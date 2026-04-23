@@ -1,0 +1,119 @@
+<script>
+	import { clearUserInfo } from '@/user/index.uts'
+	import {flushSyncQueue} from '@/utils/map-storage.uts'
+
+	
+	export default {
+		onLaunch: function() {
+			console.log('App Launch');
+			
+			// 【核心修复 1】字体加载
+			// uni-app x 不支持在 CSS 中使用 @font-face 和 content 属性
+			// 必须通过 API 加载字体文件 (.ttf)
+			uni.loadFontFace({
+				family: 'iconfont',
+				// source: "url('./static/iconfont.ttf')",
+				source: "url('/static/iconfont.ttf')",
+				success() {
+					console.log('iconfont loaded success');
+				},
+				fail(e) {
+					console.error('iconfont loaded fail', e);
+				}
+			});
+			
+			//检查登录的逻辑
+			
+			//从本地存储拿 Token
+			//数据类型一定要声明
+			const token = uni.getStorageSync('uni_id_token') as string | null ;
+			
+			const tokenExpired = uni.getStorageSync('uni_id_token_expired');
+		
+			//未曾获取过token 
+			//不能对null使用!运算
+			if(token == null || token == ""){
+				return ;
+			}
+			
+			//或 token已过期
+			if (tokenExpired != null && Date.now() > (tokenExpired as number)) {
+				console.log('Token 已过期，清理中...');
+				clearUserInfo();
+				return;
+			}
+			
+			//异步验证登录的逻辑
+			this.verifyLogin();
+			
+		},
+		
+		onShow: function() {
+			console.log('App Show');
+
+
+			// 网络恢复后，把地图打卡离线期间积累的操作同步到云端
+			flushSyncQueue().catch(() => {});
+
+		},
+		onHide: function() {
+			console.log('App Hide');
+		},
+		
+		methods: {
+			async verifyLogin(){
+				try{
+					const userApi = uniCloud.importObject('user-center');
+					
+					//未完成
+					const res = await userApi.checkToken();	//验证token
+				}
+				catch(e){
+					console.error('Token 验证失败', e);
+					clearUserInfo();
+				}
+			}
+		}
+	};
+	
+	
+</script>
+	
+<style>
+	/* 【核心修复 2】移除了 @import "@/static/iconfont.css"; */
+	/* 原因：iconfont.css 内部包含 :before 和 content: "\e6xx" 属性，这在 uvue 中会导致编译报错 */
+	
+	/* 【核心修复 3】移除了 html/page/uni-button 等标签选择器 */
+	/* 原因：uvue 仅支持类选择器 (.class) 和 ID 选择器 (#id) */
+	
+	/* 定义基础样式类，需要在每个页面根元素手动添加 class="app-page" */
+	.app-page {
+		background-color: #f5f5f5;
+		flex: 1; /* 确保页面撑满 */
+	}
+	
+	/* 定义图标基础类 */
+	.iconfont {
+		font-family: iconfont; /* 对应上面 loadFontFace 的 family */
+		font-size: 16px;
+		font-style: normal;
+	}
+	
+	/* 定义无边框按钮类，替代原来的 uni-button 重置 */
+	.btn-noborder {
+		border-width: 0;
+		border-style: solid;
+		border-color: transparent;
+	}
+
+
+
+	/* AI创作页面所需的 flex 方向工具类 */
+	.uni-row {
+		flex-direction: row;
+	}
+	.uni-column {
+		flex-direction: column;
+	}
+
+</style>

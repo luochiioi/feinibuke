@@ -1,0 +1,450 @@
+<template>
+	<view class="checkin-page">
+		<view class="hero-section">
+			<text class="hero-tag">PHOTO CHECK-IN</text>
+			<text class="hero-title">{{ markerTitle }}</text>
+			<text class="hero-subtitle">拍一张照片，记录你到访这里的瞬间。</text>
+		</view>
+
+		<view class="content-card photo-card">
+			<view class="section-head">
+				<text class="section-title">打卡照片</text>
+				<text class="section-note">最多选 1 张，建议 < 1MB</text>
+			</view>
+
+			<view class="photo-area" @click="choosePhoto">
+				<view v-if="photoPath" class="photo-preview-wrap">
+					<image class="photo-preview" :src="photoPath" mode="aspectFill" />
+					<view class="photo-change-mask">
+						<text class="photo-change-text">点击更换</text>
+					</view>
+				</view>
+				<view v-else class="photo-placeholder">
+					<text class="placeholder-icon">📷</text>
+					<text class="placeholder-text">点击拍照或选择图片</text>
+				</view>
+			</view>
+
+			<view v-if="photoSize" class="photo-meta">
+				<text class="photo-meta-text">图片大小：{{ photoSize }}</text>
+				<text v-if="compressed" class="photo-meta-compressed">已压缩</text>
+			</view>
+		</view>
+
+		<view class="content-card note-card">
+			<view class="section-head">
+				<text class="section-title">打卡备注</text>
+				<text class="section-note">选填</text>
+			</view>
+			<textarea
+				v-model="note"
+				class="note-input"
+				placeholder="记录一下此刻的感受……"
+				maxlength="200"
+				:auto-height="true"
+			/>
+			<text class="note-count">{{ note.length }}/200</text>
+		</view>
+
+		<view class="content-card location-card">
+			<view class="section-head">
+				<text class="section-title">当前距离</text>
+			</view>
+			<view class="dist-row">
+				<text class="dist-value" :class="canCheckin ? 'dist-ok' : 'dist-far'">
+					{{ distanceText }}
+				</text>
+				<text class="dist-hint" v-if="!canCheckin && distance !== '--'">
+					请靠近景点 {{ needMore }} 米后打卡
+				</text>
+				<text class="dist-hint dist-ok-hint" v-if="canCheckin">
+					距离满足，可以打卡了！
+				</text>
+			</view>
+		</view>
+
+		<view class="action-row">
+			<button class="secondary-btn" @click="goBack">取消</button>
+			<button
+				class="primary-btn"
+				:class="{ 'btn-disabled': submitting || !canCheckin }"
+				:disabled="submitting || !canCheckin"
+				@click="submit"
+			>
+				{{ submitting ? '提交中…' : '完成打卡' }}
+			</button>
+		</view>
+	</view>
+</template>
+
+<script lang="ts">
+import { getMarkers } from '@/utils/map-storage.uts';
+import { doCheckin, completeTaskCloud, addRewardCloud } from '@/utils/map-storage.uts';
+import { calculateDistanceWithAccuracy } from '@/utils/coordinate.uts';
+import { triggerTaskCheck } from '@/utils/map-tasks.uts';
+
+const CHECKIN_RADIUS = 500; // 米
+
+export default {
+	data() {
+		return {
+			markerId: null,
+			markerTitle: '景点打卡',
+			photoPath: '',
+			photoSize: '',
+			compressed: false,
+			note: '',
+			locLat: 0.0,
+			locLng: 0.0,
+			hasLocation: false,
+			distance: '--',
+			submitting: false
+		};
+	},
+	computed: {
+		canCheckin() {
+			if (this.distance === '--') return false;
+			return parseFloat(this.distance) <= CHECKIN_RADIUS;
+		},
+		distanceText() {
+			if (this.distance === '--') return '正在获取位置…';
+			const d = parseFloat(this.distance);
+			return d >= 1000 ? `${(d / 1000).toFixed(2)} 千米` : `${d} 米`;
+		},
+		needMore() {
+			if (this.distance === '--') return '--';
+			return Math.max(0, parseFloat(this.distance) - CHECKIN_RADIUS);
+		}
+	},
+	onLoad(query) {
+		const idRaw = query != null ? query["id"] : null;
+		const titleRaw = query != null ? query["title"] : null;
+		this.markerId = idRaw != null ? parseInt('' + idRaw) : 0;
+		const titleStr = titleRaw != null ? '' + titleRaw : '景点打卡';
+		this.markerTitle = decodeURIComponent(titleStr) ?? titleStr;
+		this.getLocation();
+	},
+	methods: {
+		getLocation() {
+			uni.getLocation({
+				type: 'gcj02',
+				isHighAccuracy: true,
+				highAccuracyExpireTime: 8000,
+				success: (res) => {
+					this.locLat = res.latitude;
+					this.locLng = res.longitude;
+					this.hasLocation = true;
+					this.calcDistance();
+				},
+				fail: () => {
+					uni.showToast({ title: '获取定位失败', icon: 'none' });
+				}
+			});
+		},
+		calcDistance() {
+			if (!this.hasLocation) return;
+			const markers = getMarkers();
+			const target = markers.find(m => {
+				const mo = m as UTSJSONObject;
+				return mo["id"] == this.markerId;
+			});
+			if (target == null) return;
+			const to = target as UTSJSONObject;
+			const targetLatRaw = to["latitude"];
+			const targetLngRaw = to["longitude"];
+			if (targetLatRaw == null || targetLngRaw == null) return;
+			this.distance = '' + calculateDistanceWithAccuracy(
+				this.locLat,
+				this.locLng,
+				parseFloat('' + targetLatRaw),
+				parseFloat('' + targetLngRaw)
+			);
+		},
+		choosePhoto() {
+			uni.showActionSheet({
+				itemList: ['拍照', '从相册选择'],
+				success: (res) => {
+					const sourceType = res.tapIndex === 0 ? ['camera'] : ['album'];
+					uni.chooseImage({
+						count: 1,
+						sizeType: ['compressed'],
+						sourceType,
+						success: (imgRes) => {
+							const tempPath = imgRes.tempFilePaths[0];
+							this.checkAndSetPhoto(tempPath);
+						}
+					});
+				}
+			});
+		},
+		checkAndSetPhoto(path : string) {
+			this.photoPath = path;
+			this.compressed = false;
+			this.photoSize = '';
+			uni.compressImage({
+				src: path,
+				quality: 70,
+				success: (compRes) => {
+					this.photoPath = compRes.tempFilePath;
+					this.compressed = true;
+					this.photoSize = '（已压缩）';
+				},
+				fail: () => {
+					// keep original
+				}
+			});
+		},
+		updateSizeLabel(path : string) {
+			// no-op: file size API unavailable on this platform
+		},
+		async submit() {
+			if (this.submitting || !this.canCheckin) return;
+			this.submitting = true;
+			uni.showLoading({ title: '打卡中…', mask: true });
+
+			const markers = getMarkers();
+			const markerRaw = markers.find(m => {
+				const mo = m as UTSJSONObject;
+				return mo["id"] == this.markerId;
+			});
+			if (markerRaw == null) {
+				uni.hideLoading();
+				uni.showToast({ title: '景点不存在', icon: 'none' });
+				this.submitting = false;
+				return;
+			}
+			const marker = markerRaw as UTSJSONObject;
+
+			try {
+				const photoArg = this.photoPath != '' ? this.photoPath : null;
+				const noteArg = this.note.trim() != '' ? this.note.trim() : null;
+				await doCheckin(marker, photoArg, noteArg);
+
+				const completedTasks = triggerTaskCheck(marker);
+				for (const task of completedTasks) {
+					const taskId = '' + task["id"];
+					const taskCompletedAt = parseFloat('' + task["completedAt"]);
+					await completeTaskCloud(taskId, taskCompletedAt);
+					await addRewardCloud({
+						id: `reward_${Date.now()}`,
+						taskId: taskId,
+						taskName: '' + task["name"],
+						reward: task["reward"],
+						earnedAt: task["completedAt"]
+					});
+				}
+
+				uni.hideLoading();
+				uni.showToast({ title: '打卡成功！', icon: 'success' });
+				if (completedTasks.length > 0) {
+					const firstName = '' + completedTasks[0]["name"];
+					setTimeout((): void => {
+						uni.showToast({ title: `任务完成：${firstName}`, icon: 'none', duration: 2500 });
+					}, 900);
+				}
+				setTimeout((): void => {
+					this.submitting = false;
+					uni.navigateBack();
+				}, 800);
+			} catch (e) {
+				uni.hideLoading();
+				uni.showToast({ title: '打卡失败，请重试', icon: 'none' });
+				this.submitting = false;
+			}
+		},
+		goBack() {
+			uni.navigateBack();
+		}
+	}
+};
+</script>
+
+<style scoped>
+.checkin-page {
+	flex: 1;
+	padding: 0 20rpx 80rpx;
+	background: linear-gradient(180deg, #f0f4ff 0%, #f8faff 100%);
+}
+
+.hero-section {
+	padding: 68rpx 8rpx 26rpx;
+}
+
+.hero-tag {
+	display: flex;
+	padding: 10rpx 18rpx;
+	border-radius: 999rpx;
+	background: rgba(0, 122, 255, 0.1);
+	font-size: 20rpx;
+	letter-spacing: 3rpx;
+	color: #007aff;
+}
+
+.hero-title {
+	margin-top: 16rpx;
+	font-size: 50rpx;
+	font-weight: 700;
+	color: #1a2a4a;
+	line-height: 1.2;
+}
+
+.hero-subtitle {
+	margin-top: 10rpx;
+	font-size: 24rpx;
+	color: #5b6475;
+}
+
+.content-card {
+	padding: 28rpx 24rpx;
+	border-radius: 30rpx;
+	background: rgba(255, 253, 250, 0.96);
+	border: 1px solid rgba(20, 33, 61, 0.06);
+	box-shadow: 0 16rpx 40rpx rgba(31, 41, 55, 0.08);
+	margin-bottom: 18rpx;
+}
+
+.section-head {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	margin-bottom: 20rpx;
+}
+
+.section-title {
+	font-size: 30rpx;
+	font-weight: 700;
+	color: #14213d;
+}
+
+.section-note {
+	font-size: 21rpx;
+	color: #7b8496;
+}
+
+/* 照片区域 */
+.photo-area {
+	border-radius: 22rpx;
+	overflow: hidden;
+	background: #f0f4fb;
+	border: 2px dashed #c5d3e8;
+}
+
+.photo-placeholder {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	justify-content: center;
+	height: 340rpx;
+}
+
+.placeholder-icon { font-size: 72rpx; }
+.placeholder-text { font-size: 26rpx; color: #8b9ab5; margin-top: 16rpx; }
+
+.photo-preview-wrap {
+	position: relative;
+	height: 400rpx;
+}
+
+.photo-preview {
+	width: 100%;
+	height: 100%;
+}
+
+.photo-change-mask {
+	position: absolute;
+	bottom: 0; left: 0; right: 0;
+	padding: 18rpx;
+	background: linear-gradient(to top, rgba(0,0,0,0.5), transparent);
+	display: flex;
+	justify-content: center;
+}
+
+.photo-change-text { color: #fff; font-size: 24rpx; }
+
+.photo-meta {
+	display: flex;
+	align-items: center;
+	/* gap removed - use margin instead */
+	margin-top: 12rpx;
+}
+
+.photo-meta-text { font-size: 22rpx; color: #7b8496; }
+.photo-meta-compressed {
+	font-size: 20rpx;
+	padding: 4rpx 10rpx;
+	border-radius: 999rpx;
+	background: rgba(52, 199, 89, 0.1);
+	color: #34c759;
+}
+
+/* 备注 */
+.note-input {
+	width: 100%;
+	min-height: 140rpx;
+	padding: 18rpx;
+	border-radius: 18rpx;
+	background: #f7f9fc;
+	border: 1px solid rgba(20, 33, 61, 0.07);
+	font-size: 26rpx;
+	color: #14213d;
+	box-sizing: border-box;
+}
+
+.note-count {
+	text-align: right;
+	margin-top: 8rpx;
+	font-size: 20rpx;
+	color: #aab3c0;
+}
+
+/* 距离 */
+.dist-row { display: flex; flex-direction: column; }
+.dist-row .dist-value { margin-bottom: 10rpx; }
+
+.dist-value {
+	font-size: 46rpx;
+	font-weight: 700;
+}
+
+.dist-ok { color: #34c759; }
+.dist-far { color: #ff9500; }
+
+.dist-hint { font-size: 24rpx; color: #7b8496; }
+.dist-ok-hint { color: #34c759; }
+
+/* 操作按钮 */
+.action-row {
+	display: flex;
+	margin-top: 8rpx;
+}
+.action-row .secondary-btn { margin-right: 14rpx; }
+
+.primary-btn, .secondary-btn {
+	height: 96rpx;
+	border-radius: 26rpx;
+	font-size: 30rpx;
+	font-weight: 700;
+}
+
+.primary-btn {
+	flex: 1;
+	background: linear-gradient(135deg, #007aff 0%, #0056d0 100%);
+	color: #fff;
+	box-shadow: 0 20rpx 40rpx rgba(0, 122, 255, 0.25);
+}
+
+.btn-disabled {
+	background: #c0c8d8;
+	box-shadow: none;
+}
+
+.secondary-btn {
+	width: 180rpx;
+	background: rgba(20, 33, 61, 0.05);
+	color: #14213d;
+}
+
+.primary-btn:active, .secondary-btn:active {
+	transform: scale(0.97);
+}
+</style>

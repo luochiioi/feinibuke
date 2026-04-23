@@ -1,0 +1,7 @@
+{
+  "passwordSecret": "ABCD_1234_EFGH_5678",
+  "tokenSecret": "YOUR_TOKEN_SECRET_888",
+  "tokenExpiresIn": 7200,
+  "tokenExpiresThreshold": 600,
+  "passwordStrength": "medium"
+}

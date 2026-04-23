@@ -1,0 +1,43 @@
+<template>
+	<view class="container">
+		<video 
+			ref="videoPlayer"
+			id="myVideo"
+			class="my-video"
+			:src="finalSrc" 
+			:controls="true"
+			crossorigin="anonymous"
+			@error="onVideoError"
+		></video>
+	</view>
+</template>
+
+<script>
+	export default {
+		data() {
+			return {
+				// 初始留空
+				finalSrc: "" 
+			}
+		},
+		onReady() {
+			// 延迟 500ms 赋值，避开 H5 渲染初期的不稳定阶段
+			setTimeout(() => {
+				this.finalSrc = "https://mp-333f9ced-9a50-417a-b5f7-2c6dfcbf44b7.cdn.bspapp.com/test_video/1a1bb464be291f6565815acac3096142.mp4";
+				console.log("视频地址已动态注入");
+			}, 500);
+		},
+		methods: {
+			onVideoError(e : UniVideoErrorEvent) {
+				console.error("视频报错详细对象：", e);
+				// 在 H5 环境下，可以尝试直接查看 DOM 错误
+				// #ifdef H5
+				const videoDom = document.querySelector('video');
+				if (videoDom && videoDom.error) {
+					console.error("H5 原生错误代码:", videoDom.error.code); // 1:中止, 2:网络, 3:解码, 4:不支持
+				}
+				// #endif
+			}
+		}
+	}
+</script>

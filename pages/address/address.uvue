@@ -1,0 +1,182 @@
+<template>
+	<view class="page-container">
+		
+		<view class="nav-header">
+			<view class="status-placeholder"></view>
+			<view class="nav-bar">
+				<view class="back-icon" @click="goBack">
+					<uni-icons type="left" size="24" color="#333333"></uni-icons>
+				</view>
+				<text class="nav-title">我的地址</text>
+			</view>
+		</view>
+
+		<scroll-view class="address-list" scroll-y="true">
+			<view v-for="(item, index) in addressList" :key="index" class="address-card">
+				
+				<view class="card-top">
+					<text class="name">{{item["name"]}}</text>
+					<text class="phone">{{item["phone"]}}</text>
+				</view>
+				
+				<view class="card-mid">
+					<text v-if="item['isDefault'] == true" class="default-tag">默认</text>
+					<text class="address-text">{{item["address"]}}</text>
+				</view>
+
+				<view class="divider"></view>
+
+				<view class="card-bottom">
+					<view class="default-check" @click="setDefault(index)">
+						<uni-icons :type="item['isDefault'] == true ? 'checkbox-filled' : 'circle'" 
+								   :color="item['isDefault'] == true ? '#5b89c7' : '#cccccc'" 
+								   size="22"></uni-icons>
+						<text class="check-text" :class="{'text-active': item['isDefault'] == true}">默认地址</text>
+					</view>
+					
+					<view class="action-group">
+						<view class="action-btn" @click="editAddress(index)">
+							<uni-icons type="compose" color="#888888" size="18"></uni-icons>
+							<text class="action-text">编辑</text>
+						</view>
+						<view class="action-btn" @click="deleteAddress(index)">
+							<uni-icons type="trash" color="#888888" size="18"></uni-icons>
+							<text class="action-text">删除</text>
+						</view>
+					</view>
+				</view>
+				
+			</view>
+			
+			<view v-if="addressList.length == 0" class="empty-state">
+				<text class="empty-text">暂无收货地址</text>
+			</view>
+		</scroll-view>
+
+		<view class="bottom-bar">
+			<view class="add-btn" @click="goAdd">
+				<uni-icons type="plusempty" size="18" color="#ffffff" style="margin-right: 6rpx;"></uni-icons>
+				<text class="add-btn-text">新建收货地址</text>
+			</view>
+		</view>
+	</view>
+</template>
+
+<script>
+	export default {
+		data() {
+			return {
+				addressList: [] as UTSJSONObject[]
+			}
+		},
+		onShow() {
+			this.loadData();
+		},
+		methods: {
+			loadData() {
+				const cache = uni.getStorageSync('myAddressList');
+				if (cache != null && cache !== "") {
+					const list = cache as UTSJSONObject[];
+					if (list.length > 0) { 
+						this.addressList = list; 
+						return; 
+					}
+				}
+				this.initDefaultData();
+			},
+			initDefaultData() {
+				const defaultItems = [
+					{ id: 1, name: '张三', phone: '138****8000', address: '湖南省长沙市岳麓区湖南大学XX宿舍区X栋', isDefault: false },
+					{ id: 2, name: '李四', phone: '139****5678', address: '湖南省长沙市岳麓区麓山南路非遗文化体验馆', isDefault: false },
+					{ id: 3, name: '胡墨林', phone: '19929936280', address: '湖南大学', isDefault: true }
+				] as UTSJSONObject[];
+				this.addressList = defaultItems;
+				uni.setStorageSync('myAddressList', defaultItems);
+			},
+			goBack() { uni.navigateBack(); },
+			goAdd() { uni.navigateTo({ url: '/pages/address/addAddress' }); },
+			setDefault(index: number) {
+				let list = this.addressList;
+				for (let i = 0; i < list.length; i++) {
+					list[i]["isDefault"] = false;
+				}
+				list[index]["isDefault"] = true;
+				this.addressList = list;
+				uni.setStorageSync('myAddressList', list);
+			},
+			editAddress(index: number) {
+				uni.showToast({ title: '编辑功能开发中', icon: 'none' });
+			},
+			deleteAddress(index: number) {
+				uni.showModal({
+					title: '提示',
+					content: '确定要删除该地址吗？',
+					success: (res) => {
+						if (res.confirm) {
+							this.addressList.splice(index, 1);
+							uni.setStorageSync('myAddressList', this.addressList);
+						}
+					}
+				});
+			}
+		}
+	}
+</script>
+
+<style scoped>
+	.page-container { flex: 1; background-color: #e2e6fa; display: flex; flex-direction: column;}
+	
+	/* 🎯 绝不翻车的导航栏写法 */
+	.nav-header { background-color: #ffffff; }
+	.status-placeholder { width: 100%; height: var(--status-bar-height, 44px); }
+	
+	.nav-bar { 
+		height: 44px; /* 固定标准高度 */
+		display: flex;
+		flex-direction: row; 
+		align-items: center; 
+		justify-content: center; 
+		border-bottom: 1px solid #eeeeee; 
+		position: relative; 
+	}
+	.back-icon { 
+		position: absolute; 
+		left: 10px; 
+		top: 0; 
+		bottom: 0; /* 自动垂直居中 */
+		display: flex; 
+		align-items: center; 
+		justify-content: center; 
+		padding: 0 10px; 
+	}
+	.nav-title { font-size: 17px; font-weight: bold; color: #333; }
+
+	.address-list { flex: 1; padding: 24rpx; }
+	.address-card { background-color: #ffffff; padding: 30rpx 30rpx 20rpx 30rpx; border-radius: 16rpx; margin-bottom: 24rpx; box-shadow: 0 4rpx 12rpx rgba(0,0,0,0.02); }
+	
+	.card-top { display: flex; flex-direction: row; align-items: flex-end; margin-bottom: 16rpx; }
+	.name { font-size: 32rpx; font-weight: bold; color: #333; margin-right: 24rpx; }
+	.phone { font-size: 28rpx; color: #666; }
+	
+	.card-mid { display: flex; flex-direction: row; align-items: center; margin-bottom: 30rpx; flex-wrap: wrap; }
+	.default-tag { background-color: #e6eff7; color: #5b89c7; font-size: 20rpx; padding: 4rpx 12rpx; border-radius: 4rpx; margin-right: 12rpx; font-weight: bold; }
+	.address-text { font-size: 28rpx; color: #444; line-height: 1.5; flex: 1; }
+	
+	.divider { height: 1rpx; background-color: #f0f0f0; margin-bottom: 20rpx; }
+	
+	.card-bottom { display: flex; flex-direction: row; justify-content: space-between; align-items: center; }
+	.default-check { display: flex; flex-direction: row; align-items: center; }
+	.check-text { font-size: 26rpx; color: #999; margin-left: 8rpx; }
+	.text-active { color: #5b89c7; }
+	
+	.action-group { display: flex; flex-direction: row; }
+	.action-btn { display: flex; flex-direction: row; align-items: center; margin-left: 36rpx; }
+	.action-text { font-size: 26rpx; color: #888; margin-left: 6rpx; }
+	
+	.empty-state { padding-top: 200rpx; display: flex; align-items: center; justify-content: center; }
+	.empty-text { color: #999; font-size: 28rpx; }
+	
+	.bottom-bar { background-color: #ffffff; padding: 20rpx 40rpx 60rpx; border-top: 1rpx solid #eeeeee; }
+	.add-btn { background-color: #5b89c7; height: 88rpx; border-radius: 44rpx; display: flex; flex-direction: row; justify-content: center; align-items: center; }
+	.add-btn-text { color: #ffffff; font-size: 32rpx; font-weight: bold; }
+</style>

@@ -1,0 +1,93 @@
+{
+	"name": "feiyi_DEMO3",
+	"appid": "__UNI__D91D6E4",
+	"description": "",
+	"versionName": "1.0.0",
+	"versionCode": "100",
+	"uni-app-x": {},
+	/* 快应用特有相关 */
+	"quickapp": {},
+	/* 小程序特有相关 */
+	"mp-weixin": {
+		"appid": "",
+		"setting": {
+			"urlCheck": false
+		},
+		"usingComponents": true
+	},
+	"mp-alipay": {
+		"usingComponents": true
+	},
+	"mp-baidu": {
+		"usingComponents": true
+	},
+	"mp-toutiao": {
+		"usingComponents": true
+	},
+	"uniStatistics": {
+		"enable": false
+	},
+	"vueVersion": "3",
+	"app": {
+		"distribute": {
+			"icons": {
+				"android": {
+					"hdpi": "",
+					"xhdpi": "",
+					"xxhdpi": "",
+					"xxxhdpi": ""
+				}
+			}
+		}
+	},
+	"app-android": {
+		"distribute": {
+			"modules": {},
+			"icons": {
+				"hdpi": "C:/Users/Raymond/Desktop/feiyi_Demo2/static/logo.png",
+				"xhdpi": "C:/Users/Raymond/Desktop/feiyi_Demo2/static/logo.png",
+				"xxhdpi": "C:/Users/Raymond/Desktop/feiyi_Demo2/static/logo.png",
+				"xxxhdpi": "C:/Users/Raymond/Desktop/feiyi_Demo2/static/logo.png"
+			},
+			"splashScreens": {
+				"default": {
+					"xhdpi": "C:/Users/Raymond/Desktop/feiyi_Demo2/static/logo.png",
+					"xxhdpi": "C:/Users/Raymond/Desktop/feiyi_Demo2/static/logo.png",
+					"xxxhdpi": "C:/Users/Raymond/Desktop/feiyi_Demo2/static/logo.png"
+				}
+			},
+			"abiFilters": [
+				"x86",
+				"arm64-v8a",
+				"x86_64"
+			]
+		}
+	},
+	"app-ios": {
+		"distribute": {
+			"modules": {},
+			"icons": {},
+			"splashScreens": {}
+		}
+	},
+	"web": {
+		"router": {
+			"mode": "hash",
+			"base": "/feinibuke/"
+		},
+		"sdkConfigs": {
+			"maps": {
+				"tencent": {
+					"key": "SUEBZ-3SOLL-SXMPB-M2BY6-Q7E3K-S5FQ7"
+				}
+			}
+
+		},
+		"title": "非你不可DEMO3",
+		"devServer": {
+			"https": false,
+			"port": 5173, // 端口号，保持默认即可
+			"disableHostCheck": true
+		}
+	}
+}

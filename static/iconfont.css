@@ -1,0 +1,17 @@
+/* static/iconfont.css */
+@font-face {
+  font-family: "iconfont"; 
+  src: url('/static/iconfont.ttf') format('truetype'); /* 路径必须正确 */
+}
+
+.iconfont {
+  font-family: "iconfont" !important;
+  font-size: 16px;
+  font-style: normal;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* 假设你新增了「优惠券」图标，fontClass 为 icon-youhuiquan */
+.icon-youhuiquan:before {
+  content: "\e600"; /* 替换成你实际的图标编码 */
+}

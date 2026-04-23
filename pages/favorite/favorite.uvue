@@ -1,0 +1,213 @@
+<template>
+  <view class="favorite-page">
+    
+    <view class="empty" v-if="favoriteList.length === 0">
+      <view class="icon-circle">
+        <uni-icons type="heart-filled" size="60" color="#e63946"></uni-icons>
+      </view>
+      <text class="tip">还没有收藏任何内容</text>
+      <text class="sub-tip">去探索更多非遗文化吧</text>
+      <button class="go-btn" @click="goToExplore">去探索</button>
+    </view>
+
+    <scroll-view scroll-y class="items-scroll" v-else>
+      <view class="items-container">
+        <view 
+          class="favorite-card" 
+          v-for="item in favoriteList" 
+          :key="item.id"
+          @click="goToDetail(item.id)"
+        >
+          <image :src="item.img" class="fav-img" mode="aspectFill" />
+          
+          <view class="fav-content">
+            <view class="fav-header">
+              <text class="fav-title">{{ item.title }}</text>
+            </view>
+            
+            <text class="fav-desc" style="lines: 2; text-overflow: ellipsis;">{{ item.desc }}</text>
+            
+            <view class="fav-footer-info">
+              <text class="fav-area-tag">{{ item.area }}</text>
+              <text class="fav-time">收藏于 {{ item.time }}</text>
+            </view>
+          </view>
+          
+          <view class="delete-btn" @click.stop="removeFromFavorite(item)">
+            <uni-icons type="trash" size="18" color="#fff" />
+          </view>
+        </view>
+      </view>
+    </scroll-view>
+
+  </view>
+</template>
+
+<script>
+// 简单定义
+type FavItem = {
+  id: string
+  title: string
+  area: string
+  time: string
+  img: string
+  desc: string
+}
+
+export default {
+  data() {
+    return {
+      favoriteList: [] as FavItem[]
+    };
+  },
+  onShow() {
+    // 模拟数据
+    this.favoriteList = [
+       { id: "1", title: "测试收藏", area: "北京", time: "刚刚", img: "/static/models/macau-brick.png", desc: "描述..." }
+    ];
+  },
+  methods: {
+    removeFromFavorite(item: FavItem) {
+      uni.showModal({
+        title: '提示',
+        content: '确定要取消收藏吗？',
+        success: (res) => {
+          if (res.confirm) {
+            // 修复 delete 报错：不使用 delete，而是过滤数组
+            this.favoriteList = this.favoriteList.filter((fav: FavItem): boolean => fav.id !== item.id);
+            uni.showToast({ title: '已取消', icon: 'none' });
+          }
+        }
+      })
+    },
+    goToExplore() {
+      uni.switchTab({ url: '/pages/explore/explore' });
+    },
+    goToDetail(id: string) {
+      uni.navigateTo({ url: '/pages/explore-detail/explore-detail?id=' + id });
+    }
+  }
+};
+</script>
+
+<style scoped>
+.favorite-page {
+  flex: 1;
+  background-color: #f7f8fa;
+}
+
+/* 空状态 */
+.empty {
+  flex: 1;
+  align-items: center;
+  justify-content: center;
+  padding-bottom: 200rpx;
+}
+
+.icon-circle {
+  width: 140rpx;
+  height: 140rpx;
+  background-color: #fff;
+  border-radius: 70rpx; /* 修复 50% */
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 30rpx;
+}
+
+.tip {
+  font-size: 32rpx;
+  color: #333;
+  font-weight: bold;
+  margin-bottom: 12rpx;
+}
+.sub-tip {
+  font-size: 26rpx;
+  color: #999;
+  margin-bottom: 50rpx;
+}
+
+.go-btn {
+  width: 240rpx;
+  height: 80rpx;
+  background-image: linear-gradient(to right, #7b61ff, #9c88ff);
+  color: white;
+  border-radius: 40rpx;
+  font-size: 30rpx;
+  font-weight: bold;
+  border: none;
+}
+
+/* 列表区域 */
+.items-scroll {
+  flex: 1;
+}
+
+.items-container {
+  padding: 30rpx;
+}
+
+.favorite-card {
+  background-color: #fff;
+  border-radius: 24rpx;
+  padding: 24rpx;
+  margin-bottom: 24rpx;
+  flex-direction: row; 
+}
+
+.fav-img {
+  width: 180rpx;
+  height: 180rpx;
+  border-radius: 16rpx;
+  background-color: #f0f0f0;
+}
+
+.fav-content {
+  flex: 1;
+  margin-left: 24rpx;
+  justify-content: space-between;
+  padding-right: 40rpx; 
+}
+
+.fav-title {
+  font-size: 32rpx;
+  font-weight: bold;
+  color: #333;
+}
+
+.fav-desc {
+  font-size: 24rpx;
+  color: #666;
+  margin-bottom: 24rpx;
+}
+
+.fav-footer-info {
+  flex-direction: row;
+  align-items: center;
+}
+
+.fav-area-tag {
+  font-size: 20rpx;
+  color: #7b61ff;
+  background-color: #f4f1ff;
+  padding: 4rpx 12rpx;
+  border-radius: 8rpx;
+  margin-right: 16rpx;
+}
+
+.fav-time {
+  font-size: 22rpx;
+  color: #bbb;
+}
+
+.delete-btn {
+  position: absolute;
+  top: 24rpx;
+  right: 24rpx;
+  width: 50rpx;
+  height: 50rpx;
+  background-color: rgba(0,0,0,0.05);
+  border-radius: 25rpx; /* 修复 */
+  align-items: center;
+  justify-content: center;
+}
+</style>

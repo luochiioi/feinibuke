@@ -1,0 +1,344 @@
+<template>
+	<view class="detail-page">
+		<view v-if="hasTask" class="content">
+			<view class="status-banner" :class="taskStatusClass">
+				<text class="banner-icon">{{ taskBannerIcon }}</text>
+				<text class="banner-text">{{ taskBannerText }}</text>
+			</view>
+
+			<view class="info-card">
+				<text class="task-title">{{ taskName }}</text>
+				<text class="task-desc">{{ taskDesc }}</text>
+
+				<view class="info-row">
+					<text class="info-label">目标景点</text>
+					<text class="info-value">{{ taskTargetTitle }}</text>
+				</view>
+				<view class="info-row">
+					<text class="info-label">任务奖励</text>
+					<text class="info-value reward-text">{{ taskReward }}</text>
+				</view>
+				<view class="info-row" v-if="taskCompleted && taskCompletedAtStr != ''">
+					<text class="info-label">完成时间</text>
+					<text class="info-value">{{ taskCompletedAtStr }}</text>
+				</view>
+			</view>
+
+			<view class="progress-card">
+				<text class="progress-title">完成条件</text>
+				<view class="condition-item" :class="checkConditionClass">
+					<text class="cond-icon">{{ checkIcon }}</text>
+					<text class="cond-text">前往 {{ taskTargetTitle }} 完成拍照打卡</text>
+				</view>
+				<view v-if="checkedPhotoPath != ''" class="checkin-preview">
+					<image class="checkin-img" :src="checkedPhotoPath" mode="aspectFill" @click="previewPhoto(checkedPhotoPath)" />
+					<text v-if="checkedNote != ''" class="checkin-note">{{ checkedNote }}</text>
+				</view>
+			</view>
+
+			<view v-if="isPending" class="action-area">
+				<button class="nav-btn" @click="goToMap">前往景点打卡</button>
+			</view>
+		</view>
+
+		<view v-else class="loading">
+			<text>加载中…</text>
+		</view>
+	</view>
+</template>
+
+<script lang="ts">
+import { formatDateTime, getMarkers } from '@/utils/map-utils.uts';
+
+export default {
+	data() {
+		return {
+			rawTask: null as UTSJSONObject | null,
+			rawCheckedMarker: null as UTSJSONObject | null
+		};
+	},
+	computed: {
+		hasTask(): boolean {
+			return this.rawTask != null;
+		},
+		taskStatusClass(): string {
+			const s = this.rawTask == null ? '' : (this.rawTask["status"] as string);
+			return s === 'completed' ? 'banner-done' : 'banner-pending';
+		},
+		taskBannerIcon(): string {
+			const s = this.rawTask == null ? '' : (this.rawTask["status"] as string);
+			return s === 'completed' ? '\uD83C\uDF89' : '\uD83D\uDDFA';
+		},
+		taskBannerText(): string {
+			const s = this.rawTask == null ? '' : (this.rawTask["status"] as string);
+			return s === 'completed' ? '\u4EFB\u52A1\u5DF2\u5B8C\u6210' : '\u4EFB\u52A1\u8FDB\u884C\u4E2D';
+		},
+		taskName(): string {
+			return this.rawTask == null ? '' : (this.rawTask["name"] as string);
+		},
+		taskDesc(): string {
+			return this.rawTask == null ? '' : (this.rawTask["description"] as string);
+		},
+		taskTargetTitle(): string {
+			return this.rawTask == null ? '' : (this.rawTask["targetTitle"] as string);
+		},
+		taskReward(): string {
+			return this.rawTask == null ? '' : (this.rawTask["reward"] as string);
+		},
+		isCompleted(): boolean {
+			const s = this.rawTask == null ? '' : (this.rawTask["status"] as string);
+			return s === 'completed';
+		},
+		isPending(): boolean {
+			return !this.isCompleted && this.hasTask;
+		},
+		taskCompleted(): boolean {
+			return this.isCompleted;
+		},
+		taskCompletedAtStr(): string {
+			if (!this.isCompleted || this.rawTask == null) return '';
+			const v = this.rawTask["completedAt"];
+			if (v != null && typeof v === 'number') return formatDateTime(v);
+			return '';
+		},
+		checkConditionClass(): string {
+			return this.rawCheckedMarker != null ? 'cond-done' : 'cond-pending';
+		},
+		checkIcon(): string {
+			return this.rawCheckedMarker != null ? '\u2705' : '\u2B1C';
+		},
+		checkedPhotoPath(): string {
+			if (this.rawCheckedMarker == null) return '';
+			const p = this.rawCheckedMarker["photoPath"];
+			return (p != null && typeof p === 'string') ? (p as string) : '';
+		},
+		checkedNote(): string {
+			if (this.rawCheckedMarker == null) return '';
+			const n = this.rawCheckedMarker["note"];
+			return (n != null && typeof n === 'string') ? (n as string) : '';
+		}
+	},
+	onLoad(query: UTSJSONObject) {
+		const id = query["id"];
+		if (id != null) this.loadTask(id as string);
+	},
+	onShow() {
+		if (this.hasTask) this.loadTask('' + (this.rawTask as UTSJSONObject)["id"]);
+	},
+	methods: {
+		loadTask(id: string) {
+			const tasksRaw = uni.getStorageSync('task_list');
+			let tasks: Array<UTSJSONObject> = [];
+			if (tasksRaw != null && Array.isArray(tasksRaw)) {
+				tasks = tasksRaw as Array<UTSJSONObject>;
+			}
+			const userTasksRaw = uni.getStorageSync('user_tasks');
+			let userTasks: UTSJSONObject = new UTSJSONObject();
+			if (userTasksRaw != null && typeof userTasksRaw === 'object') {
+				userTasks = userTasksRaw as UTSJSONObject;
+			}
+			let found: UTSJSONObject | null = null;
+			for (let i = 0; i < tasks.length; i++) {
+				const t = tasks[i] as UTSJSONObject;
+				if ('' + t["id"] === id) {
+					found = t;
+					break;
+				}
+			}
+			if (found == null) return;
+			const base = found as UTSJSONObject;
+			const extraRaw = userTasks['' + base["id"]];
+			const merged: UTSJSONObject = JSON.parse(JSON.stringify(base)) as UTSJSONObject;
+			if (extraRaw != null && typeof extraRaw === 'object') {
+				const ej = extraRaw as UTSJSONObject;
+				if (ej["status"] != null) { merged["status"] = ej["status"]; }
+				if (ej["completedAt"] != null) { merged["completedAt"] = ej["completedAt"]; }
+				if (ej["progress"] != null) { merged["progress"] = ej["progress"]; }
+			}
+			this.rawTask = merged;
+
+			// find corresponding checkin record
+			const markers = getMarkers();
+			this.rawCheckedMarker = null;
+			for (let i = 0; i < markers.length; i++) {
+				const mk = markers[i] as UTSJSONObject;
+				const matchesId = '' + mk["id"] === id;
+				const matchesTitle = '' + mk["title"] === (base["targetTitle"] as string);
+				if ((matchesId || matchesTitle) && mk["checked"] === true) {
+					this.rawCheckedMarker = mk;
+					break;
+				}
+			}
+		},
+		goToMap() {
+			const tasksRaw = uni.getStorageSync('task_list');
+			let tasks: Array<UTSJSONObject> = [];
+			if (tasksRaw != null && Array.isArray(tasksRaw)) {
+				tasks = tasksRaw as Array<UTSJSONObject>;
+			}
+			if (this.rawTask == null) return;
+			const tid = '' + (this.rawTask as UTSJSONObject)["id"];
+			let targetMarker: UTSJSONObject | null = null;
+			for (let i = 0; i < tasks.length; i++) {
+				const t = tasks[i] as UTSJSONObject;
+				if ('' + t["id"] === tid) {
+					const markers = getMarkers();
+					const tid2 = '' + t["targetMarkerId"];
+					const ttitle = t["targetTitle"] as string;
+					for (let j = 0; j < markers.length; j++) {
+						const m = markers[j] as UTSJSONObject;
+						if ('' + m["id"] === tid2 || '' + m["title"] === ttitle) {
+							targetMarker = m;
+							break;
+						}
+					}
+					break;
+				}
+			}
+			if (targetMarker != null) {
+				uni.$emit('focus-marker', targetMarker);
+			}
+			uni.navigateTo({ url: '/pages/map/index' });
+		},
+		previewPhoto(path: string) {
+			if (typeof path === 'string' && path.length > 0) {
+				uni.previewImage({ urls: [path], current: path });
+			}
+		}
+	}
+};
+</script>
+
+<style scoped>
+.detail-page {
+	flex: 1;
+	background: linear-gradient(180deg, #f4f7ff 0%, #f8faff 100%);
+	padding: 20rpx 24rpx 80rpx;
+}
+
+.status-banner {
+	display: flex;
+	align-items: center;
+	padding: 24rpx 28rpx;
+	border-radius: 26rpx;
+	margin-bottom: 20rpx;
+}
+.status-banner .banner-icon { margin-right: 16rpx; }
+
+.banner-done {
+	background: linear-gradient(135deg, rgba(52, 199, 89, 0.12), rgba(52, 199, 89, 0.06));
+	border: 1px solid rgba(52, 199, 89, 0.25);
+}
+
+.banner-pending {
+	background: linear-gradient(135deg, rgba(255, 149, 0, 0.12), rgba(255, 149, 0, 0.06));
+	border: 1px solid rgba(255, 149, 0, 0.25);
+}
+
+.banner-icon { font-size: 44rpx; }
+.banner-text { font-size: 28rpx; font-weight: 700; color: #14213d; }
+
+.info-card {
+	padding: 28rpx 24rpx;
+	border-radius: 28rpx;
+	background: rgba(255, 253, 250, 0.97);
+	border: 1px solid rgba(20, 33, 61, 0.06);
+	box-shadow: 0 12rpx 32rpx rgba(31, 41, 55, 0.08);
+	margin-bottom: 18rpx;
+}
+
+.task-title {
+	font-size: 40rpx;
+	font-weight: 700;
+	color: #14213d;
+}
+
+.task-desc {
+	margin-top: 12rpx;
+	font-size: 26rpx;
+	color: #6b7280;
+	line-height: 1.6;
+}
+
+.info-row {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	margin-top: 22rpx;
+	padding-top: 22rpx;
+	border-top: 1px solid rgba(20, 33, 61, 0.06);
+}
+
+.info-label { font-size: 26rpx; color: #7b8496; }
+.info-value { font-size: 26rpx; font-weight: bold; color: #14213d; }
+.reward-text { color: #3949ab; }
+
+.progress-card {
+	padding: 28rpx 24rpx;
+	border-radius: 28rpx;
+	background: rgba(255, 253, 250, 0.97);
+	border: 1px solid rgba(20, 33, 61, 0.06);
+	box-shadow: 0 12rpx 32rpx rgba(31, 41, 55, 0.08);
+	margin-bottom: 18rpx;
+}
+
+.progress-title {
+	font-size: 28rpx;
+	font-weight: 700;
+	color: #14213d;
+	margin-bottom: 18rpx;
+}
+
+.condition-item {
+	display: flex;
+	align-items: center;
+	padding: 18rpx;
+	border-radius: 18rpx;
+}
+.condition-item .cond-icon { margin-right: 14rpx; }
+
+.cond-done { background: rgba(52, 199, 89, 0.08); }
+.cond-pending { background: rgba(20, 33, 61, 0.04); }
+
+.cond-icon { font-size: 36rpx; }
+.cond-text { font-size: 26rpx; color: #14213d; flex: 1; }
+
+.checkin-preview {
+	margin-top: 16rpx;
+}
+
+.checkin-img {
+	width: 100%;
+	height: 300rpx;
+	border-radius: 18rpx;
+}
+
+.checkin-note {
+	margin-top: 10rpx;
+	font-size: 24rpx;
+	color: #6b7280;
+	line-height: 1.5;
+}
+
+.action-area { margin-top: 8rpx; }
+
+.nav-btn {
+	width: 100%;
+	height: 96rpx;
+	border-radius: 26rpx;
+	font-size: 30rpx;
+	font-weight: 700;
+	background: linear-gradient(135deg, #3949ab 0%, #283593 100%);
+	color: #fff;
+	box-shadow: 0 20rpx 40rpx rgba(57, 73, 171, 0.25);
+}
+
+.nav-btn:active { transform: scale(0.98); }
+
+.loading {
+	display: flex;
+	justify-content: center;
+	padding-top: 120rpx;
+	color: #9aa6b2;
+}
+</style>

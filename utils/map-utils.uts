@@ -1,0 +1,60 @@
+export const formatDateTime = (ts: number): string => {
+	const d = new Date(ts);
+	
+	// 补充了参数 n 的类型，并改用更稳妥的补零写法
+	const pad = (n: number): string => {
+		return n < 10 ? '0' + n : '' + n;
+	};
+	
+	const y = d.getFullYear();
+	const m = pad(d.getMonth() + 1);
+	const day = pad(d.getDate());
+	const hh = pad(d.getHours());
+	const mm = pad(d.getMinutes());
+	
+	return `${y}-${m}-${day} ${hh}:${mm}`;
+};
+
+export const formatDistance = (val: any): string => {
+	if (val == null || val === '--') return '--';
+	
+	// 安全转换为数字
+	const meters = parseFloat("" + val);
+	if (isNaN(meters) || !isFinite(meters)) return '--';
+	
+	if (meters >= 1000) return `${(meters / 1000).toFixed(2)}千米`;
+	return `${meters}米`;
+};
+
+// 为所有经纬度参数加上明确的 number 类型
+export const calculateDistance = (lat1: number, lng1: number, lat2: number, lng2: number): number => {
+	const R = 6371e3;
+	const p1 = lat1 * Math.PI / 180;
+	const p2 = lat2 * Math.PI / 180;
+	const dp = (lat2 - lat1) * Math.PI / 180;
+	const dl = (lng2 - lng1) * Math.PI / 180;
+	
+	// 在 UTS 中尽量避免用 ** 2，用乘法最安全
+	const a = Math.sin(dp / 2) * Math.sin(dp / 2) + Math.cos(p1) * Math.cos(p2) * Math.sin(dl / 2) * Math.sin(dl / 2);
+	return Math.round(R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a)));
+};
+
+export const getMarkers = (): UTSJSONObject[] => {
+	const cache = uni.getStorageSync('tourism_markers');
+	return (cache != null && cache !== "") ? cache as UTSJSONObject[] : [];
+};
+
+export const saveMarkers = (markers: UTSJSONObject[]) => {
+	uni.setStorageSync('tourism_markers', markers);
+};
+
+export const getDefaultMarkers = (): UTSJSONObject[] => [
+	{ id: 1, latitude: 39.9163, longitude: 116.3972, title: '北京故宫', iconPath: 'https://img.icons8.com/color/48/marker.png', width: 36, height: 36, checked: false } as UTSJSONObject,
+	{ id: 2, latitude: 31.1413, longitude: 121.6633, title: '上海迪士尼', iconPath: 'https://img.icons8.com/color/48/marker.png', width: 36, height: 36, checked: false } as UTSJSONObject,
+	{ id: 3, latitude: 28.1861, longitude: 112.9442, title: '长沙岳麓书院', iconPath: 'https://img.icons8.com/color/48/marker.png', width: 36, height: 36, checked: false } as UTSJSONObject,
+	{ id: 4, latitude: 22.1975, longitude: 113.54056, title: '澳门大三巴', iconPath: 'https://img.icons8.com/color/48/marker.png', width: 36, height: 36, checked: false } as UTSJSONObject,
+	{ id: 5, latitude: 28.184121, longitude: 112.96129, title: '长沙橘子洲头', iconPath: 'https://img.icons8.com/color/48/marker.png', width: 36, height: 36, checked: false } as UTSJSONObject,
+	{ id: 6, latitude: 23.10889, longitude: 113.31889, title: '广州塔', iconPath: 'https://img.icons8.com/color/48/marker.png', width: 36, height: 36, checked: false } as UTSJSONObject,
+	{ id: 7, latitude: 23.07378, longitude: 113.38617, title: '中山大学东校区', iconPath: 'https://img.icons8.com/color/48/marker.png', width: 36, height: 36, checked: false } as UTSJSONObject,
+	{ id: 8, latitude: 39.9501, longitude: 116.3371, title: '北京交通大学海淀校区', iconPath: 'https://img.icons8.com/color/48/marker.png', width: 36, height: 36, checked: false } as UTSJSONObject
+];

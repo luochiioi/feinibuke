@@ -1,0 +1,139 @@
+<template>
+	<view class="page-container">
+		<view class="nav-bar">
+			<view class="status-placeholder"></view>
+			<view class="nav-content">
+				<view class="back-icon" @click="goBack">
+					<uni-icons type="left" size="24" color="#333333"></uni-icons>
+				</view>
+				<text class="nav-title">新增收货地址</text>
+			</view>
+		</view>
+
+		<scroll-view class="form-scroll" scroll-y="true">
+			
+			<view class="form-card">
+				<view class="form-item">
+					<text class="label">收货人</text>
+					<input class="input" v-model="name" placeholder="请填写收货人姓名" placeholder-class="placeholder-style" />
+				</view>
+				<view class="form-item">
+					<text class="label">手机号码</text>
+					<input class="input" type="number" v-model="phone" placeholder="请填写收货人手机号" placeholder-class="placeholder-style" maxlength="11" />
+				</view>
+				<view class="form-item no-border">
+					<text class="label">详细地址</text>
+					<input class="input" v-model="address" placeholder="街道、楼牌号等详细信息" placeholder-class="placeholder-style" />
+				</view>
+			</view>
+
+			<view class="form-card switch-card">
+				<text class="switch-label">设为默认收货地址</text>
+				<switch :checked="isDefault" @change="onSwitchChange" color="#5b89c7" style="transform: scale(0.9); margin-right: -10rpx;" />
+			</view>
+			
+		</scroll-view>
+
+		<view class="bottom-bar">
+			<view class="save-btn" hover-class="btn-hover" @click="saveAddress">
+				<text class="save-btn-text">保存并使用</text>
+			</view>
+		</view>
+	</view>
+</template>
+
+<script>
+	export default {
+		data() {
+			return {
+				name: '',
+				phone: '',
+				address: '',
+				isDefault: false
+			}
+		},
+		methods: {
+			goBack() {
+				uni.navigateBack();
+			},
+			
+			// 🎯 修复点：使用官方提供的标准类型 UniSwitchChangeEvent，编译器就不会报错了！
+			onSwitchChange(e: UniSwitchChangeEvent) {
+				this.isDefault = e.detail.value;
+			},
+			
+			saveAddress() {
+				// 1. 表单校验
+				if (this.name.trim() === '') { uni.showToast({ title: '请填写收货人', icon: 'none' }); return; }
+				if (this.phone.trim() === '') { uni.showToast({ title: '请填写手机号', icon: 'none' }); return; }
+				if (this.address.trim() === '') { uni.showToast({ title: '请填写详细地址', icon: 'none' }); return; }
+
+				// 2. 获取本地存储的地址列表
+				const cache = uni.getStorageSync('myAddressList');
+				let list = [] as UTSJSONObject[];
+				
+				if (cache != null && cache !== "") {
+					list = cache as UTSJSONObject[];
+				}
+
+				// 3. 如果当前设为默认，则需要把其他的默认状态取消
+				if (this.isDefault) {
+					for (let i = 0; i < list.length; i++) {
+						list[i]["isDefault"] = false;
+					}
+				}
+
+				// 4. 生成新ID并构造新数据
+				const newId = list.length > 0 ? (list[list.length - 1]["id"] as number) + 1 : 1;
+				const newItem = {
+					id: newId,
+					name: this.name.trim(),
+					phone: this.phone.trim(),
+					address: this.address.trim(),
+					isDefault: this.isDefault
+				} as UTSJSONObject;
+
+				// 5. 追加并保存
+				list.push(newItem);
+				uni.setStorageSync('myAddressList', list);
+
+				// 6. 提示并返回
+				uni.showToast({ title: '保存成功', icon: 'success' });
+				setTimeout(() => {
+					uni.navigateBack();
+				}, 1000);
+			}
+		}
+	}
+</script>
+
+<style scoped>
+	.page-container { flex: 1; background-color: #e2e6fa; display: flex; flex-direction: column; }
+	
+	.nav-bar { background-color: #ffffff; } /* 👈 大哥，就是这里补上了 } */
+	.status-placeholder { width: 100%; height: var(--status-bar-height, 44px); }
+	.nav-content { height: 44px; display: flex; flex-direction: row; align-items: center; justify-content: center; position: relative; }
+	.back-icon { position: absolute; left: 10px; top: 0; bottom: 0; display: flex; align-items: center; justify-content: center; padding: 0 10px; }
+	.nav-title { font-size: 17px; font-weight: bold; color: #333; }
+
+	.form-scroll { flex: 1; padding: 24rpx; }
+	
+	.form-card { background-color: #ffffff; border-radius: 16rpx; padding: 0 30rpx; margin-bottom: 24rpx; }
+	
+	/* 输入框行 */
+	.form-item { display: flex; flex-direction: row; align-items: center; min-height: 110rpx; border-bottom: 1rpx solid #f2f2f2; }
+	.no-border { border-bottom: none; }
+	.label { width: 160rpx; font-size: 30rpx; color: #333; }
+	.input { flex: 1; font-size: 30rpx; color: #333; height: 100%; }
+	.placeholder-style { color: #aaaaaa; font-size: 30rpx; }
+
+	/* 开关行 */
+	.switch-card { display: flex; flex-direction: row; align-items: center; justify-content: space-between; min-height: 110rpx; }
+	.switch-label { flex: 1; font-size: 30rpx; color: #333; }
+
+	/* 底部固定按钮 */
+	.bottom-bar { background-color: #ffffff; padding: 20rpx 40rpx 60rpx; border-top: 1rpx solid #eeeeee; }
+	.save-btn { background-color: #5b89c7; height: 88rpx; border-radius: 44rpx; display: flex; justify-content: center; align-items: center; }
+	.btn-hover { opacity: 0.8; }
+	.save-btn-text { color: #ffffff; font-size: 32rpx; font-weight: bold; letter-spacing: 2rpx; }
+</style>

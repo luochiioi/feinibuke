@@ -1,0 +1,162 @@
+import { reactive } from 'vue'
+
+//用户数据
+export type MyUserInfo = {
+	// _id: string ,	//设置为可选属性
+	userId: string ,
+	userName: string ,
+}
+
+//购物车的商品
+export type CartItem = {
+	_id : string ,			//商品UID
+	itemId : string ,		//商品业务id
+	itemName : string ,		//商品名字
+	unitPrice : number ,	//商品单价
+	coverImage : string ,	//商品图片
+	count : number ,		//商品购买数量
+	shopId : string ,
+	selected : boolean      //商品是否被选中(不是必须)
+}
+
+//订单队列里面的订单
+export type OrderItem = {
+  itemId: string | null ,//訂單商品业务id
+  itemName: string ,//訂單商品名字
+  unitPrice: number ,//訂單商品價格
+  count: number ,//訂單商品數量
+  subtotal : number//小计(单价乘该商品数量)
+}
+
+//订单队列
+export type Order = {
+  _id : string,
+  orderId: string,//訂單id
+  shopId: string,//商店id
+  userId: string,//下单者id
+  items: OrderItem[],//訂單商品
+  totalAmount: number,//總價
+  createTime: string,// 时间
+  //这里暂设为可选
+  // consigneeInfo?: string,//收货人信息
+  // shippingAddress?:string,//收货地址
+  status: 'paid' | 'shipped' | 'finished'//订单状态
+}
+
+//商品
+export type Product = {
+	_id: string,
+	title: string,
+	unitPrice: number,
+	shopId: string
+	// 如果你的商品还有其他属性，可以在这里继续加
+}
+
+//商品细节
+export type productDetail = { 
+  _id: string,	//标识码
+  itemName: string,	//商品名字
+  quantity: number,	//商品上架总数量
+  unitPrice: number,	//商品单价
+  title: string,	//商品标题
+  subtitle: string,	//商品副标题
+  sales: number,	//商品销量
+  status: boolean,	//商品状态(是否在售)
+  POO: string,	//原产地
+  category: string,	//类别
+  createDate: string,	//上架日期
+  description: string,	//描述
+  images: string,	//图片
+  itemId: string,	//id
+  shopId: string,
+  stock: number	//商品剩余的量
+}
+
+// 🌟修复点 1：把状态名改回统一的 userInfo
+export type GlobalState = {
+	userInfo: MyUserInfo | null, 
+	cartItems: CartItem[],
+	orders: Order[],
+	curProduct : productDetail | null ,
+}
+
+// 🌟修复点 2：统一大小写为 savedUserInfo
+const savedUserInfo = uni.getStorageSync('MyUserInfo');
+const savedCart = uni.getStorageSync('cart');
+
+//处理用户信息
+let processedUserInfo : MyUserInfo | null = null;
+
+//在 UTS 中，从Storage 拿到的对象确实是 UTSJSONObject
+if (savedUserInfo instanceof UTSJSONObject) {
+    // 强制转换为你的 MyUserInfo 类型接口
+    processedUserInfo = JSON.parse<MyUserInfo>(JSON.stringify(savedUserInfo));
+} else if (savedUserInfo != null) {  // 🌟修复点 3：这里也同步改成 savedUserInfo
+    // 如果有值但不是对象（比如残留的旧字符串数据），则清理
+    uni.removeStorageSync('MyUserInfo');
+}
+
+//处理购物车
+let processedCart : CartItem[] | null = null;
+
+// 注意：数组在 UTS 中使用 Array.isArray() 检查最安全
+if (Array.isArray(savedCart)) {
+    // 确认是数组后，再进行断言
+    processedCart = savedCart as CartItem[];
+} else if (savedCart != null) {
+    // 数据格式不对，清理
+    uni.removeStorageSync('cart');
+}
+
+//导出用户数据
+export const state = reactive<GlobalState>({
+	userInfo: processedUserInfo , // 🌟修复点 4：对应 GlobalState 的改动
+	cartItems: processedCart ?? [] as CartItem[],
+	orders: [] as Order[] ,
+	curProduct : null as productDetail | null
+})
+
+// 放入购物车
+export function addCart(product : productDetail){
+	//获取商品在购物车数组中的index
+	const index = state.cartItems.findIndex((item : CartItem) : boolean => {
+		return item._id == product._id ;
+	}) ;
+	
+	if(index > -1){	//商品已存在
+		state.cartItems[index].count++ ;
+	}
+	else{	//商品不存在
+		const newItem : CartItem = {
+			_id: product._id,
+			itemId: "", // 或者 product.id
+			itemName: product.title,
+			unitPrice: product.unitPrice,
+			coverImage: "" ,
+			count: 1,
+			shopId: product.shopId ,
+			selected: false
+		}
+		
+		state.cartItems.push(newItem) ;
+	}
+	
+	uni.setStorageSync('cart', state.cartItems);	//把购物车数据写入磁盘
+}
+
+export function clearUserInfo() {
+	state.userInfo = null;	//全局变量设置为null 状态变为未登录的状态
+	uni.removeStorageSync('MyUserInfo');	//移除硬盘数据
+	uni.removeStorageSync('uni_id_token');
+	uni.removeStorageSync('uni_id_token_expired');
+}
+
+// 保存信息
+export function	setUserInfo(data: MyUserInfo , token: string , tokenExpired: number) {
+	state.userInfo = data;	//全局变量设置为data 状态变为登录后的状态
+	//用户信息写入硬盘
+	uni.setStorageSync('MyUserInfo', data);
+	//用户token写入硬盘
+	uni.setStorageSync('uni_id_token', token); // 必须叫这个名
+	uni.setStorageSync('uni_id_token_expired', tokenExpired);
+}

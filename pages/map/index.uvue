@@ -1,0 +1,403 @@
+<template>
+	<view class="container">
+		<view class="back-btn" @click="goBack">
+			<text class="back-icon">←</text>
+		</view>
+
+		<view class="map-container">
+			<map
+				id="myMap"
+				class="map-component"
+				:latitude="latitude"
+				:longitude="longitude"
+				:scale="scale"
+				:markers="markers"
+				:show-location="true"
+				coord-type="gcj02"
+				@markertap="onMarkerTap"
+				@longpress="handleMapLongPress"
+				@tap="onMapClick"
+			></map>
+			
+			<view class="map-tools">
+				<view class="tool-btn task-btn" @click="goToTasksPage">
+					<text class="tool-icon">🎯</text>
+				</view>
+
+				<view class="divider"></view>
+
+				<view class="tool-btn" @click="zoomIn">
+					<text class="tool-icon">➕</text>
+				</view>
+				<view class="tool-btn" @click="zoomOut">
+					<text class="tool-icon">➖</text>
+				</view>
+				<view class="tool-btn locate-btn" @click="backToCurrentLocation">
+					<text class="tool-icon">📍</text>
+				</view>
+			</view>
+
+			<view class="tool-btn add-btn floating-add" @click="addMarkerAtCurrent">
+				<text class="tool-icon">📍</text>
+			</view>
+
+			<view class="bottom-sheet" :class="{ 'sheet-active': hasActiveMarker }">
+				<view class="sheet-handle" @click="clearActiveMarker"></view>
+				<view class="sheet-body" v-if="hasActiveMarker">
+					<view class="spot-info">
+						<view class="title-row">
+							<text class="spot-title">{{ amTitle }}</text>
+							<text class="close-x" @click="clearActiveMarker">✕</text>
+						</view>
+						<text class="spot-dist">
+							{{ amChecked ? '🎉 已完成打卡' : '📏 距離約 ' + calculateLiveDistance() + ' 米' }}
+						</text>
+					</view>
+					<view v-if="amPhotoPath != ''" class="checkin-photo-row">
+						<image class="checkin-thumb" :src="amPhotoPath" mode="aspectFill" @click="previewPhoto(amPhotoPath)" />
+						<text class="checkin-note" v-if="amNote != ''">{{ amNote }}</text>
+					</view>
+					<view class="action-bar">
+						<button class="main-action-btn" :class="{ 'btn-success': amChecked }" @click="handleCheckIn">
+							{{ amChecked ? '已完成' : '立即打卡' }}
+						</button>
+						<button class="ghost-btn" @click="deleteMarker(amId)">刪除</button>
+					</view>
+				</view>
+			</view>
+		</view>
+	</view>
+</template>
+
+<script lang="ts">
+import { getMarkersCloud, getMarkers, deleteMarkerCloud } from '@/utils/map-storage.uts';
+import { getDefaultMarkers } from '@/utils/map-utils.uts';
+
+export default {
+	data() {
+		return {
+			latitude: 39.9163,
+			longitude: 116.3972,
+			scale: 12,
+			curLat: 0.0,
+			curLng: 0.0,
+			hasCurrentLocation: false,
+			mapCtx: null,
+			markers: [] as Array<Any>,
+			activeMarker: null as UTSJSONObject | null,
+			hasActiveMarker: false,
+			locationRetryCount: 0
+}
+	},
+	computed: {
+		amTitle() : string {
+			if (this.activeMarker == null) return '';
+			return '' + this.activeMarker["title"];
+		},
+		amChecked() : boolean {
+			if (this.activeMarker == null) return false;
+			return this.activeMarker["checked"] == true;
+		},
+		amPhotoPath() : string {
+			if (this.activeMarker == null) return '';
+			const v = this.activeMarker["photoPath"];
+			return v != null ? '' + v : '';
+		},
+		amNote() : string {
+			if (this.activeMarker == null) return '';
+			const v = this.activeMarker["note"];
+			return v != null ? '' + v : '';
+		},
+		amId() : number {
+			if (this.activeMarker == null) return 0;
+			return parseInt('' + this.activeMarker["id"]);
+		},
+	},
+	onShow() {
+		this.loadMarkers();
+		// 監聽來自清單頁的定位跳轉請求
+		uni.$once('focus-marker', (data : UTSJSONObject) => {
+			this.latitude = parseFloat('' + data["latitude"]);
+			this.longitude = parseFloat('' + data["longitude"]);
+			this.scale = 16; // 固定縮放等級
+			const dataId = data["id"];
+			const target = this.markers.find(m => {
+				const mo = m as UTSJSONObject;
+				return mo["id"] == dataId;
+			});
+			if (target != null) {
+				this.activeMarker = target as UTSJSONObject;
+				this.hasActiveMarker = true;
+			}
+		});
+	},
+	mounted() {
+		this.mapCtx = uni.createMapContext('myMap', this);
+		this.getRealLocation();
+		
+		// 每5秒刷新定位
+		setInterval(() => {
+				this.getRealLocation();
+			}, 8000);
+	},
+	methods: {
+		goBack() {
+			uni.navigateBack();
+		},
+		goToTasksPage() {
+			uni.navigateTo({ url: '/pages/map/tasks' });
+		},
+		
+		async loadMarkers() {
+			// 先用本地缓存快速渲染，再从云端刷新
+			const cached = getMarkers();
+			if (cached.length > 0) this.markers = cached;
+
+			try {
+				const cloud = await getMarkersCloud();
+				if (cloud.length > 0) {
+					this.markers = cloud;
+				} else if (cached.length === 0) {
+					// 云端和本地都没有数据，写入默认示例
+					const defaults = getDefaultMarkers();
+					this.markers = defaults as Array<Any>;
+					uni.setStorageSync('tourism_markers', defaults);
+				}
+			} catch (_) {
+				// 云端失败，使用本地缓存或默认数据
+				if (this.markers.length === 0) {
+					this.markers = getDefaultMarkers() as Array<Any>;
+					uni.setStorageSync('tourism_markers', this.markers);
+				}
+			}
+		},
+
+		backToCurrentLocation() {
+			if (!this.hasCurrentLocation) {
+				this.getRealLocation();
+				return;
+			}
+			this.latitude = this.curLat;
+			this.longitude = this.curLng;
+			this.scale = 16;
+		},
+
+		addMarkerAtCurrent() {
+			const lat = this.hasCurrentLocation ? this.curLat : this.latitude;
+			const lng = this.hasCurrentLocation ? this.curLng : this.longitude;
+			this.goToAddMarker(lat, lng);
+		},
+
+		handleMapLongPress(e : any) {
+			const event = e as UTSJSONObject;
+			const lat = event["latitude"] as number;
+			const lng = event["longitude"] as number;
+			this.goToAddMarker(lat, lng);
+		},
+
+		goToAddMarker(lat : number, lng : number) {
+			const curLat = this.hasCurrentLocation ? this.curLat : this.latitude;
+			const curLng = this.hasCurrentLocation ? this.curLng : this.longitude;
+			uni.navigateTo({
+				url: `/pages/map/add-marker?centerLat=${lat}&centerLng=${lng}&currentLat=${curLat}&currentLng=${curLng}`
+			});
+		},
+
+		handleCheckIn() {
+		        // 【核心修复】：告诉编译器 activeMarker 具体是个啥类型（转成 UTSJSONObject 或 any）
+		        const marker = this.activeMarker as UTSJSONObject; 
+		        
+		        // 现在用 marker 来代替 this.activeMarker 就不会报错了
+		        if (marker.getBoolean('checked') == true) return; 
+		        
+		        const dist = parseFloat('' + this.calculateLiveDistance());
+        if (dist <= 500) {
+            const mId = marker.getString('id') as string;
+            const mTitle = marker.getString('title') as string;
+            uni.navigateTo({
+                url: `/pages/map/checkin?id=${mId}&title=${encodeURIComponent(mTitle)}`
+            });
+		        } else {
+				uni.showModal({ title: '提示', content: `還差 ${dist} 米，請靠近後再試。`, showCancel: false });
+			}
+		},
+
+		calculateLiveDistance() : string | number {
+			if (!this.hasCurrentLocation || this.activeMarker == null) return '--';
+			const R = 6371e3;
+			const p1 = this.curLat * Math.PI / 180;
+			const targetLat = parseFloat('' + this.activeMarker["latitude"]);
+			const targetLng = parseFloat('' + this.activeMarker["longitude"]);
+			const p2 = targetLat * Math.PI / 180;
+			const dp = p2 - p1;
+			const dl = (targetLng - this.curLng) * Math.PI / 180;
+			const sinDp2 = Math.sin(dp / 2);
+			const sinDl2 = Math.sin(dl / 2);
+			const a = sinDp2 * sinDp2 + Math.cos(p1) * Math.cos(p2) * sinDl2 * sinDl2;
+			return Math.round(R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a)));
+		},
+
+		getRealLocation() {
+				uni.getLocation({
+					type: 'gcj02',
+					isHighAccuracy: true,
+					highAccuracyExpireTime: 10000,
+					success: (res) => {
+						this.curLat = res.latitude;
+						this.curLng = res.longitude;
+						this.hasCurrentLocation = true;
+					},
+
+					fail: (err) => {
+						console.error('定位失败:', err);
+						uni.showToast({
+							title: '定位失败，可稍后重试',
+							icon: 'none'
+						});
+
+						// 失败后重试（最多3次）
+						if (this.locationRetryCount == null) {
+							this.locationRetryCount = 0;
+						}
+						if (this.locationRetryCount < 3) {
+							this.locationRetryCount++;
+							setTimeout(() => this.getRealLocation(), 2000);
+						}
+					}
+				});
+			},
+
+		clearActiveMarker() {
+			this.activeMarker = null;
+			this.hasActiveMarker = false;
+		},
+
+		onMarkerTap(e: any) {
+			const event = e as UTSJSONObject;
+			const tapId = event["markerId"] as number;
+			const marker = this.markers.find(m => {
+				const mo = m as UTSJSONObject;
+				return mo["id"] == tapId;
+			});
+			if (marker != null) {
+				this.activeMarker = marker as UTSJSONObject;
+				this.hasActiveMarker = true;
+				const mo = marker as UTSJSONObject;
+				this.latitude = parseFloat('' + mo["latitude"]);
+				this.longitude = parseFloat('' + mo["longitude"]);
+			}
+		},
+
+		onMapClick() {
+			this.activeMarker = null;
+			this.hasActiveMarker = false;
+		},
+
+		async deleteMarker(id : number) {
+			const toDelete = this.markers.find(m => {
+				const mo = m as UTSJSONObject;
+				return mo["id"] == id;
+			});
+			this.markers = this.markers.filter(m => {
+				const mo = m as UTSJSONObject;
+				return mo["id"] != id;
+			});
+			this.activeMarker = null;
+			this.hasActiveMarker = false;
+			if (toDelete != null) {
+				try {
+					const del = toDelete as UTSJSONObject;
+					const cloudId = del["_id"] != null ? '' + del["_id"] : '' + del["id"];
+					await deleteMarkerCloud(cloudId);
+				} catch (_) {}
+			}
+		},
+
+		previewPhoto(path: string) { // type annotation added
+					uni.previewImage({ urls: [path], current: path });
+				},
+				saveMarkers() { 
+					uni.setStorageSync('tourism_markers', this.markers); 
+				},
+				zoomIn() { 
+					if (this.scale < 20) this.scale += 1; 
+				},
+				zoomOut() {
+					if (this.scale > 3) this.scale -= 1;
+				}
+			}
+};
+</script>
+
+<style scoped>
+.container {
+	display: flex; flex-direction: column; height: 100%;
+	background: linear-gradient(180deg, #f7f9fc 0%, #eef3f8 100%);
+	font-family: "PingFang TC", "Noto Sans TC", "Microsoft JhengHei", system-ui, sans-serif;
+}
+.back-btn {
+	position: absolute; top: 60rpx; left: 25rpx; z-index: 100;
+	width: 80rpx; height: 80rpx; background: rgba(255,255,255,0.92); border-radius: 40rpx;
+	display: flex; justify-content: center; align-items: center;
+	box-shadow: 0 6rpx 18rpx rgba(0,0,0,0.15);
+}
+.back-icon { font-size: 40rpx; color: #333; }
+
+.map-container { flex: 1; position: relative; }
+.map-component { width: 100%; height: 100%; }
+
+.map-tools {
+	position: absolute; right: 25rpx; top: 50%; transform: translateY(-50%);
+	display: flex; flex-direction: column; z-index: 99;
+}
+.map-tools .tool-btn + .tool-btn,
+.map-tools .divider + .divider,
+.map-tools .tool-btn + .divider,
+.map-tools .divider + .tool-btn { margin-top: 20rpx; }
+.tool-btn {
+	width: 90rpx; height: 90rpx; background: white; border-radius: 45rpx;
+	display: flex; justify-content: center; align-items: center;
+	box-shadow: 0 6rpx 15rpx rgba(0,0,0,0.15);
+	border: 1px solid rgba(0,0,0,0.04);
+	transition: transform 0.12s ease, box-shadow 0.12s ease;
+}
+.tool-icon { font-size: 40rpx; }
+.add-btn { background: #007aff; color: white; }
+.task-btn { background: #ff9500; color: white; }
+.divider { height: 1px; background: #eee; margin: 10rpx 15rpx; }
+.floating-add {
+	position: absolute; left: 25rpx; bottom: 25rpx; z-index: 99;
+	box-shadow: 0 12rpx 26rpx rgba(0,122,255,0.35);
+}
+.tool-btn:active { transform: scale(0.96); box-shadow: 0 4rpx 10rpx rgba(0,0,0,0.12); }
+
+.bottom-sheet {
+	position: absolute; bottom: -100%; left: 0; right: 0;
+	background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
+	border-radius: 30rpx 30rpx 0 0; padding: 32rpx;
+	transition: bottom 0.3s; z-index: 1000; box-shadow: 0 -12rpx 34rpx rgba(0,0,0,0.12);
+}
+.sheet-active { bottom: 0; }
+.sheet-handle { width: 60rpx; height: 8rpx; background: #eee; border-radius: 4rpx; margin: 0 auto 20rpx; }
+.spot-title { font-size: 36rpx; font-weight: bold; letter-spacing: 0.5rpx; }
+.spot-dist { font-size: 24rpx; color: #999; margin-top: 10rpx; }
+.action-bar { display: flex; margin-top: 30rpx; }
+.action-bar .main-action-btn { margin-right: 20rpx; }
+.main-action-btn {
+	flex: 2; background: #007aff; color: white; border-radius: 14rpx; height: 90rpx;
+	font-weight: bold; box-shadow: 0 8rpx 18rpx rgba(0,122,255,0.2);
+}
+.btn-success { background: #34c759; }
+.ghost-btn { flex: 1; background: #fff2f2; color: #f56c6c; border: none; font-size: 24rpx; height: 90rpx; }
+.title-row { display: flex; justify-content: space-between; }
+.checkin-photo-row {
+	display: flex; align-items: flex-start; margin-top: 16rpx;
+}
+.checkin-photo-row .checkin-thumb { margin-right: 18rpx; }
+.checkin-thumb {
+	width: 120rpx; height: 120rpx; border-radius: 16rpx; flex-shrink: 0;
+}
+.checkin-note {
+	flex: 1; font-size: 24rpx; color: #6b7280; line-height: 1.5;
+}
+</style>

@@ -1,0 +1,9 @@
+{
+  "name": "order-api",
+  "dependencies": {
+    "auth-util": "file:../common/auth-util"
+  },
+  "extensions": {
+    "uni-cloud-jql": {}
+  }
+}

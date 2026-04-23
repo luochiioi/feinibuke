@@ -1,0 +1,26 @@
+{
+  "bsonType": "object",
+  "required": ["taskId", "status"],
+  "permission": {
+    "read": true,
+    "create": true,
+    "update": true,
+    "delete": true
+  },
+  "properties": {
+    "_id": {},
+    "taskId": {
+      "bsonType": "string",
+      "description": "关联的任务业务ID，如 task_001"
+    },
+    "status": {
+      "bsonType": "string",
+      "enum": ["pending", "completed"],
+      "defaultValue": "pending"
+    },
+    "completedAt": {
+      "bsonType": "int",
+      "description": "完成时间戳（毫秒）"
+    }
+  }
+}

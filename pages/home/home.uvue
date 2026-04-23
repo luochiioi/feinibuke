@@ -1,0 +1,318 @@
+<template>
+  <scroll-view class="home-page" scroll-y="true">        
+    <view class="user-card">
+      <view class="avatar-box">
+        <uni-icons type="person-filled" size="50" color="#8eb4d7"></uni-icons>
+      </view>
+      <view class="user-text">
+        <text class="user-name" v-if="currentUser != null">您好，{{userName}}</text>
+        <text class="user-name" v-else>您好，游客</text>
+        <text class="user-desc">欢迎回来，体验更多专属功能</text>
+      </view>
+      <button class="login-btn" v-if = "currentUser == null" @click="logIn">登录</button>
+    </view>
+    
+    <view class="grid-card">
+      <text class="grid-title">我的服务</text>
+      <view class="service-grid">
+        <view class="service-item" @click="navigateTo('/pages/cart/cart')">
+          <view class="icon-circle" style="background-color: #E3F2FD;">
+            <uni-icons type="cart-filled" size="24" color="#2196F3"></uni-icons>
+          </view>
+          <text class="service-text">购物车</text>
+        </view>
+        
+        <view class="service-item" @click="navigateTo('/pages/order/order')">
+          <view class="icon-circle" style="background-color: #FFF3E0;">
+            <uni-icons type="calendar-filled" size="24" color="#FF9800"></uni-icons>
+          </view>
+          <text class="service-text">我的订单</text>
+        </view>
+        
+        <view class="service-item" @click="navigateTo('/pages/favorite/favorite')">
+          <view class="icon-circle" style="background-color: #FFEBEE;">
+            <uni-icons type="heart-filled" size="24" color="#F44336"></uni-icons>
+          </view>
+          <text class="service-text">我的收藏</text>
+        </view>
+        
+        <view class="service-item" @click="navigateTo('/pages/coupon/coupon')">
+          <view class="icon-circle" style="background-color: #E8F5E9;">
+             <uni-icons type="gift-filled" size="24" color="#4CAF50"></uni-icons>
+          </view>
+          <view class="service-text-wrap">
+            <text class="service-text">优惠券</text>
+          </view>
+        </view>
+      </view>
+    </view>
+    
+    <view class="list-card">
+       <text class="card-title">更多功能</text>
+       <view class="more-func-row">
+         
+        <view class="more-func-item item-address" @click="navigateTo('/pages/address/address')">
+           <uni-icons type="location-filled" size="22" color="#4facfe"></uni-icons>
+           <text class="more-func-text text-address">收货地址</text>
+         </view>
+         
+         <view class="more-func-item item-security" @click="showToast('账号安全')">
+           <uni-icons type="locked-filled" size="22" color="#a18cd1"></uni-icons>
+           <text class="more-func-text text-security">账号与安全</text>
+         </view>
+         
+         <view class="more-func-item item-cache" @click="showToast('清除缓存')">
+           <uni-icons type="trash-filled" size="22" color="#ff758c"></uni-icons>
+           <text class="more-func-text text-cache">清除缓存</text>
+         </view>
+         
+       </view>
+
+       <view class="logout-box" @click="logOut">
+         <text class="logout-text">退出登录</text>
+       </view>
+    </view>
+
+    <view class="page-footer">
+      <text class="footer-text">© 2025 非你不可</text>
+    </view>
+  </scroll-view>
+</template>
+
+<script>
+	import {MyUserInfo , state ,clearUserInfo} from '@/user/index.uts'
+	export default {
+	  data(){
+		return {
+			state : state ,
+		}  
+	  } ,
+	  
+	  computed: {
+	  	// 1. 将 MyUserInfoInfofo 提取出来并强制断言类型，MyUserInfoUserInfoInfo 的问题
+		currentUser() : MyUserInfo | null {
+			return state.userInfo != null ? state.userInfo : null
+		},
+		// 2. 直接提取用户名，解决模板中多层访问 .userName 报错的问题
+		userName() : string {
+			const info = state.userInfo
+			return info != null ? info.userName : '游客'
+		}
+	  },
+	  
+	  methods: {
+		// 登录按钮的跳转函数
+	    logIn() {
+		  uni.navigateTo({ url: '/pages/login/login' }) ;
+	    },
+		
+		logOut(){
+			clearUserInfo() ;
+		},
+		
+		//待完成
+	    showToast(msg: string) {
+	      uni.showToast({ title: msg, icon: 'none' });
+	    },
+	    navigateTo(url: string) {
+	      uni.navigateTo({
+	        url: url,
+	        fail(err) {
+	          uni.showToast({ title: '功能开发中', icon: 'none' });
+	        }
+	      });
+	    }
+	  },
+	};
+</script>
+
+<style scoped>
+/* 页面整体底色：改为稍微深一点点的淡灰蓝色，衬托白卡片 */
+.home-page {
+  flex: 1;
+  background-color: #f2f5f8;
+  /* 【修复空白】将原来的 120rpx 缩小到 40rpx */
+  padding: 120rpx 24rpx 40rpx 24rpx;
+}
+
+/* --- 用户卡片：澳门葡式瓷砖 (Azulejo) 风格 --- */
+.user-card {
+  flex-direction: row; 
+  align-items: center;
+  justify-content: space-between;
+  /* 稍微提亮瓷砖蓝底色，更显清透 */
+  background-color: #eaf3fa;
+  border-radius: 24rpx;
+  padding: 50rpx 40rpx;
+  margin-bottom: 30rpx;
+  /* 经典的葡式瓷砖星花图案：uni-app x 仅支持 linear-gradient，用渐变模拟 */
+  /* 注：background-size 在 uni-app X 中不支持，图案可能无法正确平铺 */
+  background-image: linear-gradient(135deg, rgba(31,111,181,0.05) 25%, transparent 25%),
+                    linear-gradient(225deg, rgba(31,111,181,0.05) 25%, transparent 25%),
+                    linear-gradient(45deg,  rgba(31,111,181,0.05) 25%, transparent 25%),
+                    linear-gradient(315deg, rgba(31,111,181,0.05) 25%, transparent 25%);
+  box-shadow: 0 10rpx 24rpx rgba(31, 111, 181, 0.06);
+  border: 2rpx solid #dcecf8;
+}
+
+.avatar-box {
+  width: 110rpx;
+  height: 110rpx;
+  background-color: #ffffff;
+  border-radius: 55rpx;
+  align-items: center;
+  justify-content: center;
+  border: 4rpx solid #c8dff0; 
+}
+
+.user-text {
+  flex: 1;
+  flex-direction: column; 
+  margin-left: 30rpx;
+  justify-content: center;
+}
+
+.user-name {
+  font-size: 36rpx;
+  font-weight: bold;
+  color: #1f3b54; 
+  margin-bottom: 8rpx;
+}
+
+.user-desc {
+  font-size: 24rpx;
+  color: #6a859c;
+}
+
+.login-btn {
+  background-color: #3884c6; 
+  color: #ffffff;
+  font-size: 26rpx;
+  font-weight: bold;
+  width: 160rpx;
+  height: 64rpx;
+  line-height: 64rpx;
+  border-radius: 32rpx;
+  border: none;
+  box-shadow: 0 6rpx 16rpx rgba(56, 132, 198, 0.25);
+}
+
+.grid-card, .list-card {
+  background-color: #ffffff;
+  border-radius: 24rpx;
+  padding: 40rpx 30rpx;
+  margin-bottom: 30rpx;
+  box-shadow: 0 8rpx 20rpx rgba(0, 0, 0, 0.02); 
+}
+
+.grid-title, .card-title {
+  font-size: 32rpx;
+  font-weight: bold;
+  color: #333333;
+  margin-bottom: 30rpx;
+}
+
+/* --- 我的服务 --- */
+.service-grid {
+  flex-direction: row; 
+  flex-wrap: wrap;
+  justify-content: space-between;
+}
+
+.service-item {
+  width: 48%;
+  background-color: #f0eeff; 
+  border-radius: 20rpx;
+  padding: 24rpx;
+  margin-bottom: 24rpx;
+  flex-direction: row; 
+  align-items: center;
+}
+
+.icon-circle {
+  width: 72rpx;
+  height: 72rpx;
+  border-radius: 36rpx;
+  align-items: center;
+  justify-content: center;
+  margin-right: 20rpx;
+}
+
+.service-text-wrap {
+  flex-direction: row; 
+  align-items: center;
+}
+
+.service-text {
+  font-size: 28rpx;
+  color: #444444;
+  font-weight: bold;
+}
+
+/* --- 更多功能 --- */
+.list-card {
+  padding-bottom: 40rpx; 
+}
+
+.card-title {
+  margin-top: 0;
+}
+
+.more-func-row {
+  flex-direction: row; 
+  flex-wrap: wrap;
+}
+
+.more-func-item {
+  flex-direction: row;
+  align-items: center;
+  padding: 16rpx 26rpx;
+  border-radius: 14rpx;
+  margin-right: 20rpx;
+  margin-bottom: 24rpx;
+}
+
+.item-address { background-color: #f0f8ff; }
+.text-address { color: #2087d9; }
+
+.item-security { background-color: #f8f0fc; } 
+.text-security { color: #8e54a8; }
+
+.item-cache { background-color: #fff0f3; } 
+.text-cache { color: #d9455f; }
+
+.more-func-text {
+  font-size: 26rpx;
+  font-weight: normal;
+  margin-left: 12rpx;
+}
+
+/* --- 退出登录按钮 --- */
+.logout-box {
+  margin-top: 40rpx;
+  height: 88rpx;
+  align-items: center;
+  justify-content: center;
+  background-color: #fff5f5; 
+  border-radius: 44rpx;
+}
+
+.logout-text {
+  color: #e63946;
+  font-size: 30rpx;
+  font-weight: bold;
+}
+
+/* --- 底部版权 --- */
+.page-footer {
+  height: 60rpx;
+  justify-content: center;
+  align-items: center;
+  margin-top: 10rpx;
+}
+
+.footer-text {
+  font-size: 24rpx;
+  color: #bbbbbb;
+}
+</style>

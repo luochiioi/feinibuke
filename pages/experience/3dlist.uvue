@@ -1,0 +1,100 @@
+<template>
+  <view class="page-container">
+    <view class="nav-bar">
+      <view class="back-btn" @click="goBack">
+        <uni-icons type="back" size="24" color="#333"></uni-icons>
+      </view>
+      <text class="nav-title">3D 数字展览馆</text>
+      <view style="width: 24px;"></view> 
+    </view>
+
+    <scroll-view class="category-tabs" scroll-x="true" show-scrollbar="false">
+      <view class="tabs-container">
+        <view class="tab-item" :class="currentCategory === '全部' ? 'tab-active' : ''" @click="switchCategory('全部')">
+          <text class="tab-text" :class="currentCategory === '全部' ? 'text-active' : ''">全部</text>
+        </view>
+        <view class="tab-item" v-for="(cat, index) in categories" :key="index" :class="currentCategory === cat ? 'tab-active' : ''" @click="switchCategory(cat)">
+          <text class="tab-text" :class="currentCategory === cat ? 'text-active' : ''">{{ cat }}</text>
+        </view>
+      </view>
+    </scroll-view>
+
+    <scroll-view class="list-scroll" scroll-y="true">
+      <view class="model-grid">
+        <view class="model-item" v-for="(item, index) in filteredModels" :key="item.id" @click="goToModelDetail(item)">
+          <image class="m-img" :src="item.image" mode="aspectFill"></image>
+          <view class="m-info">
+            <text class="m-name">{{ item.name }}</text>
+            <text class="m-desc">{{ item.desc }}</text>
+            <view class="m-tag"><text class="m-tag-text">3D 预览</text></view>
+          </view>
+        </view>
+      </view>
+      <view style="height: 40px;"></view>
+    </scroll-view>
+
+  </view>
+</template>
+
+<script>
+
+type ModelItem = { id: number; name: string; category: string; image: string; desc: string; period: string; };
+
+export default {
+  // 🎯 毒素切除：删除了 mixins: [themeMixin]
+  data() {
+    return {
+      currentCategory: '全部',
+      categories: ['青铜器', '陶瓷', '木雕', '服饰'],
+      modelList: [
+        { id: 1, name: '青铜莲鹤方壶', category: '青铜器', image: 'https://images.unsplash.com/photo-1615266895738-11f1371cd7e5?q=80&w=400&auto=format&fit=crop', desc: '此壶主体部分为西周后期以来流行的方壶造型...', period: '春秋时期 · 河南博物院藏' },
+        { id: 2, name: '景德镇青花瓷瓶', category: '陶瓷', image: 'https://images.unsplash.com/photo-1578749556568-bc2c40e68b61?q=80&w=400&auto=format&fit=crop', desc: '纹饰繁密，釉色青翠，展现极高制瓷工艺。', period: '明代 · 故宫博物院藏' },
+        { id: 3, name: '三星堆青铜神树', category: '青铜器', image: 'https://images.unsplash.com/photo-1584284143243-718e2025139a?q=80&w=400&auto=format&fit=crop', desc: '古蜀先民宇宙观的具象化体现，神秘莫测。', period: '商代 · 三星堆博物馆藏' },
+        { id: 4, name: '潮州金漆木雕', category: '木雕', image: 'https://images.unsplash.com/photo-1601614392067-961daab559ba?q=80&w=400&auto=format&fit=crop', desc: '刀法精湛，金碧辉煌，极具岭南地方特色。', period: '清代 · 广东省博物馆藏' }
+      ] as ModelItem[]
+    }
+  },
+  computed: {
+    filteredModels(): ModelItem[] {
+      if (this.currentCategory === '全部') return this.modelList;
+      return this.modelList.filter((item: ModelItem): boolean => item.category === this.currentCategory);
+    }
+  },
+  methods: {
+    goBack() { uni.navigateBack(); },
+    switchCategory(cat: string) { this.currentCategory = cat; },
+    goToModelDetail(item: ModelItem) {
+      const url = `/pages/experience/3dmodel?id=${item.id}&name=${encodeURIComponent(item.name)}&desc=${encodeURIComponent(item.desc)}&period=${encodeURIComponent(item.period)}`;
+      uni.navigateTo({ url: url });
+    }
+  }
+};
+</script>
+
+<style scoped>
+.page-container { flex: 1; background-color: #f7f8fa; display: flex; flex-direction: column; height: 100%; }
+
+/* 导航栏 */
+.nav-bar { height: 88px; padding-top: 44px; display: flex; flex-direction: row; align-items: center; justify-content: space-between; padding-left: 20px; padding-right: 20px; background-color: #ffffff; z-index: 100; }
+.nav-title { color: #333333; font-size: 16px; font-weight: bold; }
+.back-btn { width: 32px; height: 32px; display: flex; align-items: center; justify-content: center; }
+
+/* 分类 Tabs */
+.category-tabs { width: 100%; padding: 20rpx 0; background-color: #ffffff; margin-bottom: 20rpx; }
+.tabs-container { flex-direction: row; padding: 0 30rpx; }
+.tab-item { padding: 12rpx 36rpx; background-color: #f0f0f0; border-radius: 30rpx; margin-right: 20rpx; align-items: center; justify-content: center; }
+.tab-active { background-color: #7b61ff; }
+.tab-text { font-size: 26rpx; color: #666666; }
+.text-active { color: #ffffff; font-weight: bold; }
+
+/* 列表区 */
+.list-scroll { flex: 1; width: 100%; }
+.model-grid { flex-direction: row; flex-wrap: wrap; justify-content: space-between; padding: 0 30rpx; }
+.model-item { width: 48%; background-color: #ffffff; border-radius: 16rpx; overflow: hidden; margin-bottom: 24rpx; flex-direction: column; box-shadow: 0 4rpx 16rpx rgba(0,0,0,0.04); }
+.m-img { width: 100%; height: 260rpx; background-color: #eaeaea; }
+.m-info { padding: 20rpx; flex-direction: column; }
+.m-name { font-size: 28rpx; font-weight: bold; color: #333333; margin-bottom: 10rpx; lines: 1; text-overflow: ellipsis; }
+.m-desc { font-size: 22rpx; color: #999999; margin-bottom: 16rpx; lines: 1; text-overflow: ellipsis; }
+.m-tag { align-self: flex-start; background-color: rgba(123, 97, 255, 0.1); padding: 6rpx 16rpx; border-radius: 8rpx; }
+.m-tag-text { font-size: 20rpx; color: #7b61ff; font-weight: bold; }
+</style>

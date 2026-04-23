@@ -1,0 +1,16 @@
+<<<<<<< HEAD
+{
+	"name": "auth-util",
+	"version": "1.0.0",
+	"description": "",
+	"main": "index.js",
+	"scripts": {
+		"test": "echo \"Error: no test specified\" && exit 1"
+	},
+	"keywords": [],
+	"author": "",
+	"license": "ISC"
+}
+=======
+{"name":"auth-util","version":"1.0.0","description":"","main":"index.js","scripts":{"test":"echo \"Error: no test specified\" && exit 1"},"keywords":[],"author":"","license":"ISC"}
+>>>>>>> 84cc042fa35c54028adc1cea4914753f19db77f4

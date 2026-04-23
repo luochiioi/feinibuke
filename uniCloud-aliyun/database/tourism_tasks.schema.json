@@ -1,0 +1,48 @@
+{
+  "bsonType": "object",
+  "required": ["name", "targetTitle", "reward"],
+  "permission": {
+    "read": true,
+    "create": true,
+    "update": true,
+    "delete": true
+  },
+  "properties": {
+    "_id": {
+      "description": "云端自动生成的文档ID"
+    },
+    "id": {
+      "bsonType": "string",
+      "description": "任务的业务ID，如 task_001"
+    },
+    "name": {
+      "bsonType": "string",
+      "description": "任务名称"
+    },
+    "description": {
+      "bsonType": "string",
+      "description": "任务描述"
+    },
+    "targetTitle": {
+      "bsonType": "string",
+      "description": "目标景点名称"
+    },
+    "targetMarkerId": {
+      "description": "目标景点的数字ID（与 tourism_markers.id 对应）"
+    },
+    "reward": {
+      "bsonType": "string",
+      "description": "任务奖励描述，如 10 积分"
+    },
+    "status": {
+      "bsonType": "string",
+      "description": "任务状态",
+      "enum": ["pending", "completed"],
+      "defaultValue": "pending"
+    },
+    "completedAt": {
+      "bsonType": "timestamp",
+      "description": "完成时间戳"
+    }
+  }
+}

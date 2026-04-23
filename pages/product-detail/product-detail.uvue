@@ -1,0 +1,318 @@
+<template>
+  <view class="page-wrapper">
+    
+    <view class="custom-navbar">
+      <view class="status-bar"></view>
+      
+      <view class="navbar-content">
+        <view class="nav-btn-left" @click="goBack">
+          <uni-icons type="back" size="24" color="#333"></uni-icons>
+        </view>
+        
+        <text class="nav-title">商品详情</text>
+        
+		<!-- 右上角的购物车按钮 -->
+        <view class="nav-btn-right" @click="goToCart">
+          <view class="cart-icon-bg">
+            <uni-icons type="cart" size="20" color="#333"></uni-icons>
+          </view>
+        </view>
+      </view>
+    </view>
+
+    <scroll-view class="container" scroll-y="true">
+      <view class="nav-placeholder"></view>
+
+      <swiper class="banner" circular autoplay interval="4000" indicator-dots indicator-active-color="#000">
+        <swiper-item v-for="(img, index) in product.images" :key="index">
+          <image :src="img" mode="aspectFill" class="banner-img"></image>
+        </swiper-item>
+      </swiper>
+
+      <view class="info-card">
+        <view class="price-row">
+          <text class="currency">¥</text>
+          <text class="price">{{ product.unitPrice }}</text>
+          <text class="sales">已售 {{ product.sales }}</text>
+        </view>
+        <text class="title">{{ product.title }}</text>
+      </view>
+
+      <view class="comment-section">
+        <view class="section-header">
+          <text class="section-title">商品评价</text>
+        </view>
+        <view class="comment-placeholder"></view>
+      </view>
+
+      <view class="detail-images">
+        <image src="/static/product/temp.png" mode="widthFix" class="detail-img"></image>
+        <image src="/static/product/temp.png" mode="widthFix" class="detail-img"></image>
+      </view>
+
+      <view style="height: 120rpx;"></view>
+    </scroll-view>
+
+	<!-- 底部的按钮组 -->
+    <view class="footer-bar">
+      <view class="icons-area">
+        <view class="icon-item" @click="showDevTips">
+          <uni-icons type="shop" size="24" color="#333"></uni-icons>
+          <text class="icon-text">商店</text>
+        </view>
+        <view class="icon-item" @click="showDevTips">
+          <uni-icons type="headphones" size="24" color="#333"></uni-icons>
+          <text class="icon-text">客服</text>
+        </view>
+      </view>
+      
+      <view class="btns-area">
+        <view class="btn add-cart" @click="addToCart">
+          <text class="btn-txt-white">加入购物车</text>
+        </view>
+        <view class="btn buy-now" @click="buyNow">
+          <text class="btn-txt-white">立即购买</text>
+        </view>
+      </view>
+    </view>
+
+  </view>
+</template>
+
+<script>
+import {MyUserInfo , state , productDetail , addCart} from '@/user/index.uts'
+
+
+export default {
+  data() {
+    return {
+      product : state.curProduct as productDetail
+    }
+  },
+  onLoad() {//页面加载时调用的函数
+	
+  },
+  methods: {
+    showDevTips() {	//商店按钮
+      uni.showToast({ title: '功能还在开发中', icon: 'none' });
+    },
+    goBack() {	//返回按钮
+      uni.navigateBack();
+    },
+    goToCart() {	//购物车按钮
+      uni.navigateTo({ url: '/pages/cart/cart' });
+    },
+    
+    addToCart() {	//放入购物车
+		addCart(this.product) ;	//更新本地数据
+		uni.showToast({ title: '已加入购物车', icon: 'success' });
+    },
+
+    buyNow() {	//立即购买
+	  //放入购物车
+      this.addToCart();	
+      //跳转到购物车页面
+	  setTimeout(() => {
+          uni.navigateTo({ url: '/pages/cart/cart' }); 
+      }, 500);
+    }
+  }
+}
+</script>
+
+<style scoped>
+.page-wrapper {
+  flex: 1;
+  background-color: #f9f9f9;
+}
+
+/* --- 自定义导航栏样式 --- */
+.custom-navbar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  background-color: #ffffff;
+  z-index: 999;
+  /* 简单的阴影让它更像导航栏 */
+  border-bottom-width: 1rpx;
+  border-bottom-style: solid;
+  border-bottom-color: #eee;
+}
+
+.status-bar {
+  /* 状态栏高度，通常 UTS/App 端会自动适配，或者给个安全值 */
+  height: 40px; 
+}
+
+.navbar-content {
+  height: 44px;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 10px;
+}
+
+.nav-btn-left {
+  width: 40px;
+  height: 40px;
+  align-items: center;
+  justify-content: center;
+}
+
+.nav-title {
+  font-size: 16px;
+  font-weight: bold;
+  color: #333;
+}
+
+.nav-btn-right {
+  width: 40px;
+  height: 40px;
+  align-items: center;
+  justify-content: center;
+}
+
+/* 购物车圆形背景 */
+.cart-icon-bg {
+  width: 32px;
+  height: 32px;
+  background-color: #fff;
+  border-radius: 16px;
+  align-items: center;
+  justify-content: center;
+}
+
+/* 内容容器 */
+.container {
+  flex: 1;
+  background-color: #f9f9f9;
+}
+
+/* 占位块：高度 = status-bar + navbar-content */
+.nav-placeholder {
+  width: 100%;
+  height: 84px; /* 40 + 44 */
+  background-color: #f9f9f9;
+}
+
+.banner {
+  width: 100%;
+  height: 750rpx;
+  background-color: #fff;
+}
+.banner-img {
+  width: 100%;
+  height: 100%;
+}
+
+.info-card {
+  background-color: #fff;
+  padding: 30rpx;
+  margin-bottom: 20rpx;
+}
+.price-row {
+  flex-direction: row; 
+  align-items: flex-end; 
+  margin-bottom: 16rpx;
+}
+.currency {
+  font-size: 32rpx;
+  color: #ff0000;
+  font-weight: bold;
+}
+.price {
+  font-size: 56rpx;
+  color: #ff0000;
+  font-weight: bold;
+  margin-left: 4rpx;
+}
+.sales {
+  font-size: 24rpx;
+  color: #999;
+  margin-left: auto;
+}
+.title {
+  font-size: 30rpx;
+  color: #000;
+  line-height: 1.4;
+}
+
+.comment-section {
+  background-color: #fff;
+  padding: 30rpx;
+  margin-bottom: 20rpx;
+}
+.section-title {
+  font-size: 30rpx;
+  color: #333;
+  font-weight: bold;
+}
+.comment-placeholder {
+  height: 100rpx;
+  width: 100%;
+}
+
+.detail-images {
+  width: 100%;
+  background-color: #fff;
+  flex-direction: column; 
+}
+.detail-img {
+  width: 100%;
+}
+
+.footer-bar {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  width: 100%;
+  height: 100rpx;
+  background-color: #fff;
+  flex-direction: row; 
+  padding-bottom: 20rpx; 
+}
+
+.icons-area {
+  width: 180rpx;
+  flex-direction: row; 
+  justify-content: space-around;
+  align-items: center;
+}
+.icon-item {
+  flex-direction: column; 
+  align-items: center;
+  justify-content: center;
+}
+.icon-text {
+  font-size: 20rpx;
+  color: #333;
+  margin-top: 4rpx;
+}
+
+.btns-area {
+  flex: 1;
+  flex-direction: row; 
+  align-items: center;
+  justify-content: space-between;
+  padding-right: 20rpx;
+  padding-left: 10rpx;
+}
+
+.btn {
+  flex: 1;
+  height: 70rpx;
+  flex-direction: row; 
+  align-items: center;
+  justify-content: center;
+  margin: 0 10rpx;
+  border-radius: 35rpx;
+}
+.add-cart { background-color: #87CEEB; }
+.buy-now { background-color: #1E3A8A; }
+.btn-txt-white {
+  font-size: 26rpx;
+  color: #fff;
+  font-weight: bold;
+}
+</style>

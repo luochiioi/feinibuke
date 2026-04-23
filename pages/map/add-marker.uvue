@@ -1,0 +1,468 @@
+<template>
+	<view class="add-page">
+		<view class="hero-section">
+			<text class="hero-tag">NEW SPOT</text>
+			<text class="hero-title">新增地点</text>
+			<text class="hero-subtitle">默认带入地图中心或当前位置，补上名称后就可以直接保存。</text>
+		</view>
+
+		<view class="content-card source-card">
+			<view class="section-head">
+				<text class="section-title">坐标来源</text>
+				<text class="section-note">更适合手机端的添加方式</text>
+			</view>
+
+			<view class="source-row">
+				<view
+					:class="['source-chip', activeSource === 'center' ? 'source-chip--active' : '', mapCenterNull ? 'source-chip--disabled' : '']"
+					@click="applyCoordinates('center')"
+				>
+					地图中心
+				</view>
+				<view
+					:class="['source-chip', activeSource === 'current' ? 'source-chip--active' : '', currentLocationNull ? 'source-chip--disabled' : '']"
+					@click="applyCoordinates('current')"
+				>
+					我的位置
+				</view>
+				<view class="refresh-btn" @click="refreshCurrentLocation">刷新定位</view>
+			</view>
+
+			<text class="source-tip">
+				{{ sourceTip }}
+			</text>
+		</view>
+
+		<view class="content-card form-card">
+			<view class="section-head">
+				<text class="section-title">地点信息</text>
+				<text class="section-note">支持手动微调坐标</text>
+			</view>
+
+			<view class="field-group">
+				<text class="field-label">地点名称</text>
+				<input v-model.trim="formTitle" class="field-input" maxlength="24" placeholder="例如：鼓浪屿日光岩" />
+			</view>
+
+			<view class="field-grid">
+				<view class="field-group field-group--half">
+					<text class="field-label">纬度</text>
+					<input
+						v-model="formLatitude"
+						class="field-input"
+						type="digit"
+						placeholder="请输入纬度"
+					/>
+				</view>
+				<view class="field-group field-group--half">
+					<text class="field-label">经度</text>
+					<input
+						v-model="formLongitude"
+						class="field-input"
+						type="digit"
+						placeholder="请输入经度"
+					/>
+				</view>
+			</view>
+
+			<view class="preview-card">
+				<text class="preview-label">当前坐标预览</text>
+				<text class="preview-value">{{ previewCoordinates }}</text>
+			</view>
+
+			<view class="action-row">
+				<button class="secondary-btn" @click="goBack">取消</button>
+				<button class="primary-btn" @click="submitForm">保存地点</button>
+			</view>
+		</view>
+	</view>
+</template>
+
+<script lang="ts">
+import { addMarkerCloud } from '@/utils/map-storage.uts';
+
+export default {
+	data() {
+		return {
+			formTitle: '',
+			formLatitude: '',
+			formLongitude: '',
+			mapCenterLat: -1,
+			mapCenterLng: -1,
+			mapCenterValid: false,
+			currentLat: -1,
+			currentLng: -1,
+			currentLocationValid: false,
+			activeSource: '',
+			isLoadingLocation: false
+		};
+	},
+	computed: {
+		sourceTip() : string {
+			if (this.activeSource === 'current' && this.currentLocationValid) {
+				return `当前使用”我的位置”：${this.currentLat.toFixed(6)}, ${this.currentLng.toFixed(6)}`;
+			}
+			if (this.activeSource === 'center' && this.mapCenterValid) {
+				return `当前使用”地图中心”：${this.mapCenterLat.toFixed(6)}, ${this.mapCenterLng.toFixed(6)}`;
+			}
+			return '没有自动坐标时，也可以直接手动输入经纬度。';
+		},
+		mapCenterNull() : boolean {
+			return !this.mapCenterValid;
+		},
+		currentLocationNull() : boolean {
+			return !this.currentLocationValid;
+		},
+		previewCoordinates() : string {
+			const latitude = this.parseCoordinate(this.formLatitude);
+			const longitude = this.parseCoordinate(this.formLongitude);
+			if (latitude == null || longitude == null) {
+				return '等待填写';
+			}
+			return `${latitude!!.toFixed(6)}, ${longitude!!.toFixed(6)}`;
+		}
+	},
+	onLoad(query) {
+		const centerLatRaw = query != null ? query["centerLat"] : null;
+		const centerLngRaw = query != null ? query["centerLng"] : null;
+		const currentLatRaw = query != null ? query["currentLat"] : null;
+		const currentLngRaw = query != null ? query["currentLng"] : null;
+
+		const centerLat = this.parseCoordinate(centerLatRaw);
+		const centerLng = this.parseCoordinate(centerLngRaw);
+		const curLat = this.parseCoordinate(currentLatRaw);
+		const curLng = this.parseCoordinate(currentLngRaw);
+
+		if (centerLat != null && centerLng != null) {
+			this.mapCenterLat = centerLat!!;
+			this.mapCenterLng = centerLng!!;
+			this.mapCenterValid = true;
+		}
+
+		if (curLat != null && curLng != null) {
+			this.currentLat = curLat!!;
+			this.currentLng = curLng!!;
+			this.currentLocationValid = true;
+		}
+
+		if (this.mapCenterValid) {
+			this.applyCoordinates('center');
+		} else if (this.currentLocationValid) {
+			this.applyCoordinates('current');
+		} else {
+			this.refreshCurrentLocation();
+		}
+	},
+	methods: {
+		parseCoordinate(value : any | null) : number | null {
+			if (value == null) {
+				return null;
+			}
+			const str = '' + value;
+			if (str == '') {
+				return null;
+			}
+			const parsed = parseFloat(str);
+			return isFinite(parsed) ? parsed : null;
+		},
+		fillFormCoordinates(lat : number, lng : number) {
+			this.formLatitude = lat.toFixed(6);
+			this.formLongitude = lng.toFixed(6);
+		},
+		applyCoordinates(source : string) {
+			if (source === 'center') {
+				if (!this.mapCenterValid) {
+					return;
+				}
+				this.fillFormCoordinates(this.mapCenterLat, this.mapCenterLng);
+				this.activeSource = 'center';
+				return;
+			}
+			if (!this.currentLocationValid) {
+				this.refreshCurrentLocation();
+				return;
+			}
+			this.fillFormCoordinates(this.currentLat, this.currentLng);
+			this.activeSource = 'current';
+		},
+		refreshCurrentLocation() {
+			if (this.isLoadingLocation) {
+				return;
+			}
+			this.isLoadingLocation = true;
+			uni.getLocation({
+				type: 'gcj02',
+				isHighAccuracy: true,
+				highAccuracyExpireTime: 3000,
+				success: (res) => {
+					this.currentLat = res.latitude;
+					this.currentLng = res.longitude;
+					this.currentLocationValid = true;
+					if (this.formLatitude == '' || this.formLongitude == '' || this.activeSource === 'current') {
+						this.applyCoordinates('current');
+					}
+				},
+				fail: () => {
+					uni.showToast({
+						title: '获取定位失败，请手动填写坐标',
+						icon: 'none'
+					});
+				},
+				complete: () => {
+					this.isLoadingLocation = false;
+				}
+			});
+		},
+		async submitForm() {
+			const title = this.formTitle.trim();
+			const latitude = this.parseCoordinate(this.formLatitude);
+			const longitude = this.parseCoordinate(this.formLongitude);
+
+			if (title == '') {
+				uni.showToast({ title: '请先填写地点名称', icon: 'none' });
+				return;
+			}
+
+			if (latitude == null || longitude == null) {
+				uni.showToast({ title: '请填写有效的经纬度', icon: 'none' });
+				return;
+			}
+
+			const lat = latitude!!;
+			const lng = longitude!!;
+			if (lat < -90 || lat > 90 || lng < -180 || lng > 180) {
+				uni.showToast({ title: '经纬度超出范围', icon: 'none' });
+				return;
+			}
+
+			uni.showLoading({ title: '保存中…', mask: true });
+			try {
+				await addMarkerCloud({ title: title, latitude: lat, longitude: lng });
+				uni.hideLoading();
+				uni.showToast({ title: '地点已保存', icon: 'success' });
+				setTimeout((): void => { uni.navigateBack() }, 450);
+			} catch (e) {
+				uni.hideLoading();
+				uni.showToast({ title: '保存失败，请重试', icon: 'none' });
+			}
+		},
+		goBack() {
+			uni.navigateBack();
+		}
+	}
+};
+</script>
+
+<style scoped>
+.add-page {
+	flex: 1;
+	padding: 0 20rpx 64rpx;
+	background: linear-gradient(180deg, #f5ede3 0%, #fbf7f1 100%);
+}
+
+.hero-section {
+	padding: 68rpx 8rpx 26rpx;
+}
+
+.hero-tag {
+	display: flex;
+	padding: 10rpx 18rpx;
+	border-radius: 999rpx;
+	background: rgba(15, 118, 110, 0.1);
+	font-size: 20rpx;
+	letter-spacing: 3rpx;
+	color: #0f766e;
+}
+
+.hero-title {
+	margin-top: 18rpx;
+	font-size: 56rpx;
+	line-height: 1.14;
+	font-weight: 700;
+	color: #183b37;
+}
+
+.hero-subtitle {
+	margin-top: 12rpx;
+	font-size: 24rpx;
+	line-height: 1.6;
+	color: #5b6475;
+}
+
+.content-card {
+	padding: 28rpx 24rpx;
+	border-radius: 30rpx;
+	background: rgba(255, 253, 248, 0.96);
+	border: 1px solid rgba(20, 33, 61, 0.06);
+	box-shadow: 0 20rpx 48rpx rgba(31, 41, 55, 0.1);
+}
+
+.content-card + .content-card {
+	margin-top: 18rpx;
+}
+
+.section-head {
+	display: flex;
+	align-items: flex-start;
+	justify-content: space-between;
+	flex-wrap: wrap;
+	/* flex children spaced via margin */
+}
+
+.section-title {
+	font-size: 30rpx;
+	font-weight: 700;
+	color: #14213d;
+}
+
+.section-note {
+	font-size: 21rpx;
+	color: #7b8496;
+}
+
+.source-row {
+	display: flex;
+	flex-wrap: wrap;
+	margin-top: 20rpx;
+}
+.source-row .source-chip + .source-chip,
+.source-row .refresh-btn + .refresh-btn,
+.source-row .source-chip + .refresh-btn,
+.source-row .refresh-btn + .source-chip { margin-left: 12rpx; }
+
+.source-chip,
+.refresh-btn {
+	padding: 16rpx 20rpx;
+	border-radius: 999rpx;
+	font-size: 22rpx;
+	font-weight: bold;
+}
+
+.source-chip {
+	background: rgba(20, 33, 61, 0.04);
+	color: #5b6475;
+	border: 1px solid rgba(20, 33, 61, 0.08);
+}
+
+.source-chip--active {
+	background: linear-gradient(135deg, #0f766e 0%, #159e8c 100%);
+	color: #ffffff;
+	border-color: transparent;
+	box-shadow: 0 18rpx 36rpx rgba(15, 118, 110, 0.18);
+}
+
+.source-chip--disabled {
+	opacity: 0.45;
+}
+
+.refresh-btn {
+	background: rgba(245, 158, 11, 0.12);
+	color: #c77a06;
+}
+
+.source-tip {
+	margin-top: 18rpx;
+	font-size: 22rpx;
+	line-height: 1.6;
+	color: #5b6475;
+}
+
+.field-group {
+	margin-top: 22rpx;
+}
+
+.field-grid {
+	display: flex;
+	flex-wrap: wrap;
+}
+.field-grid .field-group--half + .field-group--half { margin-left: 14rpx; }
+
+.field-group--half {
+	flex: 1;
+	min-width: 0;
+}
+
+.field-label {
+	margin-bottom: 12rpx;
+	font-size: 22rpx;
+	font-weight: bold;
+	color: #14213d;
+}
+
+.field-input {
+	height: 92rpx;
+	padding: 0 22rpx;
+	border-radius: 22rpx;
+	background: #fffdf8;
+	border: 1px solid rgba(20, 33, 61, 0.08);
+	font-size: 26rpx;
+	color: #14213d;
+}
+
+.preview-card {
+	margin-top: 22rpx;
+	padding: 24rpx 22rpx;
+	border-radius: 24rpx;
+	background: linear-gradient(135deg, #183b37 0%, #295b53 100%);
+}
+
+.preview-label {
+	font-size: 20rpx;
+	color: rgba(255, 248, 239, 0.74);
+}
+
+.preview-value {
+	margin-top: 12rpx;
+	font-size: 30rpx;
+	font-weight: 700;
+	color: #fff8ef;
+}
+
+.action-row {
+	display: flex;
+	margin-top: 24rpx;
+}
+.action-row .secondary-btn { margin-right: 14rpx; }
+
+.primary-btn,
+.secondary-btn {
+	height: 92rpx;
+	border-radius: 24rpx;
+	font-size: 28rpx;
+	font-weight: 700;
+}
+
+.primary-btn {
+	flex: 1;
+	background: linear-gradient(135deg, #f59e0b 0%, #f97316 100%);
+	color: #fff7ed;
+	box-shadow: 0 20rpx 40rpx rgba(193, 107, 3, 0.22);
+}
+
+.secondary-btn {
+	width: 180rpx;
+	background: rgba(20, 33, 61, 0.05);
+	color: #14213d;
+}
+
+.source-chip:active,
+.refresh-btn:active,
+.primary-btn:active,
+.secondary-btn:active {
+	transform: scale(0.97);
+}
+
+@media screen and (max-width: 380px) {
+	.hero-title {
+		font-size: 50rpx;
+	}
+
+	.action-row {
+		flex-direction: column-reverse;
+	}
+
+	.secondary-btn {
+		width: 100%;
+	}
+}
+</style>

@@ -1,0 +1,112 @@
+/**
+ * 任务系统数据工具
+ */
+
+/**
+ * 返回默认任务列表（首次启动时写入存储）
+ */
+export function getDefaultTasks() : Array<UTSJSONObject> {
+	return [
+		{
+			id: 'task_001',
+			name: '故宫探索者',
+			description: '前往北京故宫完成拍照打卡，记录你与历史的邂逅。',
+			targetTitle: '北京故宫',
+			targetMarkerId: 1,
+			reward: '10 积分',
+			status: 'pending',
+			completedAt: null
+		},
+		{
+			id: 'task_002',
+			name: '魔都奇遇',
+			description: '打卡上海迪士尼，感受梦幻与欢乐的碰撞。',
+			targetTitle: '上海迪士尼',
+			targetMarkerId: 2,
+			reward: '15 积分',
+			status: 'pending',
+			completedAt: null
+		},
+		{
+			id: 'task_003',
+			name: '湖湘文化之旅',
+			description: '探访长沙岳麓书院，感受千年文化底蕴。',
+			targetTitle: '长沙岳麓书院',
+			targetMarkerId: 3,
+			reward: '12 积分',
+			status: 'pending',
+			completedAt: null
+		},
+		{
+			id: 'task_004',
+			name: '澳门印象',
+			description: '在澳门大三巴牌坊前留影，记录这座中西交融的城市。',
+			targetTitle: '澳门大三巴',
+			targetMarkerId: 4,
+			reward: '12 积分',
+			status: 'pending',
+			completedAt: null
+		},
+		{
+			id: 'task_005',
+			name: '橘洲打卡',
+			description: '站在长沙橘子洲头，感受"问苍茫大地，谁主沉浮"的豪情。',
+			targetTitle: '长沙橘子洲头',
+			targetMarkerId: 5,
+			reward: '10 积分',
+			status: 'pending',
+			completedAt: null
+		},
+		{
+			id: 'task_006',
+			name: '广州塔挑战',
+			description: '打卡广州小蛮腰，俯瞰羊城全貌。',
+			targetTitle: '广州塔',
+			targetMarkerId: 6,
+			reward: '10 积分',
+			status: 'pending',
+			completedAt: null
+		}
+	];
+}
+
+/**
+ * 检查某个景点打卡是否触发任务完成，返回完成的任务列表
+ */
+export function triggerTaskCheck(marker : UTSJSONObject) : Array<UTSJSONObject> {
+	const _t = uni.getStorageSync('task_list');
+	const tasks = (_t != null && _t !== "") ? _t as UTSJSONObject[] : [] as UTSJSONObject[];
+	const _u = uni.getStorageSync('user_tasks');
+	const userTasks = (_u != null && _u !== "") ? _u as UTSJSONObject : {} as UTSJSONObject;
+	const _r = uni.getStorageSync('rewards');
+	const rewards = (_r != null && _r !== "") ? _r as UTSJSONObject[] : [] as UTSJSONObject[];
+	const completed = [] as UTSJSONObject[];
+
+	tasks.forEach(task => {
+		if (task["status"] === 'completed') return;
+		const match = task["targetMarkerId"] === marker["id"] || task["targetTitle"] === marker["title"];
+		if (!match) return;
+
+		task["status"] = 'completed';
+		task["completedAt"] = Date.now();
+		userTasks["" + task["id"]] = { status: 'completed', completedAt: task["completedAt"] } as UTSJSONObject;
+
+		rewards.push({
+			id: `reward_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+			taskId: task["id"],
+			taskName: task["name"],
+			reward: task["reward"],
+			earnedAt: task["completedAt"]
+		} as UTSJSONObject);
+
+		completed.push(task);
+	});
+
+	if (completed.length > 0) {
+		uni.setStorageSync('task_list', tasks);
+		uni.setStorageSync('user_tasks', userTasks);
+		uni.setStorageSync('rewards', rewards);
+	}
+
+	return completed;
+}

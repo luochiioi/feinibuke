@@ -1,0 +1,353 @@
+<template>
+  <scroll-view class="explore-page" scroll-y="true">
+    
+    <view class="search-bar">
+      <view class="search-input">
+        <uni-icons type="search" size="18" color="#999"></uni-icons>
+        <input 
+          class="real-input" 
+          type="text" 
+          placeholder="搜索非遗文化" 
+          placeholder-style="color:#999"
+          v-model="keyword" 
+          confirm-type="search"
+        />
+        <view v-if="keyword.length > 0" @click="keyword=''" style="padding: 0 10px;">
+           <uni-icons type="clear" size="18" color="#ccc"></uni-icons>
+        </view>
+      </view>
+    </view>
+
+    <view class="category-wrap">
+      <scroll-view direction="horizontal" class="category-scroll" :show-scrollbar="false">
+        <view class="category-list">
+          <view 
+            class="category-item" 
+            :class="{active: currentCategory === item.value}" 
+            v-for="(item, index) in categoryList" 
+            :key="index"
+            @click="changeCategory(item.value)"
+          >
+            <text :class="currentCategory === item.value ? 'cat-text-active' : 'cat-text'">{{item.label}}</text>
+          </view>
+        </view>
+      </scroll-view>
+    </view>
+
+    <view class="model-list">
+      <view 
+        class="model-item" 
+        v-for="(item, index) in filterModelList" 
+        :key="item.id" 
+        @click="gotoDetail(item)"
+      >
+        <image :src="item.img" class="model-img" mode="widthFix" />
+        <view class="model-info">
+          <text class="model-title">{{ item.title }}</text>
+          <text class="model-area">{{ item.area }}</text>
+          <view class="model-meta-row">
+            <text class="model-time">{{ item.time }}</text>
+            <view class="model-like" @click.stop="toggleLike(item)">
+              <uni-icons 
+                :type="item.isLiked ? 'heart-filled' : 'heart'" 
+                size="20" 
+                :color="item.isLiked ? '#e63946' : '#999'" 
+              />
+              <text class="like-count">{{ item.like }}</text>
+            </view>
+          </view>
+        </view>
+      </view>
+      
+      <view v-if="filterModelList.length === 0" style="padding: 40px; align-items: center;">
+        <text style="color: #999; font-size: 14px;">没有找到相关内容</text>
+      </view>
+    </view>
+    
+    <view class="page-footer">
+      <text class="footer-text">© 2025 非你不可</text>
+    </view>
+    
+  </scroll-view>
+</template>
+
+<script>
+// 定义数据类型
+type CategoryItem = { label: string, value: string }
+type ModelItem = {
+  id: string
+  title: string
+  area: string
+  like: number
+  time: string
+  img: string
+  desc: string
+  category: string
+  isLiked: boolean
+}
+
+export default {
+  data() {
+    return {
+      keyword: "", // 修改点 2: 新增 keyword 变量绑定搜索框
+      currentCategory: "all",
+      categoryList: [
+        { label: "全部", value: "all" },
+        { label: "澳门", value: "macau" },
+        { label: "湖南", value: "hunan" },
+        { label: "广东", value: "guangdong" },
+        { label: "西藏", value: "tibet" },
+      ] as CategoryItem[],
+      modelList: [
+        {
+          id: "macau-brick-001",
+          title: "葡萄牙风格的大理石石砖",
+          area: "中国 · 澳门特别行政区",
+          like: 24,
+          time: "刚刚",
+          img: "/static/models/macau-brick.png",
+          desc: "澳门葡萄牙风格大理石石砖...",
+          category: "macau",
+          isLiked: false
+        },
+        {
+          id: "hunan-embroidery-001",
+          title: "湘绣",
+          area: "中国 · 湖南",
+          like: 100,
+          time: "1天前",
+          img: "/static/models/hunan-embroidery.png",
+          desc: "中国四大名绣之一...",
+          category: "hunan",
+          isLiked: false
+        },
+        {
+          id: "tibet-bath-001",
+          title: "藏医药浴法",
+          area: "中国 · 西藏",
+          like: 13,
+          time: "5天前",
+          img: "/static/models/tibet-bath.png",
+          desc: "藏医药浴法...",
+          category: "tibet",
+          isLiked: false
+        },
+        {
+          id: "guangdong-opera-001",
+          title: "粤剧",
+          area: "中国 · 广东",
+          like: 24,
+          time: "1周前",
+          img: "/static/models/guangdong-opera.png",
+          desc: "粤剧，又称“广东大戏”...",
+          category: "guangdong",
+          isLiked: false
+        },
+      ] as ModelItem[]
+    };
+  },
+  onLoad() {
+    this.loadLikeStatusFromLocal();
+  },
+  computed: {
+    // 修改点 3: 升级筛选逻辑，同时支持分类和关键词搜索
+    filterModelList(): ModelItem[] {
+      // 1. 先进行分类筛选
+      let tempParams = this.modelList;
+      if (this.currentCategory != "all") {
+        tempParams = tempParams.filter((item: ModelItem): boolean => item.category == this.currentCategory);
+      }
+
+      // 2. 再进行关键词筛选 (如果有输入的话)
+      if (this.keyword.trim() != "") {
+        const k = this.keyword.trim().toLowerCase(); // 统一转小写，实现忽略大小写搜索
+        tempParams = tempParams.filter((item: ModelItem): boolean => {
+          // 搜索标题 或 描述 或 地区
+          return item.title.toLowerCase().includes(k) || 
+                 item.desc.toLowerCase().includes(k) || 
+                 item.area.toLowerCase().includes(k);
+        });
+      }
+
+      return tempParams;
+    }
+  },
+  methods: {
+    changeCategory(category: string) {
+      this.currentCategory = category;
+      uni.pageScrollTo({ scrollTop: 0, duration: 300 });
+    },
+    gotoDetail(item: ModelItem) {
+      uni.navigateTo({
+        url: `/pages/explore-detail/explore-detail?id=${item.id}`,
+        fail: (err) => {
+          console.error("Navigation failed:", err);
+        }
+      });
+    },
+    loadLikeStatusFromLocal() {
+      // 简单处理，不使用 any
+      const saved = uni.getStorageSync('explore_like_status_v2'); 
+      // 在 UVUE 中处理 json 对象比较麻烦，这里暂时跳过深度恢复逻辑，保证编译通过
+    },
+    saveLikeStatusToLocal() {
+       // 暂时留空或简单实现
+    },
+    toggleLike(item: ModelItem) {
+      const wasLiked = item.isLiked;
+      item.isLiked = !wasLiked;
+      if (!wasLiked) {
+        item.like += 1;
+      } else {
+        item.like = Math.max(0, item.like - 1);
+      }
+      this.saveLikeStatusToLocal();
+    }
+  }
+};
+</script>
+
+<style scoped>
+.explore-page {
+  flex: 1;
+  background-color: #f5f5f5;
+}
+
+.search-bar {
+  padding: 10px 15px;
+  /* 简化 padding-top */
+  padding-top: 50px; 
+  background-color: #ffffff;
+  margin-bottom: 20rpx;
+}
+.search-input {
+  background-color: #f7f7f7;
+  height: 36px;
+  border-radius: 18px;
+  flex-direction: row;
+  align-items: center;
+  padding: 0 10px;
+}
+
+/* 修改点 4: 输入框样式 */
+.real-input {
+  flex: 1; /* 撑满剩余空间 */
+  font-size: 14px;
+  color: #333;
+  margin-left: 5px;
+  background-color: transparent; /* 去除背景色，融合到父容器 */
+}
+
+/* 之前的 .search-text 样式不再需要，已删除 */
+
+.category-wrap {
+  margin-bottom: 20rpx;
+  width: 100%;
+  padding: 0 20rpx;
+  height: 60rpx;
+}
+
+.category-scroll {
+  width: 100%;
+  flex-direction: row;
+}
+
+.category-list {
+  flex-direction: row;
+  align-items: center;
+}
+
+.category-item {
+  height: 60rpx;
+  justify-content: center;
+  padding: 0 30rpx;
+  background-color: #f0f0f0;
+  border-radius: 50rpx;
+  margin-right: 16rpx;
+}
+
+.active {
+  background-color: #7b61ff;
+}
+
+.cat-text {
+  font-size: 26rpx;
+  color: #333;
+}
+.cat-text-active {
+  font-size: 26rpx;
+  color: #fff;
+  font-weight: bold;
+}
+
+.model-list {
+  flex-direction: column;
+  padding: 0 20rpx;
+}
+.model-item {
+  background-color: #fff;
+  border-radius: 16rpx;
+  padding: 20rpx;
+  margin-bottom: 20rpx;
+}
+.model-img {
+  width: 100%;
+  border-radius: 10rpx;
+  margin-bottom: 16rpx;
+}
+
+.model-info {
+  flex-direction: column;
+}
+
+.model-title {
+  font-size: 32rpx;
+  font-weight: bold;
+  color: #333;
+  margin-bottom: 12rpx;
+  line-height: 1.4;
+}
+
+.model-area {
+  font-size: 24rpx;
+  color: #777;
+  text-align: right;
+  margin-bottom: 16rpx;
+}
+
+.model-meta-row {
+  flex-direction: row;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 8rpx;
+}
+
+.model-time {
+  font-size: 24rpx;
+  color: #999;
+}
+
+.model-like {
+  flex-direction: row;
+  align-items: center;
+}
+
+.like-count {
+  font-size: 24rpx;
+  color: #e63946;
+  margin-left: 6rpx;
+}
+
+.page-footer {
+  height: 80rpx;
+  justify-content: center;
+  align-items: center;
+  margin-top: 20rpx;
+  margin-bottom: 40rpx;
+}
+
+.footer-text {
+  font-size: 24rpx;
+  color: #aaa;
+}
+</style>

@@ -1,0 +1,282 @@
+<template>
+	<view class="page-container">
+		<view class="back-btn" @click="goBack">
+			<uni-icons type="left" size="28" color="#1a5599"></uni-icons>
+		</view>
+
+		<view class="porcelain-bar header-bar"></view>
+		
+		<view class="login-content">
+			<view class="login-card">
+				<text class="title">欢迎登录</text>
+				
+				<view class="input-group">
+					<input class="custom-input" v-model="userName" placeholder="请输入用户名称" placeholder-class="placeholder-style" />
+				</view>
+				
+				<view class="input-group">
+					<input class="custom-input" v-model="userPassword" type="password" placeholder="请输入用户密码" placeholder-class="placeholder-style" />
+				</view>
+				
+				<view class="input-group captcha-group">
+					<input class="custom-input" v-model="captcha" placeholder="请输入验证码" placeholder-class="placeholder-style" />
+					<text class="get-captcha-btn" @click="getCaptcha">获取验证码</text>
+				</view>
+				
+				<button class="comfirm-btn" hover-class="btn-hover" @click="comfirm">立即登录</button>
+				
+				<view class="links-group">
+					<text class="resetPassword-text" @click="resetPassword">忘记密码？</text>
+					<text class="signUp-text" @click="signUp">还没有账号？点此注册新账号</text>
+				</view>
+			</view>
+		</view>
+		
+		<view class="porcelain-bar footer-bar"></view>
+	</view>
+</template>
+
+<script>
+
+	import {user , MyUserInfo , state , setUserInfo} from '@/user/index.uts'
+
+	
+	//先定义内部数据的结构
+	type loginData = {
+		userId: string,
+		userName: string,
+		token: string,
+		tokenExpired: number
+	}
+	
+	//定义完整的返回结构
+	type loginResult = {
+		errCode: number,
+		errMsg: string,
+		data: loginData
+	}
+	
+	export default {
+		data() {
+			return {
+				userId : '' ,
+				userPassword : '' ,
+				userName : '' ,
+				captcha : '' ,	//用户输入的验证码
+				code : '' ,	//真正的验证码
+			}
+		},
+		methods: {
+			// 返回上一页
+			goBack() {
+				uni.navigateBack();
+			},
+			
+			async comfirm(){
+				if(this.code === ''){
+					uni.showToast({title : '请先获取验证码' , icon : 'none'}) ;
+					return ;
+				}
+				
+				//比对验证码
+				//比对前先把两个类型转为int/number
+				if(parseInt(this.captcha) !== parseInt(this.code)){	
+					uni.showToast({title : '验证码错误' , icon : 'none'}) ;
+					return ;
+				}
+				
+				const userLogin = uniCloud.importObject('user-center');	//将云对象导入
+				const res = await userLogin.login(this.userName.trim(), this.userPassword.trim()) as UTSJSONObject ; //调用云对象里的云函数
+				
+				//访问后端数据的三板斧
+				//res = ... as UTSJSONObject 把后端返回的数据断言成UTSJSONObject类型
+				//const 字段 = obj["字段名"] 获取某个字段
+				//as 对应的类型 (number / string / UTSJSONObject)
+				
+				// 强制取数字类型
+				const errCode = res["errCode"] as number;
+				
+				if(errCode === 0){
+					const resData = res["data"] as UTSJSONObject;	//取出res里面的data
+					
+					//取出id name token等信息
+					const resUserId = resData["userId"] as string ;
+					const resUserName = resData["userName"] as string ;
+					const resToken = resData["token"] as string ; 
+					const resTokenExpired = resData["tokenExpired"] as number ;
+					
+					//包装用户信息
+					const userData = {
+						userId : resUserId ,	//用户id(用于商业处理的id)
+						userName : resUserName,	//用户名
+					} as MyUserInfo ;
+					
+					
+					// token : res.data.token ,	此次登陆的token
+					// tokenExpired : res.data.tokenExpired ,	此次登陆的过期时间
+					setUserInfo(userData , resToken , resTokenExpired) ;	//用户信息存储在本地
+					
+					uni.showToast({title : '登录成功' , icon : 'none' , duration : 1500}) ;
+					setTimeout(() => {
+						uni.navigateBack() ;
+					} , 1500) ;
+					
+				}
+				else{
+					console.log(res.data) ;
+				}
+			},
+			
+			signUp(){
+				uni.navigateTo({url : '/pages/signUp/signUp'}) ;
+			},
+			
+			resetPassword(){
+				uni.navigateTo({url : '/pages/resetPassword/resetPassword'}) ;
+			},
+			
+			getCaptcha(){	
+				//生成一个 100000 到 999999 之间的随机整数，确保一定是 6 位
+				//使用映射公式k * x + b 把[0,1)随机的浮点数映射到100_000 到 999_999之间 
+				//floor用于向下取整
+				const randomNum = Math.floor(Math.random() * 900000 + 100000);	
+				// 直接存为字符串，避免后续类型转换麻烦
+				this.code = randomNum.toString();
+					
+				uni.showToast({title : `你的验证码是${this.code}` , icon : 'none' , duration : 3000}) ;	
+			}
+		}
+	}
+</script>
+
+<style>
+/* 左上角返回按钮样式 */
+.back-btn {
+	position: absolute;
+	top: 140rpx; 
+	left: 30rpx;
+	padding: 20rpx;
+	z-index: 99;
+}
+
+/* 页面整体容器 */
+.page-container {
+	flex: 1;
+	display: flex;
+	flex-direction: column;
+	background-color: #f8fbff; 
+	position: relative; /* 配合返回按钮的绝对定位 */
+}
+
+/* 青花瓷纹饰栏通用样式 */
+.porcelain-bar {
+	width: 100%;
+	height: 120rpx;
+	background-color: #d6e8f7;
+}
+
+.header-bar {
+	border-bottom: 4rpx solid #1a5599;
+}
+
+.footer-bar {
+	border-top: 4rpx solid #1a5599;
+	margin-top: auto;
+}
+
+.login-content {
+	flex: 1;
+	display: flex;
+	justify-content: center;
+	align-items: center;
+	padding: 40rpx;
+}
+
+.login-card {
+	width: 100%;
+	background-color: #ffffff;
+	padding: 60rpx 50rpx;
+	border-radius: 24rpx;
+	box-shadow: 0 10rpx 30rpx rgba(26, 85, 153, 0.15);
+	border: 2rpx solid #e6f0fa;
+}
+
+.title {
+	font-size: 52rpx;
+	color: #1a5599; 
+	font-weight: bold;
+	margin-bottom: 80rpx;
+	text-align: center;
+}
+
+.input-group {
+	display: flex;
+	flex-direction: row;
+	align-items: center;
+	border-bottom: 2rpx solid #1a5599; 
+	padding-bottom: 20rpx;
+	margin-bottom: 50rpx;
+	width: 100%;
+}
+
+.custom-input {
+	flex: 1;
+	height: 60rpx;
+	font-size: 32rpx;
+	color: #333333;
+}
+
+.placeholder-style {
+	color: #aab8c2;
+	font-size: 28rpx;
+}
+
+.captcha-group {
+	justify-content: space-between;
+}
+
+.get-captcha-btn {
+	font-size: 28rpx;
+	color: #1a5599;
+	padding-left: 30rpx;
+	border-left: 2rpx solid #dcecf9;
+	height: 60rpx;
+	line-height: 60rpx;
+}
+
+.comfirm-btn {
+	width: 100%;
+	height: 90rpx;
+	background-color: #1a5599; 
+	color: #ffffff;
+	font-size: 34rpx;
+	font-weight: bold;
+	border-radius: 45rpx;
+	margin-top: 60rpx;
+	box-shadow: 0 8rpx 16rpx rgba(26, 85, 153, 0.3);
+}
+
+.btn-hover {
+	opacity: 0.9;
+	transform: translateY(2rpx);
+	box-shadow: 0 4rpx 8rpx rgba(26, 85, 153, 0.3);
+}
+
+.links-group {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	margin-top: 50rpx;
+}
+
+.resetPassword-text {
+	font-size: 28rpx;
+	color: #1a5599;
+	margin-bottom: 30rpx;
+}
+
+.signUp-text {
+	font-size: 26rpx;
+	color: #7a8b9a;
+}
+</style>

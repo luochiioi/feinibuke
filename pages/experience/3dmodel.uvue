@@ -1,0 +1,246 @@
+<template>
+  <view class="page-container">
+    
+    <view class="nav-bar">
+      <view class="back-btn" @click="goBack">
+        <uni-icons type="back" size="24" color="#fff"></uni-icons>
+      </view>
+      <text class="nav-title">数字文物馆</text>
+      <view style="width: 24px;"></view> 
+    </view>
+
+    <view class="model-viewer">
+      <view class="model-placeholder">
+        <image class="model-img" src="/static/models/3dmodel.png" mode="aspectFit"></image>
+        
+        <view class="loading-ring"></view>
+        <text class="loading-text">3D 模型加载中...</text>
+      </view>
+      
+      <view class="hotspot" style="top: 35%; left: 45%;" @click="showInfo('查看纹理细节')">
+        <view class="dot"></view>
+        <view class="pulse"></view>
+      </view>
+    </view>
+
+    <view class="info-card">
+      <text class="artifact-name">{{ modelName }}</text>
+      <text class="artifact-period">{{ modelPeriod }}</text>
+      <text class="artifact-desc">{{ modelDesc }}</text>
+      
+      <view class="action-row">
+        <view class="ar-btn" @click="startAR">
+          <text class="ar-text">开启 AR 模式</text>
+        </view>
+        
+        <view class="icon-btn" @click="toggleFavorite">
+          <uni-icons 
+            :type="isFavorited ? 'star-filled' : 'star'" 
+            size="24" 
+            :color="isFavorited ? '#FFD700' : '#fff'"
+          ></uni-icons>
+        </view>
+      </view>
+    </view>
+    
+  </view>
+</template>
+
+<script>
+export default {
+  data() {
+    return {
+      modelName: '青铜莲鹤方壶',
+      modelPeriod: '春秋时期 · 河南博物院藏',
+      modelDesc: '此壶主体部分为西周后期以来流行的方壶造型，有盖、双耳、圈足，重心在下腹部，遍饰于器身上下的各种附加装饰。',
+      isFavorited: false 
+    }
+  },
+  onLoad(options: UTSJSONObject) {
+    let nameParam = options["name"];
+    if (nameParam != null) {
+      this.modelName = decodeURIComponent(nameParam as string) ?? "";
+    }
+    
+    let periodParam = options["period"];
+    if (periodParam != null) {
+      this.modelPeriod = decodeURIComponent(periodParam as string) ?? "";
+    }
+    
+    let descParam = options["desc"];
+    if (descParam != null) {
+      this.modelDesc = decodeURIComponent(descParam as string) ?? "";
+    }
+  },
+  methods: {
+    goBack() {
+      uni.navigateBack();
+    },
+    showInfo(msg: string) {
+      uni.showToast({ title: msg, icon: 'none' });
+    },
+    startAR() {
+      uni.showModal({
+        title: 'AR 体验',
+        content: '即将请求相机权限，是否继续？',
+        success: function(res) {
+          if (res.confirm) {
+            uni.showToast({ title: '正在启动相机...', icon: 'none' });
+          }
+        }
+      });
+    },
+    toggleFavorite() {
+      this.isFavorited = !this.isFavorited;
+      if (this.isFavorited) {
+        uni.showToast({ title: '已加入收藏', icon: 'success' });
+      } else {
+        uni.showToast({ title: '已取消收藏', icon: 'none' });
+      }
+    }
+  }
+}
+</script>
+
+<style scoped>
+.page-container { 
+  flex: 1; 
+  background-color: #121212; 
+  height: 100%; 
+  display: flex; 
+  flex-direction: column; 
+}
+
+.nav-bar { 
+  height: 88px; 
+  padding-top: 44px; 
+  display: flex; 
+  flex-direction: row; 
+  align-items: center; 
+  justify-content: space-between; 
+  padding-left: 20px; 
+  padding-right: 20px;
+  position: absolute;
+  top: 0;
+  width: 100%;
+  z-index: 100; 
+}
+.nav-title { 
+  color: #fff; 
+  font-size: 16px; 
+  font-weight: bold; 
+}
+.back-btn {
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: rgba(255, 255, 255, 0.1);
+  border-radius: 16px;
+}
+
+.model-viewer { 
+  flex: 1; 
+  align-items: center; 
+  justify-content: center; 
+  position: relative; 
+}
+.model-placeholder { 
+  align-items: center; 
+  opacity: 0.8; 
+}
+.model-img { 
+  width: 200px; 
+  height: 200px; 
+  margin-bottom: 20px; 
+}
+.loading-text { 
+  color: #666; 
+  font-size: 12px; 
+  margin-top: 10px; 
+}
+
+.hotspot { 
+  position: absolute; 
+  width: 40px; 
+  height: 40px; 
+  align-items: center; 
+  justify-content: center; 
+}
+.dot { 
+  width: 8px; 
+  height: 8px; 
+  background-color: #fff; 
+  border-radius: 4px; 
+  z-index: 2; 
+}
+.pulse { 
+  position: absolute; 
+  width: 24px; 
+  height: 24px; 
+  border-radius: 12px; 
+  background-color: rgba(255,255,255,0.3); 
+  border: 1px solid rgba(255,255,255,0.5);
+}
+
+.info-card {
+  background-color: #1E1E1E;
+  border-top-left-radius: 24px;
+  border-top-right-radius: 24px;
+  padding: 30px 24px 50px 24px; 
+}
+.artifact-name { 
+  font-size: 24px; 
+  color: #fff; 
+  font-weight: bold; 
+  margin-bottom: 8px; 
+}
+.artifact-period { 
+  font-size: 14px; 
+  color: #7b61ff; 
+  margin-bottom: 20px; 
+}
+.artifact-desc { 
+  font-size: 14px; 
+  color: #aaa; 
+  line-height: 1.6; 
+  margin-bottom: 30px; 
+}
+
+.action-row { 
+  display: flex; 
+  flex-direction: row; 
+  align-items: center; 
+  justify-content: space-between; 
+}
+
+.ar-btn { 
+  flex: 1; 
+  background-image: linear-gradient(to right, #7b61ff, #9c88ff); 
+  border-radius: 24px; 
+  height: 48px; 
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: center;
+  margin-right: 16px; 
+}
+
+.ar-text {
+  color: #fff; 
+  font-size: 16px; 
+  font-weight: bold;
+  white-space: nowrap;
+}
+
+.icon-btn { 
+  width: 48px; 
+  height: 48px; 
+  border-radius: 24px; 
+  background-color: #333; 
+  display: flex;
+  align-items: center; 
+  justify-content: center; 
+}
+</style>

@@ -1,0 +1,85 @@
+<template>
+  <view class="coupon-page">
+    <view class="empty" v-if="list.length === 0">
+      <view class="icon-container">
+        <text class="icon">🎁</text>
+      </view>
+      <text class="tip">暂无可用优惠券</text>
+      <button class="btn" @click="goToShop">去领取</button>
+    </view>
+    <view v-else class="items-container">
+      <view class="item" v-for="(item, index) in list" :key="index">
+        <text>{{ item }}</text>
+      </view>
+    </view>
+  </view>
+</template>
+
+<script>
+export default {
+  data() {
+    return {
+      list: [] as string[]
+    };
+  },
+  methods: {
+    goToShop() {
+      uni.switchTab({ url: '/pages/index/index' });
+    }
+  }
+};
+</script>
+
+<style scoped>
+.coupon-page {
+  flex: 1; /* 修复 min-height */
+  background-color: #f5f5f5;
+  align-items: center;
+  padding-top: 180rpx;
+}
+
+.empty {
+  width: 600rpx;
+  align-items: center;
+}
+
+.icon-container {
+  justify-content: center;
+  align-items: center;
+  margin-bottom: 20rpx;
+  height: 160rpx;
+}
+
+.icon {
+  font-size: 80px; /* 160rpx approx */
+  color: #ffd166;
+}
+
+.tip {
+  font-size: 36rpx;
+  color: #999;
+  margin-bottom: 40rpx;
+}
+
+.btn {
+  width: 280rpx;
+  height: 70rpx;
+  background-color: #7b61ff;
+  color: white;
+  border-radius: 35rpx;
+  font-size: 30rpx;
+  border: none;
+}
+
+.items-container {
+  width: 100%;
+  padding: 0 30rpx;
+}
+
+.item {
+  background-color: white;
+  padding: 30rpx;
+  margin-bottom: 20rpx;
+  border-radius: 16rpx;
+}
+</style>

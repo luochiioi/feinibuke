@@ -1,0 +1,27 @@
+{
+  "bsonType": "object",
+  "required": ["taskId", "taskName", "reward"],
+  "permission": {
+    "read": true,
+    "create": true,
+    "update": true,
+    "delete": true
+  },
+  "properties": {
+    "_id": {},
+    "taskId": {
+      "bsonType": "string",
+      "description": "关联的任务业务ID"
+    },
+    "taskName": {
+      "bsonType": "string"
+    },
+    "reward": {
+      "bsonType": "string"
+    },
+    "earnedAt": {
+      "bsonType": "int",
+      "description": "获得时间戳（毫秒）"
+    }
+  }
+}

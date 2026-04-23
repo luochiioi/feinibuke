@@ -1,0 +1,164 @@
+<template>
+  <scroll-view class="detail-page" scroll-y="true">
+    
+    <image :src="modelItem.img" class="detail-img" mode="widthFix" />
+
+    <view class="detail-info">
+      <text class="detail-title">{{ modelItem.title }}</text>
+      
+      <text class="detail-desc">{{ modelItem.desc }}</text>
+
+      <view class="detail-meta-row">
+        <text class="detail-time">{{ modelItem.time }}</text>
+        <view class="detail-like" @click.stop="toggleLike">
+          <uni-icons 
+            :type="modelItem.isLiked ? 'heart-filled' : 'heart'" 
+            size="20" 
+            :color="modelItem.isLiked ? '#e63946' : '#999'" 
+          />
+          <text class="like-count">{{ modelItem.like }}</text>
+        </view>
+      </view>
+    </view>
+
+    <button class="ar-btn" @click="startARExperience">开始VR体验</button>
+  </scroll-view>
+</template>
+
+<script>
+// 类型定义
+type DetailItem = {
+  id: string
+  title: string
+  desc: string
+  time: string
+  like: number
+  img: string
+  isLiked: boolean
+}
+
+export default {
+  data() {
+    return {
+      modelItem: {
+        id: "",
+        title: '加载中...',
+        desc: '',
+        time: '',
+        like: 0,
+        img: '',
+        isLiked: false
+      } as DetailItem
+    };
+  },
+  onLoad(options: OnLoadOptions) {
+    const id = options['id']; // UVUE 获取 options 方式
+    if (id != null) {
+       // 模拟数据加载
+       this.modelItem.id = id as string;
+       this.modelItem.title = "模拟标题 " + id;
+       this.modelItem.desc = "这里是详细描述内容...\n支持换行显示。";
+       if(id == "macau-brick-001"){
+		   this.modelItem.img = "/static/models/macau-brick.png";
+	   }
+	   else if(id == "hunan-embroidery-001"){
+		   this.modelItem.img = "/static/models/hunan-embroidery.png";
+	   }
+	   else if(id == "tibet-bath-001"){
+		   this.modelItem.img = "/static/models/tibet-bath.png";
+	   }
+	   else if(id == "guangdong-opera-001"){
+		   this.modelItem.img = "/static/models/guangdong-opera.png";
+	   }
+    }
+  },
+  methods: {
+    startARExperience() {
+      uni.showToast({ title: "正在启动VR体验...", icon: "loading" });
+    },
+    toggleLike() {
+      this.modelItem.isLiked = !this.modelItem.isLiked;
+      if (this.modelItem.isLiked) {
+        this.modelItem.like++;
+      } else {
+        this.modelItem.like--;
+      }
+    }
+  }
+};
+</script>
+
+<style scoped>
+.detail-page {
+  flex: 1;
+  background-color: #f5f5f5;
+  padding: 20rpx;
+}
+
+.detail-img {
+  width: 100%;
+  border-radius: 16rpx;
+  margin-bottom: 20rpx;
+}
+
+.detail-info {
+  background-color: #fff;
+  border-radius: 16rpx;
+  padding: 30rpx;
+  margin-bottom: 30rpx;
+  flex-direction: column;
+}
+
+.detail-title {
+  font-size: 36rpx;
+  font-weight: bold;
+  color: #333;
+  margin-bottom: 20rpx;
+  line-height: 1.4;
+}
+
+.detail-desc {
+  font-size: 28rpx;
+  color: #555;
+  line-height: 1.8; 
+  margin-bottom: 30rpx;
+}
+
+.detail-meta-row {
+  flex-direction: row;
+  justify-content: space-between;
+  align-items: center;
+  padding-top: 20rpx;
+  border-top-width: 1rpx;
+  border-top-style: solid;
+  border-top-color: #f0f0f0;
+}
+
+.detail-time {
+  font-size: 24rpx;
+  color: #999;
+}
+
+.detail-like {
+  flex-direction: row;
+  align-items: center;
+}
+
+.like-count {
+  font-size: 26rpx;
+  color: #e63946;
+  margin-left: 8rpx;
+}
+
+.ar-btn {
+  width: 100%;
+  height: 90rpx;
+  background-color: #7b61ff;
+  color: #fff;
+  border-radius: 45rpx;
+  font-size: 32rpx;
+  font-weight: bold;
+  margin-top: 20rpx;
+  margin-bottom: 40rpx;
+}
+</style>

@@ -1,0 +1,438 @@
+<template>
+  <view class="order-page">
+
+    <view class="search-box">
+      <input
+        class="search-input"
+        type="text"
+        v-model="keyword"
+        placeholder="搜索商品名称"
+      />
+      <uni-icons
+        type="search"
+        size="18"
+        color="#999"
+        class="search-icon"
+      ></uni-icons>
+    </view>
+    
+    <view class="tabs">
+      <view
+        v-for="tab in tabs"
+        :key="tab.value"
+        class="tab"
+        @click="currentTab = tab.value"
+      >
+        <text 
+          class="tab-text"
+          :class="{ 'tab-text-active': currentTab === tab.value }"
+        >
+          {{ tab.label }}
+        </text>
+        
+        <view
+          v-if="currentTab === tab.value"
+          class="active-line"
+        ></view>
+      </view>
+    </view>
+    
+    <view v-if="orders.length === 0" class="empty">
+      <view class="empty-icon">
+        <text class="icon-text"></text>
+      </view>
+      <text class="empty-title">暂无订单</text>
+      <text class="empty-desc">快去挑选喜欢的商品吧～</text>
+    </view>
+
+    <view v-else class="order-list">
+      <view
+        v-for="order in filteredOrders"
+        :key="order.orderId"
+        class="order-card"
+      >
+        <view class="order-header">
+          <text class="time-text">{{ order.createTime }}</text>
+          <text class="status">
+            {{ getStatusText(order.status) }}
+          </text>
+        </view>
+
+        <view
+          v-for="item in order.items"
+          :key="item.itemId"
+          class="product-item"
+        >
+          <view class="product-img"></view>
+
+          <view class="product-info">
+            <text class="name">
+              {{ item.itemName }}
+            </text>
+            <text class="price">
+              ¥{{ item.unitPrice }}
+            </text>
+          </view>
+
+          <text class="count">
+            x{{ item.count }}
+          </text>
+        </view>
+
+        <view class="order-footer">
+          <text class="total">
+            合计：¥{{ formatPrice(order.totalAmount) }}
+          </text>
+
+          <view class="actions">
+            <button
+              v-if="order.status === 'paid'"
+              class="btn"
+            >
+              提醒发货
+            </button>
+
+            <button
+              v-if="order.status === 'shipped'"
+              class="btn primary"
+              @click="finishOrder(order)"
+            >
+              确认收货
+            </button>
+          </view>
+        </view>
+
+      </view>
+    </view>
+
+  </view>
+</template>
+
+<script>
+import { state, type Order} from '@/user/index.uts'
+
+// 定义 Tab 的具体结构
+type TabItem = {
+  label: string,
+  value: string
+}
+
+export default {
+  data() {
+    return {
+      orders: state.orders as Order[],	//state.orders 与 orders共用内存空间
+      currentTab: 'all',
+	  keyword: '',
+      tabs: [
+        { label: '全部', value: 'all' },
+        { label: '待发货', value: 'paid' },
+        { label: '已发货', value: 'shipped' },
+        { label: '已完成', value: 'finished' }
+      ] as TabItem[]
+    }
+ 
+  },
+  onLoad(){
+	this.getOrder() ;
+  },
+  computed: {
+    filteredOrders(): Order[] {
+      let list = this.currentTab === 'all'
+        ? this.orders
+        : this.orders.filter(o => o.status === this.currentTab)
+    
+      //关键字搜索（按商品名）
+      if (this.keyword.trim() !== '') {
+        list = list.filter(order =>
+          order.items.some(item =>
+            item.itemName.includes(this.keyword.trim())
+          )
+        )
+      }
+    
+      // 时间排序（最新在前）
+      //先解构 [...list] 复制一份新数组，再排序，防止修改原数据
+      return [...list].sort((a : Order, b : Order) : number => {
+            const timeA = new Date(a.createTime).getTime();
+            const timeB = new Date(b.createTime).getTime();
+            return timeB > timeA ? 1 : -1;
+          });
+    }
+  },
+
+  methods: {
+	async getOrder(){
+		try{
+			if(this.orders.length === 0){//当前缓存订单为空
+				if(state.userInfo == null){
+					uni.showToast({title : '请先登录' , icon : 'none'}) ;
+					return 
+				}
+				
+				const orderObj = uniCloud.importObject('order-api') ;		//获取云对象
+				const res = await orderObj.getOrder() as UTSJSONObject ;	//调用云对象返回的信息
+				
+				console.log(res) ; 
+				
+				this.orders = [] ;
+				if (res.errCode === 0) {
+					const rawData = res['data'] as UTSJSONObject[] | null ;
+					if(rawData == null){
+						return ;
+					}
+									
+					const jsonStr = JSON.stringify(rawData);	//先转json string类型
+					const parsedData = JSON.parse<Order[]>(jsonStr);	//再转真实类型
+					
+				    if(parsedData != null){
+						this.orders = parsedData ;
+					} 
+				}
+			}
+		}
+		catch(e){
+			console.error("错误信息：", e);
+		}
+	},
+	
+    formatTime(time: number): string {
+      const d = new Date(time)
+      return `${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`
+    },
+
+    getStatusText(status: string): string {
+      switch (status) {
+        case 'paid': return '待发货'
+        case 'shipped': return '已发货'
+        case 'finished': return '交易完成'
+        default: return ''
+      }
+    },
+
+    finishOrder(order: Order) {
+      order.status = 'finished'
+      uni.showToast({ title: '确认收货成功' })
+    },
+	
+	async changeOrder() {
+		
+	},
+	async filteredOrder(){
+		
+	},
+	
+	formatPrice(val : any | null) : string {
+	  if (val == null) return "0.00";
+	  // 确保转为数值，防止后端返回的是字符串
+	  let num = 0.0;
+	  if (typeof val === 'number') {
+	    num = val as number;
+	  } else {
+	    num = parseFloat(val.toString());
+	  }
+	  return num.toFixed(2);
+	},
+	
+  }
+}
+</script>
+
+<style scoped>
+.order-page {
+  flex: 1;
+  background: #f5f5f5;
+}
+
+.tabs {
+  display: flex;
+  flex-direction: row;
+  background: #fff;
+  border-bottom: 1rpx solid #eee;
+}
+
+.tab {
+  flex: 1;
+  padding: 24rpx 0;
+  position: relative;
+  /* 添加 flex 布局让内部的 text 居中 */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* 核心修复：文字专属类 */
+.tab-text {
+  font-size: 30rpx;
+  color: #333;
+}
+
+/* 核心修复：文字激活状态专属类 */
+.tab-text-active {
+  color: #7b61ff;
+  font-weight: bold;
+}
+
+.active-line {
+  position: absolute;
+  bottom: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 60rpx;
+  height: 6rpx;
+  background-color: #7b61ff;
+  border-radius: 3rpx;
+}
+
+.search-box {
+  position: relative;
+  padding: 20rpx;
+  background: #fff;
+}
+
+.search-input {
+  width: 100%;
+  height: 70rpx;
+  border-radius: 35rpx;
+  background: #f5f5f5;
+  padding-left: 70rpx;   /* 预留图标位置 */
+  padding-right: 30rpx;
+  font-size: 26rpx;
+}
+
+.search-icon {
+  position: absolute;
+  left: 40rpx;
+  top: 50%;
+  transform: translateY(-50%);
+}
+
+.empty {
+  flex: 1;
+  min-height: 600rpx;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  /* color: #999;  <- 已删除此行，防止报错 */
+}
+
+.empty-icon {
+  width: 200rpx;
+  height: 200rpx;
+  border-radius: 100rpx;
+  background-color: #f0f2f5;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 40rpx;
+}
+
+.icon-text {
+  font-size: 80rpx;
+}
+
+.empty-title {
+  font-size: 30rpx;
+  color: #666; /* 明确写在 text 上 */
+  margin-bottom: 16rpx;
+}
+
+.empty-desc {
+  font-size: 24rpx;
+  color: #aaa; /* 明确写在 text 上 */
+}
+
+.order-list {
+  padding: 20rpx;
+}
+
+.order-card {
+  background: #fff;
+  border-radius: 16rpx;
+  margin-bottom: 20rpx;
+  overflow: hidden;
+}
+
+.order-header {
+  display: flex;
+  justify-content: space-between;
+  padding: 20rpx;
+}
+
+/* 为时间文本增加类 */
+.time-text {
+  font-size: 24rpx;
+  color: #666;
+}
+
+.status {
+  font-size: 24rpx;
+  color: #ff5000;
+}
+
+.product-item {
+  display: flex;
+  padding: 20rpx;
+  border-top: 1rpx solid #f2f2f2;
+}
+
+.product-img {
+  width: 120rpx;
+  height: 120rpx;
+  background: #eee;
+  border-radius: 12rpx;
+  margin-right: 20rpx;
+}
+
+.product-info {
+  flex: 1;
+}
+
+.name {
+  font-size: 26rpx;
+  color: #333;
+}
+
+.price {
+  margin-top: 10rpx;
+  font-size: 26rpx;
+  color: #ff5000;
+}
+
+.count {
+  align-self: center;
+  font-size: 26rpx;
+  color: #666;
+}
+
+.order-footer {
+  padding: 20rpx;
+  border-top: 1rpx solid #f2f2f2;
+}
+
+.total {
+  text-align: right;
+  font-size: 26rpx;
+  margin-bottom: 20rpx;
+}
+
+.actions {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.btn {
+  padding: 10rpx 30rpx;
+  border-radius: 30rpx;
+  font-size: 24rpx;
+  border: 1rpx solid #ccc;
+  background: #fff;
+  margin-left: 20rpx;
+}
+
+.btn.primary {
+  border: none;
+  background: #ff5000;
+  color: #fff;
+}
+</style>

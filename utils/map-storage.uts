@@ -1,0 +1,394 @@
+/**
+ * 数据存储层（云函数 + 本地缓存 fallback）
+ */
+
+const LOCAL_KEY   = 'tourism_markers';
+const QUEUE_KEY   = 'cloud_sync_queue';
+const ICON_OK     = 'https://img.icons8.com/flat-round/48/checkmark.png';
+const ICON_DEFAULT = 'https://img.icons8.com/color/48/marker.png';
+
+// ─── 内部：调用 markers 云函数 ───────────────────────────────────────────────
+async function _call(action: string, data: any = {}) {
+    const res = await uniCloud.callFunction({
+        name: 'markers',
+        data: { action, data }
+    });
+    const result = res.result;
+    
+    if (result instanceof UTSJSONObject) {
+        if (result["code"] != null && result["code"] !== 0) {
+            const msg = result["msg"] != null ? ("" + result["msg"]) : '云函数返回错误';
+            throw new Error(msg);
+        }
+    }
+    return result;
+}
+
+// ─── 内部：格式化 marker ────────────────────────────────────────────────────
+function _fmt(m: any) {
+    const mObj = m as UTSJSONObject;
+    return {
+        id:       mObj["id"] != null ? mObj["id"] : null,
+        _id:      mObj["_id"] != null ? ("" + mObj["_id"]) : (mObj["id"] != null ? ("" + mObj["id"]) : ''),
+        iconPath: mObj["checked"] === true ? ICON_OK : ICON_DEFAULT,
+        width:    mObj["width"] != null ? mObj["width"] : 36,
+        height:   mObj["height"] != null ? mObj["height"] : 36,
+        title:    mObj["title"] != null ? mObj["title"] : '',
+        latitude: mObj["latitude"] != null ? mObj["latitude"] : 0,
+        longitude: mObj["longitude"] != null ? mObj["longitude"] : 0
+    };
+}
+
+// ─── 内部：待同步队列 ────────────────────────────────────────────────────────
+function _enqueue(action: string, data: any) {
+    try {
+        const cache = uni.getStorageSync(QUEUE_KEY);
+        const q = (cache != null && cache !== "") ? cache as any[] : [];
+        q.push({ action, data, ts: Date.now() });
+        uni.setStorageSync(QUEUE_KEY, q);
+    } catch (e) {}
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+//  打卡点读取
+// ════════════════════════════════════════════════════════════════════════════
+
+export async function getMarkersCloud() {
+    try {
+        const res = await _call('getAll') as UTSJSONObject;
+        const resData = res["data"] != null ? res["data"] as any[] : [];
+        const data = resData.map((item: any): any => _fmt(item));
+        if (data.length > 0) uni.setStorageSync(LOCAL_KEY, data);
+        return data;
+    } catch (e) {
+        console.warn('[storage] getMarkersCloud 失败，使用本地缓存');
+        const cache = uni.getStorageSync(LOCAL_KEY);
+        const localData = (cache != null && cache !== "") ? cache as any[] : [];
+        return localData.map((item: any): any => _fmt(item));
+    }
+}
+
+export function getMarkers() {
+    const cache = uni.getStorageSync(LOCAL_KEY);
+    return (cache != null && cache !== "") ? cache as any[] : [];
+}
+
+export function saveMarkers(markers: any[]) {
+    uni.setStorageSync(LOCAL_KEY, markers);
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+//  打卡点写入
+// ════════════════════════════════════════════════════════════════════════════
+
+export async function addMarkerCloud(payload: UTSJSONObject) {
+    const numId = Date.now();
+    const doc = {
+        id:        numId,
+        title:     payload["title"],
+        latitude:  payload["latitude"],
+        longitude: payload["longitude"],
+        checked:   false,
+        iconPath:  ICON_DEFAULT,
+        width:     36,
+        height:    36,
+        createdAt: numId
+    } as UTSJSONObject;
+
+    const cache = uni.getStorageSync(LOCAL_KEY);
+    const local = (cache != null && cache !== "") ? cache as UTSJSONObject[] : [];
+    const optimistic = { ...doc, _id: "" + numId } as UTSJSONObject;
+    local.push(optimistic);
+    uni.setStorageSync(LOCAL_KEY, local);
+
+    try {
+        const res = await _call('add', doc) as UTSJSONObject;
+        const cache2 = uni.getStorageSync(LOCAL_KEY);
+        const cached = (cache2 != null && cache2 !== "") ? cache2 as UTSJSONObject[] : [];
+        const idx = cached.findIndex((m: UTSJSONObject): boolean => m["_id"] === ("" + numId));
+        if (idx !== -1) {
+            cached[idx]["_id"] = res["id"];
+            uni.setStorageSync(LOCAL_KEY, cached);
+        }
+        doc["_id"] = res["id"];
+        return doc;
+    } catch (e) {
+        console.warn('[storage] addMarkerCloud 失败，已写本地');
+        _enqueue('add', doc);
+        return optimistic;
+    }
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+//  打卡点更新（upsert：有则改，无则插）
+// ════════════════════════════════════════════════════════════════════════════
+
+export async function updateMarkerCloud(cloudId: string, updates: UTSJSONObject) {
+    const cache = uni.getStorageSync(LOCAL_KEY);
+    const local = (cache != null && cache !== "") ? cache as UTSJSONObject[] : [];
+    const idx = local.findIndex(
+        (m: UTSJSONObject): boolean => m["_id"] === cloudId || ("" + m["id"]) === cloudId
+    );
+    
+    if (idx !== -1) {
+        local[idx] = { ...local[idx], ...updates } as UTSJSONObject;
+        if (updates["checked"] === true) local[idx]["iconPath"] = ICON_OK;
+        uni.setStorageSync(LOCAL_KEY, local);
+    }
+
+    const isObjectId = /^[0-9a-f]{24}$/.test(cloudId);
+
+    try {
+        if (isObjectId) {
+            const reqData = { _id: cloudId } as UTSJSONObject;
+            Object.assign(reqData, updates);
+            const res = await _call('update', reqData) as UTSJSONObject;
+            if ((res["updated"] as number) > 0) return;
+        }
+        
+        // 🌟 修复1：抛弃 Number()，使用安全的 parseInt() 转换
+        const numId = idx !== -1 && local[idx]["id"] != null ? (local[idx]["id"] as number) : parseInt(cloudId);
+        if (!isNaN(numId)) {
+            const reqData = { id: numId } as UTSJSONObject;
+            Object.assign(reqData, updates);
+            const res = await _call('upsertById', reqData) as UTSJSONObject;
+            if (res["inserted"] === true && res["newId"] != null && idx !== -1) {
+                local[idx]["_id"] = res["newId"];
+                uni.setStorageSync(LOCAL_KEY, local);
+            }
+        }
+    } catch (e) {
+        console.warn('[storage] updateMarkerCloud 失败，已写本地');
+        const qData = { _id: cloudId } as UTSJSONObject;
+        Object.assign(qData, updates);
+        _enqueue('update', qData);
+    }
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+//  打卡点删除
+// ════════════════════════════════════════════════════════════════════════════
+
+export async function deleteMarkerCloud(cloudId: string) {
+    const cache = uni.getStorageSync(LOCAL_KEY);
+    const local = (cache != null && cache !== "") ? cache as UTSJSONObject[] : [];
+    const marker = local.find(
+        (m: UTSJSONObject): boolean => m["_id"] === cloudId || ("" + m["id"]) === cloudId
+    );
+    const filtered = local.filter(
+        (m: UTSJSONObject): boolean => m["_id"] !== cloudId && ("" + m["id"]) !== cloudId
+    );
+    uni.setStorageSync(LOCAL_KEY, filtered);
+
+    try {
+        const isObjectId = /^[0-9a-f]{24}$/.test(cloudId);
+        if (isObjectId) {
+            await _call('delete', { _id: cloudId });
+        } else if (marker != null && marker["id"] != null) {
+            await _call('delete', { id: marker["id"] });
+        }
+    } catch (e) {
+        console.warn('[storage] deleteMarkerCloud 失败');
+        _enqueue('delete', { _id: cloudId });
+    }
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+//  打卡（check-in）
+// ════════════════════════════════════════════════════════════════════════════
+
+export async function doCheckin(marker: UTSJSONObject, photoPath: string | null, note: string | null) {
+    const cloudId = marker["_id"] != null ? (marker["_id"] as string) : ("" + marker["id"]);
+    const updates = {
+        checked:   true,
+        checkedAt: Date.now(),
+        iconPath:  ICON_OK
+    } as UTSJSONObject;
+    
+    if (photoPath != null) updates["photoPath"] = photoPath;
+    if (note != null)      updates["note"] = note;
+
+    await updateMarkerCloud(cloudId, updates);
+    return { ...marker, ...updates } as UTSJSONObject;
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+//  任务进度（user_tasks）
+// ════════════════════════════════════════════════════════════════════════════
+
+export async function getUserTasksCloud() {
+    try {
+        const res = await _call('getUserTasks') as UTSJSONObject;
+        const map = {} as UTSJSONObject;
+        const resData = res["data"] != null ? res["data"] as any[] : [];
+        
+        // 🌟 修复2：用标志位替代 Object.keys() 判断是否为空
+        let hasData = false;
+        for (let i = 0; i < resData.length; i++) {
+            const t = resData[i] as UTSJSONObject;
+            const tId = t["taskId"] as string;
+            map[tId] = { status: t["status"], completedAt: t["completedAt"] };
+            hasData = true;
+        }
+        
+        if (hasData) {
+            uni.setStorageSync('user_tasks', map);
+        }
+        return map;
+    } catch (e) {
+        console.warn('[storage] getUserTasksCloud 失败');
+        const cache = uni.getStorageSync('user_tasks');
+        return (cache != null && cache !== "") ? cache as UTSJSONObject : {};
+    }
+}
+
+export async function completeTaskCloud(taskId: string, completedAt: number) {
+    const cacheT = uni.getStorageSync('task_list');
+    const tasks = (cacheT != null && cacheT !== "") ? cacheT as UTSJSONObject[] : [];
+    const idx = tasks.findIndex((t: UTSJSONObject): boolean => t["id"] === taskId);
+    if (idx !== -1) {
+        tasks[idx]["status"] = 'completed';
+        tasks[idx]["completedAt"] = completedAt;
+        uni.setStorageSync('task_list', tasks);
+    }
+    const cacheU = uni.getStorageSync('user_tasks');
+    const userTasks = (cacheU != null && cacheU !== "") ? cacheU as UTSJSONObject : {};
+    userTasks[taskId] = { status: 'completed', completedAt };
+    uni.setStorageSync('user_tasks', userTasks);
+
+    try {
+        await _call('upsertUserTask', { taskId, status: 'completed', completedAt });
+    } catch (e) {
+        console.warn('[storage] completeTaskCloud 云端失败');
+    }
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+//  奖励记录（rewards）
+// ════════════════════════════════════════════════════════════════════════════
+
+export async function getRewardsCloud() {
+    try {
+        const res = await _call('getRewards') as UTSJSONObject;
+        const data = res["data"] != null ? res["data"] as any[] : [];
+        if (data.length > 0) uni.setStorageSync('rewards', data);
+        return data;
+    } catch (e) {
+        console.warn('[storage] getRewardsCloud 失败');
+        const cache = uni.getStorageSync('rewards');
+        return (cache != null && cache !== "") ? cache as any[] : [];
+    }
+}
+
+export async function addRewardCloud(reward: UTSJSONObject) {
+    const cache = uni.getStorageSync('rewards');
+    const local = (cache != null && cache !== "") ? cache as UTSJSONObject[] : [];
+    const exist = local.find((r: UTSJSONObject): boolean => r["taskId"] === reward["taskId"]);
+    if (exist == null) {
+        local.push(reward);
+        uni.setStorageSync('rewards', local);
+    }
+    try {
+        await _call('addReward', reward);
+    } catch (e) {
+        console.warn('[storage] addRewardCloud 云端失败');
+    }
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+//  本地数据迁移到云端
+// ════════════════════════════════════════════════════════════════════════════
+
+export async function migrateLocalToCloud(markers: UTSJSONObject[]) {
+    try {
+        const countRes = await _call('count') as UTSJSONObject;
+        if ((countRes["total"] as number) > 0) return { skipped: true, count: countRes["total"] };
+        if (markers == null || markers.length === 0) return { migrated: 0 };
+
+        const list = markers.map((m: UTSJSONObject): UTSJSONObject => ({
+            id:        m["id"],
+            title:     m["title"],
+            latitude:  m["latitude"],
+            longitude: m["longitude"],
+            checked:   m["checked"] != null ? m["checked"] : false,
+            checkedAt: m["checkedAt"] != null ? m["checkedAt"] : null,
+            photoPath: m["photoPath"] != null ? m["photoPath"] : null,
+            note:      m["note"] != null ? m["note"] : null,
+            iconPath:  m["iconPath"] != null ? m["iconPath"] : ICON_DEFAULT,
+            width:     m["width"] != null ? m["width"] : 36,
+            height:    m["height"] != null ? m["height"] : 36,
+            createdAt: m["createdAt"] != null ? m["createdAt"] : m["id"]
+        }));
+
+        const res = await _call('addBatch', { list }) as UTSJSONObject;
+        const ids = res["ids"] as string[];
+        const updated = markers.map((m: UTSJSONObject, i: number): UTSJSONObject => {
+            m["_id"] = ids[i] != null ? ids[i] : ("" + m["id"]);
+            return m;
+        });
+        uni.setStorageSync(LOCAL_KEY, updated);
+        return { migrated: updated.length };
+    } catch (e) {
+        return { error: '迁移失败' };
+    }
+}
+
+export async function forceResyncToCloud(markers: UTSJSONObject[]) {
+    try {
+        await _call('deleteAll');
+        if (markers == null || markers.length === 0) return { migrated: 0 };
+
+        const list = markers.map((m: UTSJSONObject): UTSJSONObject => ({
+            id:        m["id"],
+            title:     m["title"],
+            latitude:  m["latitude"],
+            longitude: m["longitude"],
+            checked:   m["checked"] != null ? m["checked"] : false,
+            checkedAt: m["checkedAt"] != null ? m["checkedAt"] : null,
+            photoPath: m["photoPath"] != null ? m["photoPath"] : null,
+            note:      m["note"] != null ? m["note"] : null,
+            iconPath:  m["iconPath"] != null ? m["iconPath"] : ICON_DEFAULT,
+            width:     m["width"] != null ? m["width"] : 36,
+            height:    m["height"] != null ? m["height"] : 36,
+            createdAt: m["createdAt"] != null ? m["createdAt"] : m["id"]
+        }));
+
+        const res = await _call('addBatch', { list }) as UTSJSONObject;
+        const ids = res["ids"] as string[];
+        const updated = markers.map((m: UTSJSONObject, i: number): UTSJSONObject => {
+            m["_id"] = ids[i] != null ? ids[i] : ("" + m["id"]);
+            return m;
+        });
+        uni.setStorageSync(LOCAL_KEY, updated);
+        return { migrated: updated.length };
+    } catch (e) {
+        return { error: '同步失败' };
+    }
+}
+
+export async function flushSyncQueue() {
+    const cache = uni.getStorageSync(QUEUE_KEY);
+    const q = (cache != null && cache !== "") ? cache as UTSJSONObject[] : [];
+    if (q.length === 0) return;
+
+    const failed = [] as UTSJSONObject[];
+    for (let i = 0; i < q.length; i++) {
+        const item = q[i];
+        try {
+            const action = item["action"] as string;
+            // 🌟 修复3：强行给 Any 托底，绝对不允许它是空的
+            const safeData = item["data"] != null ? item["data"] as any : {};
+            
+            if (action === 'add') {
+                await _call('add', safeData);
+            } else if (action === 'update') {
+                await _call('update', safeData as UTSJSONObject);
+            } else if (action === 'delete') {
+                await _call('delete', safeData);
+            }
+        } catch (_) {
+            failed.push(item);
+        }
+    }
+    uni.setStorageSync(QUEUE_KEY, failed);
+}

@@ -1,0 +1,375 @@
+<template>
+  <scroll-view class="page-container" scroll-y="true">
+    
+    <view class="header-section">
+      <view class="header-row">
+        <view class="title-group">
+          <text class="main-title">非遗商城</text>
+          <text class="sub-title">甄选非遗好物 · 传承文化之美</text>
+        </view>
+        <view class="cart-btn" @click="goToCart">
+          <uni-icons type="cart" size="24" color="#333"></uni-icons>
+        </view>
+      </view>
+    </view>
+
+    <view class="search-bar">
+      <view class="search-input">
+        <uni-icons type="search" size="18" color="#999"></uni-icons>
+        <input 
+          class="real-input" 
+          type="text" 
+          placeholder="搜索非遗好物 / 原产地" 
+          v-model="keyword"
+          confirm-type="search"
+		  @confirm="filteredProducts"
+        />
+        <view v-if="keyword.length > 0" @click="keyword=''; filteredProducts()" style="padding: 0 10px;">
+           <uni-icons type="clear" size="18" color="#ccc"></uni-icons>
+        </view>
+      </view>
+    </view>
+
+    <view style="height: 50px; background-color: #fff;">
+      <scroll-view class="category-scroll" direction="horizontal" scroll-x="true" show-scrollbar="false">
+        <view class="category-wrapper">
+          <view 
+            class="category-item" 
+            v-for="(item, index) in categoryList" 
+            :key="index"
+            @click="changeCategory(index)"
+          >
+            <text :class="['category-text', curCategoryIndex === index ? 'text-active' : '']">{{ item.name }}</text>
+            <view v-if="curCategoryIndex === index" class="active-indicator"></view>
+          </view>
+        </view>
+      </scroll-view>
+    </view>
+
+    <view class="product-list">
+      <view 
+        class="product-card" 
+        v-for="(item, index) in productList" 
+        :key="item._id"
+        @click="goToDetail(item)"
+      >
+        <image :src="item.images" mode="aspectFill" class="product-img"></image>
+        
+        <view class="product-info">
+          <text class="product-title" style="lines: 1; text-overflow: ellipsis;">{{ item.title }}</text>
+          <text class="product-desc" style="lines: 1; text-overflow: ellipsis;">{{ item.subtitle }}</text>
+          
+          <view style="flex-direction: row; margin-bottom: 6px;">
+             <text style="font-size: 10px; color: #7b61ff; background-color: #f4f1ff; padding: 2px 6px; border-radius: 4px;">{{ item.POO }}</text>
+          </view>
+
+          <view class="product-bottom">
+            <view class="price-box">
+              <text class="currency">¥</text>
+              <text class="price-num">{{ item.unitPrice }}</text>
+            </view>
+            <text class="sales-text">已售{{ item.sales }}</text>
+          </view>
+        </view>
+      </view>
+      
+      <view v-if="productList.length === 0" class="empty-tip">
+        <text style="color: #999; font-size: 14px;">没有找到相关商品</text>
+      </view>
+    </view>
+    
+    <view class="page-footer">
+      <text class="footer-text">© 2025 非你不可</text>
+    </view>
+    
+  </scroll-view>
+</template>
+
+<script>
+import {productDetail , state} from '@/user/index.uts'
+
+type Category = { name: string }
+
+export default {
+  data() {
+    return {
+      keyword: "" as string ,
+	  productList: [] as productDetail[],
+      curCategoryIndex: 0,	//categoryList的下标(index)
+      categoryList: [
+        { name: "推荐" },
+        { name: "苏绣" },
+        { name: "竹编" },
+        { name: "制香" },
+        { name: "剪纸" }
+      ] as Category[],
+    }
+  },
+  //计算属性 vue需要立刻得到数据用于渲染页面
+  computed: {
+
+  },
+  methods: {
+    async changeCategory(index: number) {
+		const tempKeyword = this.keyword ;
+		
+		this.curCategoryIndex = index ;	//把当前类别页面切换到index
+		
+		const curCategoryName = this.categoryList[index].name ;
+		
+		if(curCategoryName === "推荐"){
+			this.keyword = "" ;
+		}
+		else{
+			this.keyword = this.categoryList[index].name ;
+		}
+		await this.filteredProducts() ;
+		this.keyword = tempKeyword ;
+    },
+	
+    goToDetail(item: productDetail) {//item是用户从搜索后得到的全部商品中选取的商品
+	  state.curProduct = item ; 
+	  
+      uni.navigateTo({
+        url: '/pages/product-detail/product-detail?id=' + item._id,
+      });
+    },
+    goToCart() {
+      uni.navigateTo({
+        url: '/pages/cart/cart'
+      });
+    },
+	async filteredProducts(){	
+		uni.showLoading({ title: '搜索中...', mask: true });
+		try{
+			const productApi = uniCloud.importObject('product-api') ;
+			const res = await productApi.filteredProducts(this.keyword) as UTSJSONObject ;	//把返回结果解析成UTSJSONObject 后续使用键来访问数据
+			
+			uni.hideLoading() ;	//隐藏加载的动画
+			
+			const errCode = res["errCode"];
+			if(errCode === 0){
+				const rawData = res["data"];
+					
+				if(rawData != null && Array.isArray(rawData)) {
+				    const jsonStr = JSON.stringify(rawData);	//先转json string类型
+				    const parsedData = JSON.parse<productDetail[]>(jsonStr);	//再转真实类型
+				        
+				    //判空赋值
+				    if (parsedData != null) {
+				        this.productList = parsedData;
+				    } else {
+				        this.productList = [] as productDetail[];
+				    }
+				                
+				    if(this.productList.length === 0) {
+				        uni.showToast({ title: '未找到相关商品', icon: 'none' });
+				    }
+				} else {
+				    this.productList = [] as productDetail[];
+				}
+			}
+			else{
+				const errMsg = (res["errMsg"] as string) ?? "搜索失败" ;	//把错误信息errMsg断言为string 如果没返回就赋值为 "搜索失败"
+				uni.showToast({title:errMsg , icon:'none'}) ;
+			}
+		}
+		catch(e){
+			uni.hideLoading() ;	//隐藏加载的动画
+			uni.showToast({title:'网络请求失败' , icon:'none'}) ;
+			
+			// console.log(JSON.stringify(e));
+		}
+	}
+  }
+}
+</script>
+
+<style scoped>
+.page-container {
+  flex: 1;
+  background-color: #f5f5f5;
+}
+
+.header-section {
+  background-color: #ffffff;
+  padding-top: 50px; 
+  padding-left: 15px;
+  padding-right: 15px;
+  padding-bottom: 5px;
+}
+
+.header-row {
+  flex-direction: row; 
+  align-items: center;
+  justify-content: space-between;
+  height: 44px;
+}
+
+.title-group {
+  flex-direction: row; 
+  align-items: flex-end; 
+}
+
+.main-title {
+  font-size: 44rpx; 
+  font-weight: bold;
+  color: #333;
+  margin-right: 24rpx; 
+}
+
+.sub-title {
+  font-size: 22rpx;
+  color: #999;
+  margin-bottom: 4rpx; 
+}
+
+.cart-btn {
+  width: 60rpx;
+  height: 60rpx;
+  align-items: center;
+  justify-content: flex-end; 
+}
+
+.search-bar {
+  padding: 5px 15px 10px 15px;
+  background-color: #ffffff;
+}
+.search-input {
+  background-color: #f7f7f7;
+  height: 36px;
+  border-radius: 18px;
+  flex-direction: row; 
+  align-items: center;
+  padding: 0 10px;
+}
+
+.real-input {
+  flex: 1; 
+  font-size: 14px;
+  color: #333;
+  margin-left: 5px;
+  background-color: transparent;
+}
+
+.category-scroll {
+  width: 100%;
+  height: 50px;
+  flex-direction: row;
+}
+.category-wrapper {
+  flex-direction: row; 
+  padding: 0 10px;
+  height: 50px;
+  align-items: center;
+}
+.category-item {
+  margin-right: 25px;
+  height: 40px;
+  justify-content: center;
+  align-items: center;
+}
+.category-text {
+  font-size: 15px;
+  color: #333;
+}
+.text-active {
+  font-size: 16px;
+  font-weight: bold;
+  color: #7b61ff;
+}
+.active-indicator {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background-color: #7b61ff;
+  border-radius: 2px;
+}
+
+.product-list {
+  flex-direction: row; 
+  flex-wrap: wrap;
+  padding: 10px;
+  justify-content: space-between;
+}
+
+.product-card {
+  width: 48%;
+  background-color: #ffffff;
+  border-radius: 8px;
+  margin-bottom: 10px;
+  flex-direction: column; 
+}
+
+.product-img {
+  width: 100%;
+  height: 170px;
+  background-color: #eeeeee;
+}
+
+.product-info {
+  padding: 8px;
+  flex-direction: column; 
+}
+
+.product-title {
+  font-size: 14px;
+  color: #333;
+  margin-bottom: 4px; 
+}
+
+.product-desc {
+  font-size: 11px;
+  color: #999; 
+  margin-bottom: 8px; 
+}
+
+.product-bottom {
+  flex-direction: row; 
+  justify-content: space-between;
+  align-items: flex-end;
+}
+
+.price-box {
+  flex-direction: row; 
+  align-items: flex-end; 
+}
+
+.currency {
+  font-size: 12px;
+  color: #ff4d4f;
+  margin-bottom: 3rpx; 
+}
+
+.price-num {
+  font-size: 18px;
+  font-weight: bold;
+  color: #ff4d4f;
+}
+
+.sales-text {
+  font-size: 11px;
+  color: #999;
+}
+
+.empty-tip {
+  width: 100%;
+  padding: 30px;
+  justify-content: center;
+  align-items: center;
+}
+
+.page-footer {
+  justify-content: center;
+  align-items: center;
+  padding-top: 20rpx;
+  padding-bottom: 60rpx; 
+}
+
+.footer-text {
+  font-size: 24rpx;
+  color: #aaa;
+}
+</style>

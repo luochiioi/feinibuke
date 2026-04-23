@@ -1,0 +1,410 @@
+<template>
+	<view class="container">
+		<view class="pattern-bg"></view>
+		<view class="main-stage">
+			<button class="collection-btn" @click="showCollection = true">
+				<text class="btn-text-white">图鉴</text>
+			</button>
+			<view class="altar-outer">
+				<view class="altar-inner">
+					<view v-if="selectedList.length == 0" class="empty-text-box">
+						<text class="empty-icon">✧</text>
+						<text class="empty-hint-main">左右各选一个非遗元素</text>
+					</view>
+					
+					<view
+						v-show="leftSelected != null"
+						class="card-absolute"
+						:style="{
+								left: leftCardX + 'px',
+								top: cardY + 'px',
+								transform: fusionStage === 1 ? 'scale(0.6)' : (fusionStage === 2 ? 'scale(0.3)' : 'scale(1)')
+						}"
+						@touchstart="handleTouchStart($event, 'left')"
+						@touchend="handleTouchEnd"
+						@touchcancel="handleTouchEnd"
+					>
+						<view class="tile-content">
+							<view v-if="dragIndex === 'left'" class="delete-progress-bar"></view>
+							<view class="tile-img-sm">
+								<image class="tile-image" :src="leftSelected != null ? leftSelected!.img : ''" mode="aspectFill"></image>
+							</view>
+							<view class="tile-name-box">
+								<text class="tile-name-sm">{{ leftSelected != null ? leftSelected!.name : '' }}</text>
+							</view>
+						</view>
+					</view>
+
+					<view
+						v-show="rightSelected != null"
+						class="card-absolute"
+						:style="{
+								left: rightCardX + 'px',
+								top: cardY + 'px',
+								transform: fusionStage === 1 ? 'scale(0.6)' : (fusionStage === 2 ? 'scale(0.3)' : 'scale(1)')
+						}"
+						@touchstart="handleTouchStart($event, 'right')"
+						@touchend="handleTouchEnd"
+						@touchcancel="handleTouchEnd"
+					>
+						<view class="tile-content">
+							<view v-if="dragIndex === 'right'" class="delete-progress-bar"></view>
+							<view class="tile-img-sm">
+								<image class="tile-image" :src="rightSelected != null ? rightSelected!.img : ''" mode="aspectFill"></image>
+							</view>
+							<view class="tile-name-box">
+								<text class="tile-name-sm">{{ rightSelected != null ? rightSelected!.name : '' }}</text>
+							</view>
+						</view>
+					</view>
+
+					<view v-if="isFusing" class="fusion-core">
+						<view class="energy-ring"></view>
+						<view class="energy-glow"></view>
+					</view>
+				</view>
+			</view>
+			
+			<view class="action-bar">
+				<button class="fuse-btn" @click="startFusion" :disabled="selectedList.length < 2">
+					<text class="btn-text-white">开启融合仪式</text>
+				</button>
+				<text class="status-hint">{{ statusMsg }}</text>
+			</view>
+			
+			<view class="select-bar">
+				<button class="select-btn" @click="openPanel('left')">
+					<text class="btn-text-white">选择左侧</text>
+				</button>
+				<button class="select-btn" @click="openPanel('right')">
+					<text class="btn-text-white">选择右侧</text>
+				</button>
+			</view>
+		</view>
+
+		<view v-if="showLibrary" class="overlay" @click="toggleLibrary"></view>
+		
+		<view class="drawer-panel" :class="{ 'panel-show': showLibrary }">
+			<view class="panel-top">
+				<text class="panel-title">选择非遗</text>
+				<text class="panel-close" @click="toggleLibrary">✕</text>
+			</view>
+			<scroll-view scroll-y="true" class="scroll-body">
+				<view class="tiles-grid">
+					<view
+						v-for="item in filteredArtList"
+						:key="item.id"
+						class="tile-card"
+						@click="selectMaterial(item)"
+					>
+						<view class="grid-img">
+							<image :src="item.img" class="grid-img-inner" mode="aspectFill"></image>
+						</view>
+						<view class="grid-info">
+							<text class="grid-info-text">{{ item.name }}</text>
+						</view>
+						<view v-if="isSelected(item)" class="selected-mask">
+							<text class="mask-check">✓</text>
+						</view>
+					</view>
+				</view>
+			</scroll-view>
+		</view>
+
+		<view v-if="resultModal" class="result-mask">
+			<view class="result-card">
+				<view class="chance-tag">
+					<text class="tag-text">生成概率: {{ lastResult.chance }}%</text>
+				</view>
+				<view class="result-image">
+					<image :src="lastResult.img" class="result-image-inner" mode="aspectFit"></image>
+				</view>
+				<text class="result-title">{{ lastResult.name }}</text>
+				<text class="result-desc">{{ lastResult.desc }}</text>
+				<text class="result-info">由 {{ lastResult.ingredients }} 幻化而成</text>
+				<button class="collect-btn" @click="confirmCollect">
+					<text class="btn-text-white">确认收录</text>
+				</button>
+			</view>
+		</view>
+
+		<view v-if="showCollection" class="result-mask" @click="showCollection = false">
+			<view class="result-card" @click.stop="">
+				<text class="result-title">图鉴收藏</text>
+				<scroll-view class="collection-scroll" scroll-y="true">
+					<view class="tiles-grid">
+						<view v-for="(item, index) in (displayCollection as UTSJSONObject[])" :key="index" class="tile-card">
+							<view class="grid-img">
+								<image 
+									:src="item['img'] as string"
+									class="grid-img-inner" 
+									:style="{ opacity: (item['isLocked'] as boolean) ? '0.3' : '1' }"
+									mode="aspectFill">
+								</image>
+							</view>
+							<view class="grid-info">
+								<text class="grid-info-text" :style="{ color: (item['isLocked'] as boolean) ? '#999' : '#004D99' }">
+									{{ item['name'] as string }}
+								</text>
+							</view>
+						</view>
+					</view>
+				</scroll-view>
+				<button class="collect-btn" @click="showCollection = false">
+					<text class="btn-text-white">关闭</text>
+				</button>
+			</view>
+		</view>
+	</view>
+</template>
+
+<script>
+type ArtItem = { id: number; name: string; tags: string[]; img: string; };
+type FusionItem = { name: string; tags: string[]; desc: string; baseWeight: number; img: string; chance ?: string; ingredients ?: string; isLocked ?: boolean; };
+
+export default {
+	data() {
+		const artList = [
+			{ id: 1, name: '昆曲', tags: ['戏曲'] }, { id: 2, name: '京剧', tags: ['戏曲'] },
+			{ id: 3, name: '粤剧', tags: ['戏曲'] }, { id: 4, name: '川剧', tags: ['戏曲'] },
+			{ id: 5, name: '秦腔', tags: ['戏曲'] }, { id: 6, name: '黄梅戏', tags: ['戏曲'] },
+			{ id: 7, name: '越剧', tags: ['戏曲'] }, { id: 8, name: '豫剧', tags: ['戏曲'] },
+			{ id: 9, name: '古琴艺术', tags: ['音乐'] }, { id: 10, name: '江南丝竹', tags: ['音乐'] },
+			{ id: 11, name: '西安鼓乐', tags: ['音乐'] }, { id: 12, name: '侗族大歌', tags: ['音乐'] },
+			{ id: 13, name: '呼麦', tags: ['音乐'] }, { id: 14, name: '南音', tags: ['音乐'] },
+			{ id: 15, name: '长调', tags: ['音乐'] }, { id: 16, name: '马头琴', tags: ['音乐'] },
+			{ id: 17, name: '秧歌', tags: ['舞蹈'] }, { id: 18, name: '狮舞', tags: ['舞蹈'] },
+			{ id: 19, name: '龙舞', tags: ['舞蹈'] }, { id: 20, name: '锅庄舞', tags: ['舞蹈'] },
+			{ id: 21, name: '孔雀舞', tags: ['舞蹈'] }, { id: 22, name: '英歌', tags: ['舞蹈'] },
+			{ id: 23, name: '相声', tags: ['戏曲'] }, { id: 24, name: '评弹', tags: ['音乐'] },
+			{ id: 25, name: '快板', tags: ['戏曲'] }, { id: 26, name: '皮影', tags: ['工艺'] },
+			{ id: 27, name: '木偶', tags: ['工艺'] }, { id: 28, name: '杂技', tags: ['舞蹈'] },
+			{ id: 29, name: '唐卡', tags: ['工艺'] }, { id: 30, name: '年画', tags: ['工艺'] }
+		];
+		const enrichedArtList: ArtItem[]= artList.map((item) : ArtItem => {
+			return {
+				id: item.id as number,
+				name: item.name as string,
+				tags: item.tags as string[],
+				img: `/static/ich/${item.id}.png`
+			} as ArtItem
+		});
+		const fusionDatabase = [
+			{ name: '九霄环佩神韵琴', tags: ['音乐'], desc: '仙乐环绕', baseWeight: 10, img: '/static/ich/result1.png' },
+			{ name: '霓裳羽衣敦煌卷', tags: ['舞蹈'], desc: '大唐幻梦', baseWeight: 10, img: '/static/ich/result2.png' },
+			{ name: '幻影乾坤面谱', tags: ['戏曲'], desc: '百味人生', baseWeight: 10, img: '/static/ich/result3.png' },
+			{ name: '非遗混沌灵石', tags: [], desc: '未知之力', baseWeight: 5, img: '/static/ich/result4.png' }
+		] as FusionItem[];
+
+		return {
+			showLibrary: false,
+			resultModal: false,
+			statusMsg: '待机中',
+			activeSide: 'left',
+			leftSelected: null as ArtItem | null,
+			rightSelected: null as ArtItem | null,
+			lastResult: {
+				name: '', tags: [] as string[], desc: '', baseWeight: 0, img: '', chance: '', ingredients: ''
+			} as FusionItem,
+			dragIndex: '',
+			pressTimer: 0 as number,
+			screenWidth: 375,
+			artList: enrichedArtList,
+			fusionDatabase: fusionDatabase,
+			showCollection: false,
+			collection: [] as FusionItem[],
+			isFusing: false,
+			fusionStage: 0
+		};
+	},
+	computed: {
+		rpxToPx() : number { return this.screenWidth / 750; },
+		altarCenterXPx() : number { return (500 * this.rpxToPx) / 2; },
+		cardWidthPx() : number { return 110 * this.rpxToPx; },
+		offsetPx() : number { return 80 * this.rpxToPx; },
+		leftCardX() : number {
+			if (this.isFusing) return this.altarCenterXPx - this.cardWidthPx / 2;
+			return this.altarCenterXPx - this.offsetPx - this.cardWidthPx;
+		},
+		rightCardX() : number {
+			if (this.isFusing) return this.altarCenterXPx - this.cardWidthPx / 2;
+			return this.altarCenterXPx + this.offsetPx;
+		},
+		cardY() : number { return Math.floor(190 * this.rpxToPx); },
+		selectedList() : ArtItem[] {
+			const list : ArtItem[] = [];
+			if (this.leftSelected != null) list.push(this.leftSelected!);
+			if (this.rightSelected != null) list.push(this.rightSelected!);
+			return list;
+		},
+		filteredArtList() : ArtItem[] {
+			return this.activeSide === 'left' ? this.artList.slice(0, 15) : this.artList.slice(15, 30);
+		},
+		displayCollection(): any[] {
+			return this.fusionDatabase.map((item: FusionItem): UTSJSONObject => {
+				const isUnlocked = this.collection.some((c: FusionItem): boolean => c.name === item.name);
+				if (isUnlocked) {
+					return {
+						"name": item.name,
+						"img": item.img,
+						"isLocked": false
+					} as UTSJSONObject;
+				} else {
+					return {
+						"name": '???',
+						"img": '/static/ich/unknown.png',
+						"isLocked": true
+					} as UTSJSONObject;
+				}
+			});
+		}
+	},
+	onLoad() {
+		const systemInfo = uni.getSystemInfoSync();
+		this.screenWidth = systemInfo.windowWidth;
+		const saved = uni.getStorageSync('ICH_COLLECTION');
+		
+		if (saved != null && saved !== '') {
+			const savedList = saved as string[]; 
+			if (Array.isArray(savedList)) {
+				this.collection = this.fusionDatabase.filter((item : FusionItem) : boolean => {
+					return savedList.includes(item.name);
+				});
+			}
+		}
+	},
+	methods: {
+		toggleLibrary() { this.showLibrary = !this.showLibrary; },
+		openPanel(side : string) {
+			this.activeSide = side;
+			this.showLibrary = true;
+		},
+		selectMaterial(item : ArtItem) {
+			if (this.activeSide === 'left') { this.leftSelected = item; } 
+			else { this.rightSelected = item; }
+			this.showLibrary = false;
+		},
+		isSelected(item : ArtItem) : boolean {
+			return this.activeSide === 'left' ? this.leftSelected?.id === item.id : this.rightSelected?.id === item.id;
+		},
+		handleTouchStart(_ : any, side : string) {
+			this.clearTimer();
+			this.dragIndex = side;
+			this.pressTimer = setTimeout(() => {
+				if (this.dragIndex === side) {
+					if (side === 'left') { this.leftSelected = null; } else { this.rightSelected = null; }
+				}
+			}, 1000);
+		},
+		handleTouchEnd() { this.clearTimer(); this.dragIndex = ''; },
+		clearTimer() { if (this.pressTimer != 0) { clearTimeout(this.pressTimer); this.pressTimer = 0; } },
+		confirmCollect() {
+			const exists = this.collection.find((i: FusionItem): boolean => i.name === this.lastResult.name);
+			if (exists == null) {
+				this.collection.push(this.lastResult);
+				uni.setStorageSync('ICH_COLLECTION', this.collection.map((i: FusionItem): string => i.name));
+			}
+			this.resultModal = false;
+		},
+		startFusion() {
+			if (this.selectedList.length < 2) return;
+			this.statusMsg = '融合中...';
+			this.isFusing = true;
+			this.fusionStage = 1;
+			setTimeout(() => { this.fusionStage = 2; }, 800);
+			setTimeout(() => {
+				const result = this.calculateWeightedResult();
+				this.lastResult = {
+					...result,
+					ingredients: this.selectedList.map((i: ArtItem): string => i.name).join(' + ')
+				} as FusionItem;
+				this.isFusing = false;
+				this.resultModal = true;
+				this.leftSelected = null;
+				this.rightSelected = null;
+				this.statusMsg = '仪式完成';
+				this.fusionStage = 0;
+			}, 2500);
+		},
+		calculateWeightedResult() : FusionItem {
+			const currentTags : string[] = [];
+			this.selectedList.forEach((item : ArtItem) => {
+				item.tags.forEach((tag : string) => {
+					currentTags.push(tag);
+				});
+			});
+			const weights = this.fusionDatabase.map((p : FusionItem) : number => {
+				let w = p.baseWeight;
+				p.tags.forEach((t : string) => {
+					const matches = currentTags.filter((ct : string) : boolean => ct === t);
+					w += (matches.length * 60);
+				});
+				return w;
+			});
+			const total = weights.reduce((acc: number, cur: number): number => acc + cur, 0);
+			let r = Math.random() * total;
+			for (let i = 0; i < this.fusionDatabase.length; i++) {
+				if (r < weights[i]) {
+					const res = this.fusionDatabase[i];
+					res.chance = ((weights[i] / total) * 100).toFixed(1);
+					return res;
+				}
+				r -= weights[i];
+			}
+			return this.fusionDatabase[0];
+		}
+	}
+}
+</script>
+
+<style>
+.container { flex: 1; background-color: #FFF; }
+.pattern-bg { position: absolute; width: 100%; height: 100%; background-color: rgba(0, 77, 153, 0.04); }
+.main-stage { display: flex; flex-direction: column; align-items: center; padding-top: 100rpx; }
+.btn-text-white { color: #FFF; font-size: 24rpx; font-weight: bold; }
+.collection-btn { position: absolute; top: 40rpx; left: 30rpx; z-index: 1000; background-color: #004D99; border-radius: 30rpx; padding: 10rpx 30rpx; border: 0; box-shadow: 0 6rpx 0 #D4AF37; }
+.altar-outer { width: 500rpx; height: 500rpx; border: 4rpx solid #004D99; border-radius: 250rpx; background-color: #FFF; position: relative; }
+.altar-inner { width: 100%; height: 100%; position: relative; }
+.card-absolute { position: absolute; width: 110rpx; height: 140rpx; transition-property: left, top, transform; transition-duration: 0.8s; }
+.tile-content { width: 100%; height: 100%; background-color: #FFF; border-radius: 12rpx; display: flex; flex-direction: column; overflow: hidden; border: 1rpx solid #EEE; }
+.tile-img-sm { width: 110rpx; height: 80rpx; }
+.tile-image { width: 110rpx; height: 80rpx; }
+.tile-name-box { flex: 1; display: flex; align-items: center; justify-content: center; }
+.tile-name-sm { text-align: center; font-size: 18rpx; font-weight: bold; color: #5D4037; }
+.fusion-core { position: absolute; left: 190rpx; top: 190rpx; width: 120rpx; height: 120rpx; z-index: 50; }
+.energy-ring { width: 120rpx; height: 120rpx; border-radius: 60rpx; border: 4rpx solid #D4AF37; }
+.energy-glow { position: absolute; top: 0; left: 0; width: 120rpx; height: 120rpx; border-radius: 60rpx; background-color: #D4AF37; opacity: 0.4; }
+.action-bar { margin-top: 50rpx; display: flex; flex-direction: column; align-items: center; }
+.fuse-btn { background-color: #004D99; padding: 10rpx 80rpx; border-radius: 50rpx; box-shadow: 0 10rpx 0 #D4AF37; border: 0; }
+.status-hint { margin-top: 20rpx; color: #94A3B8; font-size: 24rpx; }
+.select-bar { display: flex; flex-direction: row; margin-top: 40rpx; }
+.select-btn { background-color: #004D99; border-radius: 40rpx; padding: 10rpx 30rpx; border: 0; margin: 0 10rpx; }
+.drawer-panel { position: fixed; bottom: 0; left: 0; width: 750rpx; height: 800rpx; background-color: #FFF; z-index: 100; border-top-left-radius: 40rpx; border-top-right-radius: 40rpx; transform: translateY(800rpx); transition-property: transform; transition-duration: 0.3s; display: flex; flex-direction: column; }
+.panel-show { transform: translateY(0); }
+.panel-top { display: flex; flex-direction: row; justify-content: space-between; padding: 30rpx 40rpx; border-bottom: 1rpx solid #EEE; }
+.panel-title { font-weight: bold; color: #004D99; font-size: 32rpx; }
+.panel-close { font-size: 40rpx; color: #999; }
+.tiles-grid { display: flex; flex-direction: row; flex-wrap: wrap; padding: 10rpx; justify-content: flex-start;}
+.tile-card { width: 210rpx; margin: 10rpx; height: 180rpx; border: 1rpx solid #EEE; border-radius: 12rpx; background-color: #FAF7F0; overflow: hidden; position: relative;}
+.grid-img, .grid-img-inner { width: 100%; height: 120rpx; }
+.grid-info { height: 60rpx; width: 100%; display: flex; align-items: center; justify-content: center; background-color: #FFF;}
+.grid-info-text { font-size: 22rpx; color: #004D99; font-weight: bold; }
+.selected-mask { position: absolute; top: 0; left: 0; width: 210rpx; height: 180rpx; background-color: rgba(0, 77, 153, 0.7); display: flex; align-items: center; justify-content: center; }
+.mask-check { color: #FFF; font-size: 40rpx; }
+.result-mask { position: fixed; top: 0; left: 0; width: 750rpx; height: 1600rpx; background-color: rgba(0, 0, 0, 0.6); z-index: 999; display: flex; align-items: center; justify-content: center; }
+.result-card { width: 560rpx; background-color: #FFF; border: 4rpx solid #D4AF37; padding: 40rpx; align-items: center; border-radius: 20rpx; }
+.chance-tag { background-color: #D4AF37; padding: 4rpx 20rpx; border-radius: 20rpx; margin-bottom: 20rpx; }
+.tag-text { color: #FFF; font-size: 20rpx; }
+.result-image { width: 150rpx; height: 150rpx; border-radius: 75rpx; background-color: #FAF7F0; margin-bottom: 20rpx; }
+.result-image-inner { width: 150rpx; height: 150rpx; }
+.result-title { font-size: 36rpx; font-weight: bold; color: #004D99; margin-bottom: 10rpx; }
+.result-desc { font-size: 24rpx; color: #718096; text-align: center; margin-bottom: 20rpx; }
+.result-info { font-size: 20rpx; color: #999; margin-bottom: 30rpx; }
+.collect-btn { background-color: #004D99; border-radius: 40rpx; padding: 10rpx 60rpx; border: 0; }
+.collection-scroll { width: 500rpx; height: 500rpx; margin-top: 20rpx; }
+.empty-text-box { position: absolute; width: 500rpx; top: 200rpx; align-items: center; opacity: 0.5; }
+.empty-icon { font-size: 40rpx; color: #004D99; }
+.empty-hint-main { font-size: 24rpx; color: #004D99; font-weight: bold; }
+.overlay { position: fixed; top: 0; left: 0; width: 750rpx; height: 1600rpx; background-color: rgba(0, 0, 0, 0.4); z-index: 99; }
+.delete-progress-bar { position: absolute; bottom: 0; left: 0; height: 8rpx; background-color: #FF4D4F; z-index: 10; width: 110rpx; }
+</style>

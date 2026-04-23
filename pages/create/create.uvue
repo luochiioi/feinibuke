@@ -1,0 +1,267 @@
+<template>
+  <scroll-view class="create-page" scroll-y="true">
+    
+    <view class="page-header">
+      <text class="header-title">非遗创作工坊</text>
+      <text class="header-sub">传承 · 创新 · 体验</text>
+    </view>
+
+    <view class="menu-list">
+      
+      <view class="menu-card" @click="handleJump('非遗手工体验')">
+        <view class="card-content">
+          <image class="card-top-icon" src="/static/models/hunan-embroidery.png" mode="aspectFill"></image>
+          <view class="text-group">
+            <text class="card-title">非遗手工体验</text>
+            <text class="card-desc">亲手触摸历史，感受技艺温度</text>
+          </view>
+        </view>
+        <!-- <view class="card-action">
+          <view class="enter-btn" >
+            <text class="btn-text">立即进入</text>
+          </view>
+        </view> -->
+      </view>
+
+      <view class="menu-card" @click="handleJump('非遗手作体验')">
+        <view class="card-content">
+          <image class="card-top-icon" src="/static/models/macau-brick.png" mode="aspectFill"></image>
+          <view class="text-group">
+            <text class="card-title">非遗手作体验</text>
+            <text class="card-desc">线上DIY工坊，制作专属纪念</text>
+          </view>
+        </view>
+        <!-- <view class="card-action">
+          <view class="enter-btn" @click="handleJump('非遗手作体验')">
+            <text class="btn-text">立即进入</text>
+          </view>
+        </view> -->
+      </view>
+
+      <!-- <view class="menu-card" @click="handleJump('非遗创新')">
+        <view class="card-content">
+          <image class="card-top-icon" src="/static/models/guangdong-opera.png" mode="aspectFill"></image>
+          <view class="text-group">
+            <text class="card-title">非遗创新</text>
+            <text class="card-desc">融合现代科技，重塑传统美学</text>
+          </view>
+        </view>
+        <view class="card-action">
+          <view class="enter-btn">
+            <text class="btn-text">立即进入</text>
+          </view>
+        </view>
+      </view> -->
+      
+      <view class="menu-card" @click="handleJump('3D建模')">
+        <view class="card-content">
+          <image class="card-top-icon" src="/static/models/3dmodel.png" mode="aspectFill"></image>
+          <view class="text-group">
+            <text class="card-title">3D建模</text>
+            <text class="card-desc">数字化保存与展示</text>
+          </view>
+        </view>
+        <!-- <view class="card-action">
+          <view class="enter-btn" @click="handleJump('3D建模')">
+            <text class="btn-text">立即进入</text>
+          </view>
+        </view> -->
+      </view>
+      
+      <view class="menu-card" @click="handleJump('地图打卡')">
+        <view class="card-content">
+          <image class="card-top-icon" src="/static/models/checkin.png" mode="aspectFill"></image>
+          <view class="text-group">
+            <text class="card-title">地图打卡</text>
+            <text class="card-desc">探索城市文化地标</text>
+          </view>
+        </view>
+
+        <!-- <view class="card-action">
+          <view class="enter-btn" @click="handleJump('地图打卡')">
+            <text class="btn-text">立即进入</text>
+          </view>
+        </view> -->
+
+      </view>
+
+      <view class="menu-card" @click="handleJump('AI创作')">
+        <view class="card-content">
+          <image class="card-top-icon" src="/static/models/guangdong-opera.png" mode="aspectFill"></image>
+          <view class="text-group">
+            <text class="card-title">AI创作</text>
+            <text class="card-desc">AI灵感画板，草图变大作</text>
+          </view>
+        </view>
+
+      </view>
+      
+      <view class="page-footer">
+        <text class="footer-text">© 2025 非你不可</text>
+      </view>
+      
+    </view>
+    
+  </scroll-view>
+</template>
+
+<script>
+export default {
+  data() {
+    return {
+      // 已移除防抖变量 isNavigating 和 timer
+    }
+  },
+  methods: {
+    // 路由映射逻辑
+    getRoutePath(name: string): string {
+      if (name == '非遗手工体验') {
+        return '/pages/experience/handcraft';
+      } 
+      else if (name == '非遗手作体验') {
+        return '/pages/experience/diy';
+      }
+      // else if (name == '非遗创新') {
+      //   return '/pages/experience/innovation';
+      // } 
+      else if (name == '3D建模') {
+        return '/pages/experience/3dlist';
+      } 
+      else if (name == '地图打卡') {
+        return '/pages/map/index';
+      }
+      else if (name == 'AI创作') {
+        return '/pages/ai-canva/index';
+
+      } 
+      else {
+        return '';
+      }
+    },
+
+    // 简化后的跳转逻辑（无锁）
+    handleJump(name: string) {
+      const targetUrl = this.getRoutePath(name);
+      
+      if (targetUrl === '') {
+        uni.showToast({ title: `${name} 功能正在开发中`, icon: 'none' });
+        return;
+      }
+
+      uni.navigateTo({
+        url: targetUrl,
+        fail: (err) => {
+          console.error('跳转失败:', err);
+          uni.showToast({ title: '页面跳转失败，请检查路径', icon: 'none' });
+        }
+      });
+    }
+  }
+};
+</script>
+
+<style scoped>
+.create-page {
+  flex: 1;
+  background-color: #ffffff; 
+  padding: 120rpx 30rpx 40rpx 30rpx;
+}
+
+.page-header {
+  margin-bottom: 50rpx;
+  padding-left: 10rpx;
+}
+.header-title {
+  font-size: 44rpx;
+  font-weight: bold;
+  color: #1a1a1a;
+  margin-bottom: 12rpx;
+}
+.header-sub {
+  font-size: 24rpx;
+  color: #999;
+}
+
+.menu-list {
+  flex-direction: column;
+}
+
+.menu-card {
+  background-color: #ffffff;
+  border-radius: 24rpx;
+  padding: 30rpx;
+  flex-direction: column; 
+  box-shadow: 0 10rpx 40rpx rgba(0, 0, 0, 0.06); 
+  border-width: 1rpx;
+  border-style: solid;
+  border-color: #f8f8f8;
+  margin-bottom: 36rpx;
+}
+
+.card-content {
+  flex-direction: row; 
+  align-items: center;
+  margin-bottom: 24rpx;
+}
+
+.card-top-icon {
+  width: 120rpx;   
+  height: 120rpx;  
+  border-radius: 20rpx;
+  background-color: #F4F1FF;
+  margin-right: 24rpx;
+}
+
+.text-group {
+  flex-direction: column;
+  justify-content: center;
+  flex: 1;
+}
+
+.card-title {
+  font-size: 34rpx;
+  font-weight: bold;
+  color: #333;
+  margin-bottom: 8rpx;
+}
+
+.card-desc {
+  font-size: 24rpx;
+  color: #999;
+  line-height: 1.4;
+}
+
+.card-action {
+  flex-direction: row;
+  justify-content: flex-end;
+}
+
+.enter-btn {
+  background-image: linear-gradient(to right, #7b61ff, #9c88ff);
+  padding: 0 40rpx;
+  height: 64rpx;
+  border-radius: 32rpx;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: center;
+}
+
+.btn-text {
+  color: #fff;
+  font-size: 26rpx;
+  font-weight: bold;
+}
+
+.page-footer {
+  justify-content: center;
+  align-items: center;
+  padding-top: 40rpx;
+  padding-bottom: 40rpx;
+}
+
+.footer-text {
+  font-size: 24rpx;
+  color: #ccc;
+}
+</style>

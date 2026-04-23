@@ -1,0 +1,67 @@
+{
+  "bsonType": "object",
+  "required": ["title", "latitude", "longitude"],
+  "permission": {
+    "read": true,
+    "create": true,
+    "update": true,
+    "delete": true
+  },
+  "properties": {
+    "_id": {
+      "description": "云端自动生成的文档ID"
+    },
+    "id": {
+      "bsonType": "number",
+      "description": "本地兼容用的数字ID（Date.now()）"
+    },
+    "title": {
+      "bsonType": "string",
+      "description": "打卡点名称",
+      "minLength": 1,
+      "maxLength": 50
+    },
+    "latitude": {
+      "bsonType": "double",
+      "description": "纬度（GCJ-02）"
+    },
+    "longitude": {
+      "bsonType": "double",
+      "description": "经度（GCJ-02）"
+    },
+    "checked": {
+      "bsonType": "bool",
+      "description": "是否已打卡",
+      "defaultValue": false
+    },
+    "checkedAt": {
+      "bsonType": "timestamp",
+      "description": "打卡时间戳"
+    },
+    "photoPath": {
+      "bsonType": "string",
+      "description": "打卡照片路径（云存储URL或本地临时路径）"
+    },
+    "note": {
+      "bsonType": "string",
+      "description": "打卡备注",
+      "maxLength": 200
+    },
+    "iconPath": {
+      "bsonType": "string",
+      "description": "地图标记图标URL"
+    },
+    "width": {
+      "bsonType": "number",
+      "description": "标记宽度"
+    },
+    "height": {
+      "bsonType": "number",
+      "description": "标记高度"
+    },
+    "createdAt": {
+      "bsonType": "timestamp",
+      "description": "创建时间戳"
+    }
+  }
+}

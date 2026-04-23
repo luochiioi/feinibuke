@@ -1,0 +1,834 @@
+<template>
+	<view class="tasks-page">
+		<!-- 顶部统计面板 -->
+		<view class="hero-panel">
+			<text class="hero-tag">MISSIONS &amp; SPOTS</text>
+			<text class="hero-title">{{ mainTab === 'tasks' ? '我的任务' : '我的足迹' }}</text>
+			<view class="hero-stats">
+				<view class="hstat">
+					<text class="hstat-val">{{ completedCount }}</text>
+					<text class="hstat-label">已完成</text>
+				</view>
+				<view class="hstat-divider"></view>
+				<view class="hstat">
+					<text class="hstat-val">{{ pendingCount }}</text>
+					<text class="hstat-label">进行中</text>
+				</view>
+				<view class="hstat-divider"></view>
+				<view class="hstat">
+					<text class="hstat-val">{{ totalPoints }}</text>
+					<text class="hstat-label">累计积分</text>
+				</view>
+			</view>
+		</view>
+
+		<!-- 主 Tab 切换 -->
+		<view class="main-tabs">
+			<view
+				:class="['main-tab', mainTab === 'tasks' ? 'main-tab--active' : '']"
+				@click="mainTab = 'tasks'"
+			>任务</view>
+			<view
+				:class="['main-tab', mainTab === 'spots' ? 'main-tab--active' : '']"
+				@click="mainTab = 'spots'"
+			>足迹 · {{ markers.length }}</view>
+		</view>
+
+		<!-- ===== 任务面板 ===== -->
+		<view v-if="mainTab === 'tasks'" class="panel">
+			<!-- 筛选标签 -->
+			<view class="filter-row">
+				<view
+					:class="['filter-chip', activeTab === 'all' ? 'filter-chip--active' : '']"
+					@click="activeTab = 'all'"
+				>全部</view>
+				<view
+					:class="['filter-chip', activeTab === 'pending' ? 'filter-chip--active' : '']"
+					@click="activeTab = 'pending'"
+				>进行中</view>
+				<view
+					:class="['filter-chip', activeTab === 'completed' ? 'filter-chip--active' : '']"
+					@click="activeTab = 'completed'"
+				>已完成</view>
+			</view>
+
+			<scroll-view scroll-y class="scroll-area">
+				<view
+					v-for="task in filteredTasks"
+					:key="task['id']"
+					class="task-card"
+					@click="goDetail(task)"
+				>
+					<view class="task-card__header">
+						<view :class="['task-status-dot', task['status'] === 'completed' ? 'dot-done' : 'dot-pending']"></view>
+						<text class="task-name">{{ task['name'] }}</text>
+						<text :class="['task-badge', task['status'] === 'completed' ? 'badge-done' : 'badge-pending']">
+							{{ task['status'] === 'completed' ? '已完成' : '进行中' }}
+						</text>
+					</view>
+					<text class="task-target">目标：{{ task['targetTitle'] }}</text>
+					<view class="task-card__footer">
+						<text class="task-reward">🎖 {{ task['reward'] }}</text>
+						<text v-if="task['status'] === 'completed'" class="task-date">{{ formatDate(task['completedAt']) }}</text>
+					</view>
+				</view>
+
+				<view v-if="filteredTasks.length === 0" class="empty">
+					<text class="empty-icon">🗺</text>
+					<text class="empty-text">{{ activeTab === 'all' ? '还没有任务' : '该分类暂无任务' }}</text>
+				</view>
+
+				<!-- 奖励记录 -->
+				<view v-if="rewards.length > 0 && activeTab === 'all'" class="rewards-section">
+					<view class="section-head">
+						<text class="section-title">奖励记录</text>
+					</view>
+					<view v-for="r in rewards.slice(0, 5)" :key="r['id']" class="reward-item">
+						<text class="reward-icon">🎁</text>
+						<view class="reward-info">
+							<text class="reward-name">{{ r['taskName'] }}</text>
+							<text class="reward-val">{{ r['reward'] }}</text>
+						</view>
+						<text class="reward-date">{{ formatDate(r['earnedAt']) }}</text>
+					</view>
+				</view>
+
+				<view class="list-bottom-pad"></view>
+			</scroll-view>
+		</view>
+
+		<!-- ===== 足迹面板 ===== -->
+		<view v-if="mainTab === 'spots'" class="panel">
+			<!-- 操作栏 -->
+			<view class="add-spot-bar">
+				<view class="add-spot-btn" @click="goAddSpot">
+					<text class="add-spot-icon">＋</text>
+					<text class="add-spot-text">新增打卡点</text>
+				</view>
+				<view class="sync-btn" :class="{ 'sync-btn--loading': syncing }" @click="showSyncMenu">
+					<text class="sync-btn-text">{{ syncing ? '同步中…' : '☁ 同步' }}</text>
+				</view>
+			</view>
+			<!-- 同步状态提示 -->
+			<view v-if="syncMsg" class="sync-msg" :class="syncMsgClass">
+				<text>{{ syncMsgText }}</text>
+			</view>
+
+			<scroll-view scroll-y class="scroll-area">
+				<view v-for="item in markers" :key="item['id']" class="spot-card">
+					<view class="spot-card__left">
+						<text class="spot-name">{{ item['title'] }}</text>
+						<text class="spot-coord">{{ formatCoord(item['latitude']) }}, {{ formatCoord(item['longitude']) }}</text>
+						<text v-if="item['checkedAt']" class="spot-checked-time">打卡于 {{ formatDate(item['checkedAt']) }}</text>
+					</view>
+					<view class="spot-card__right">
+						<view class="spot-btn-row">
+							<view class="spot-action-btn locate-btn" @click="focusOnMap(item)">
+								<text class="spot-btn-icon">🗺</text>
+							</view>
+							<view class="spot-action-btn del-btn" @click="confirmDelete(item['id'])">
+								<text class="spot-btn-icon">🗑</text>
+							</view>
+						</view>
+						<text :class="['spot-status', getSpotStatusClass(item)]">
+							{{ getSpotStatusText(item) }}
+						</text>
+					</view>
+				</view>
+
+				<view v-if="markers.length === 0" class="empty">
+					<text class="empty-icon">📍</text>
+					<text class="empty-text">还没有打卡点，点击上方按钮添加</text>
+				</view>
+
+				<view class="list-bottom-pad"></view>
+			</scroll-view>
+		</view>
+	</view>
+</template>
+
+<script lang="ts">
+import { uniCloud } from '@/utils/map-tasks.uts';
+import { getDefaultTasks } from '@/utils/map-tasks.uts';
+import {
+	getMarkersCloud, getMarkers, deleteMarkerCloud,
+	migrateLocalToCloud, forceResyncToCloud,
+	getUserTasksCloud, getRewardsCloud
+} from '@/utils/map-storage.uts';
+
+export default {
+	data() {
+		return {
+			mainTab: 'tasks',
+			tasks: [] as Array<UTSJSONObject>,
+			rewards: [] as Array<UTSJSONObject>,
+			markers: [] as Array<UTSJSONObject>,
+			syncing: false,
+			syncMsg: null,
+			activeTab: 'all'
+		};
+	},
+	computed: {
+		syncMsgClass(): string {
+			if (this.syncMsg == null) return '';
+			return ((this.syncMsg as UTSJSONObject)["ok"] === true) ? 'sync-msg--ok' : 'sync-msg--err';
+		},
+		syncMsgText(): string {
+			if (this.syncMsg == null) return '';
+			const t = (this.syncMsg as UTSJSONObject)["text"];
+			return (t != null) ? ('' + t) : '';
+		},
+		filteredTasks() {
+			if (this.activeTab === 'all') return this.tasks;
+			return this.tasks.filter(t => (t as UTSJSONObject)["status"] === this.activeTab);
+		},
+		completedCount() {
+			return this.tasks.filter(t => (t as UTSJSONObject)["status"] === 'completed').length;
+		},
+		pendingCount() {
+			return this.tasks.filter(t => (t as UTSJSONObject)["status"] === 'pending').length;
+		},
+		totalPoints() {
+			let sum = 0;
+			for (let i = 0; i < this.rewards.length; i++) {
+				const r = this.rewards[i] as UTSJSONObject;
+				const rewardStr = '' + r["reward"];
+				const digits = rewardStr.match(/(\d+)/);
+				if (digits != null && digits.length > 1) {
+					sum += parseInt(digits[1] as string);
+				}
+			}
+			return sum;
+		}
+	},
+	onShow() {
+		this.refresh();
+	},
+	methods: {
+		getSpotStatusClass(item: UTSJSONObject): string {
+			return (item["checked"] === true) ? 'status-done' : 'status-pending';
+		},
+		getSpotStatusText(item: UTSJSONObject): string {
+			return (item["checked"] === true) ? '已打卡' : '待探索';
+		},
+		async refresh() {
+			// 任务定义（本地）
+			const tasksRaw = uni.getStorageSync('task_list');
+			let tasks: Array<UTSJSONObject>;
+			if (tasksRaw != null && Array.isArray(tasksRaw) && (tasksRaw as Array<UTSJSONObject>).length > 0) {
+				tasks = tasksRaw as Array<UTSJSONObject>;
+			} else {
+				tasks = getDefaultTasks();
+				uni.setStorageSync('task_list', tasks);
+			}
+
+			// 优先用本地缓存快速渲染
+			const userTasksRaw = uni.getStorageSync('user_tasks');
+			let userTasks: UTSJSONObject = new UTSJSONObject();
+			if (userTasksRaw != null && typeof userTasksRaw === 'object') {
+				userTasks = userTasksRaw as UTSJSONObject;
+			}
+			const mergedTasks: Array<UTSJSONObject> = [];
+			for (let i = 0; i < tasks.length; i++) {
+				const t = tasks[i] as UTSJSONObject;
+				const merged: UTSJSONObject = JSON.parse(JSON.stringify(t)) as UTSJSONObject;
+				const tid = '' + t["id"];
+				const extraRaw = userTasks[tid];
+				if (extraRaw != null && typeof extraRaw === 'object') {
+					const extra = extraRaw as UTSJSONObject;
+					if (extra["status"] != null) { merged["status"] = extra["status"]; }
+					if (extra["completedAt"] != null) { merged["completedAt"] = extra["completedAt"]; }
+					if (extra["progress"] != null) { merged["progress"] = extra["progress"]; }
+				}
+				mergedTasks.push(merged);
+			}
+			this.tasks = mergedTasks;
+			const rewardsRaw = uni.getStorageSync('rewards');
+			this.rewards = (rewardsRaw != null && Array.isArray(rewardsRaw)) ? (rewardsRaw as Array<UTSJSONObject>) : [];
+			this.markers = getMarkers() as Array<UTSJSONObject>;
+
+			// 再从云端刷新（覆盖本地）
+			try {
+				const cloudUserTasks: UTSJSONObject = await getUserTasksCloud() as UTSJSONObject;
+				const cloudRewards: Array<UTSJSONObject> = await getRewardsCloud() as Array<UTSJSONObject>;
+				const cloudMarkers: Array<UTSJSONObject> = await getMarkersCloud() as Array<UTSJSONObject>;
+				// 合并任务进度
+				const cloudMerged: Array<UTSJSONObject> = [];
+				for (let i = 0; i < tasks.length; i++) {
+					const t = tasks[i] as UTSJSONObject;
+					const merged: UTSJSONObject = JSON.parse(JSON.stringify(t)) as UTSJSONObject;
+					const tid = '' + t["id"];
+					let extra: UTSJSONObject = new UTSJSONObject();
+					const cloudExtraRaw = cloudUserTasks[tid];
+					if (cloudExtraRaw != null && typeof cloudExtraRaw === 'object') {
+						extra = cloudExtraRaw as UTSJSONObject;
+					} else {
+						const localExtraRaw = userTasks[tid];
+						if (localExtraRaw != null && typeof localExtraRaw === 'object') {
+							extra = localExtraRaw as UTSJSONObject;
+						}
+					}
+					if (extra["status"] != null) { merged["status"] = extra["status"]; }
+					if (extra["completedAt"] != null) { merged["completedAt"] = extra["completedAt"]; }
+					if (extra["progress"] != null) { merged["progress"] = extra["progress"]; }
+					cloudMerged.push(merged);
+				}
+				this.tasks = cloudMerged;
+				if (cloudRewards.length > 0) this.rewards = cloudRewards;
+				if (cloudMarkers.length > 0) this.markers = cloudMarkers;
+			} catch (_) {}
+		},
+
+		// 点击同步按钮，弹出菜单
+		showSyncMenu() {
+			if (this.syncing) return;
+			const localCount = this.markers.length;
+			uni.showActionSheet({
+				itemList: [
+					`智能同步（本地 ${localCount} 条）`,
+					'强制重新同步（清空云端重传）',
+					'查看云端数量',
+					'诊断测试（写入+读取+删除）',
+					'查看本地存储数据'
+				],
+				success: (res) => {
+					if (res.tapIndex === 0) this.syncToCloud();
+					else if (res.tapIndex === 1) this.confirmForceResync();
+					else if (res.tapIndex === 2) this.checkCloudCount();
+					else if (res.tapIndex === 3) this.runDiagnostic();
+					else if (res.tapIndex === 4) this.showLocalData();
+				}
+			});
+		},
+
+		// 诊断测试
+		async runDiagnostic() {
+			this.syncing = true;
+			this.syncMsg = null;
+			try {
+				const res = await uniCloud.callFunction({
+					name: 'markers',
+					data: { action: 'test', data: {} }
+				});
+				const r = res.result;
+				if ((r as UTSJSONObject)["code"] === 0 && ((r as UTSJSONObject)["recordFound"] as boolean) === true) {
+					this.syncMsg = {
+						ok: true,
+						text: `✅ 云函数读写正常\naddId: ${(r as UTSJSONObject)["addId"]}\n记录标题: ${(r['record'] != null ? (r['record'] as UTSJSONObject)['title'] : '')}`
+					};
+				} else if ((r as UTSJSONObject)["code"] === 0 && ((r as UTSJSONObject)["recordFound"] as boolean) !== true) {
+					this.syncMsg = {
+						ok: false,
+						text: `⚠️ 写入成功(id:${(r as UTSJSONObject)["addId"]})但读取失败，可能存在集合权限问题`
+					};
+				} else {
+					this.syncMsg = { ok: false, text: `❌ 云函数错误: ${(r as UTSJSONObject)["msg"]}` };
+				}
+			} catch (e) {
+				this.syncMsg = { ok: false, text: `❌ 调用失败: ${(e as Error).message}` };
+			} finally {
+				this.syncing = false;
+				setTimeout(() => { this.syncMsg = null; }, 10000);
+			}
+		},
+
+		// 查看本地存储数据
+		showLocalData() {
+			const markersRaw = uni.getStorageSync('tourism_markers');
+			const tasksRaw = uni.getStorageSync('task_list');
+			const userTRaw = uni.getStorageSync('user_tasks');
+			const rewardsRaw = uni.getStorageSync('rewards');
+			const queueRaw = uni.getStorageSync('cloud_sync_queue');
+			const markersLen = (markersRaw != null && Array.isArray(markersRaw)) ? (markersRaw as Array<any>).length : 0;
+			const tasksLen = (tasksRaw != null && Array.isArray(tasksRaw)) ? (tasksRaw as Array<any>).length : 0;
+			const tasksArr: Array<any> = (tasksRaw != null && Array.isArray(tasksRaw)) ? (tasksRaw as Array<any>) : [];
+			const userTObj: UTSJSONObject = (userTRaw != null && typeof userTRaw === 'object') ? (userTRaw as UTSJSONObject) : new UTSJSONObject();
+			let userTLen = 0;
+			for (let i = 0; i < tasksArr.length; i++) {
+				const tid = '' + (tasksArr[i] as UTSJSONObject)["id"];
+				if (userTObj[tid] != null) { userTLen++; }
+			}
+			const rewardsLen = (rewardsRaw != null && Array.isArray(rewardsRaw)) ? (rewardsRaw as Array<any>).length : 0;
+			const queueLen = (queueRaw != null && Array.isArray(queueRaw)) ? (queueRaw as Array<any>).length : 0;
+			const msg = [
+				`打卡点：${markersLen} 条`,
+				`任务定义：${tasksLen} 条`,
+				`任务进度：${userTLen} 条`,
+				`奖励记录：${rewardsLen} 条`,
+				`离线队列：${queueLen} 条`
+			].join('\n');
+			this.syncMsg = { ok: markers.length > 0, text: msg };
+			setTimeout(() => { this.syncMsg = null; }, 10000);
+		},
+		confirmForceResync() {
+			uni.showModal({
+				title: '强制重新同步',
+				content: `将清空云端所有打卡点，并重新上传本地的 ${this.markers.length} 条数据。确认继续？`,
+				confirmText: '确认覆盖',
+				confirmColor: '#e53935',
+				success: (res) => {
+					if (res.confirm) this.doForceResync();
+				}
+			});
+		},
+
+		async doForceResync() {
+			if (this.syncing) return;
+			this.syncing = true;
+			this.syncMsg = null;
+			try {
+				const result: UTSJSONObject = await forceResyncToCloud(this.markers) as UTSJSONObject;
+				if ((result["migrated"] as number) >= 0) {
+					this.syncMsg = { ok: true, text: `重同步成功，已上传 ${result["migrated"] as number} 条数据` };
+					const cloud = await getMarkersCloud() as Array<UTSJSONObject>;
+					if (cloud.length > 0) this.markers = cloud;
+				} else {
+					this.syncMsg = { ok: false, text: `重同步失败：${result["error"] as string}` };
+				}
+			} catch (e) {
+				this.syncMsg = { ok: false, text: `失败：${(e as Error).message}` };
+			} finally {
+				this.syncing = false;
+				setTimeout(() => { this.syncMsg = null; }, 6000);
+			}
+		},
+
+		// 查看云端实际数量
+		async checkCloudCount() {
+			this.syncing = true;
+			try {
+				const res = await uniCloud.callFunction({
+					name: 'markers',
+					data: { action: 'count', data: {} }
+				});
+				const totalRaw = res.result;
+				const total = (totalRaw != null && typeof totalRaw === 'object' && (totalRaw as UTSJSONObject)["total"] != null) ? ((totalRaw as UTSJSONObject)["total"] as number) : 0;
+				const localCount = this.markers.length;
+				this.syncMsg = {
+					ok: total > 0,
+					text: `云端有 ${total} 条 / 本地有 ${localCount} 条${total !== localCount ? ' ⚠ 数量不一致' : ' ✓ 一致'}`
+				};
+			} catch (e) {
+				this.syncMsg = { ok: false, text: `查询失败：${(e as Error).message}` };
+			} finally {
+				this.syncing = false;
+				setTimeout(() => { this.syncMsg = null; }, 6000);
+			}
+		},
+
+		// 智能同步（本地 > 云端 才迁移）
+		async syncToCloud() {
+			if (this.syncing) return;
+			this.syncing = true;
+			this.syncMsg = null;
+			try {
+				const result: UTSJSONObject = await migrateLocalToCloud(this.markers) as UTSJSONObject;
+				if (((result["skipped"]) === true)) {
+					const localCount = this.markers.length;
+					const cloudCount = result["count"] as number;
+					if (cloudCount < localCount) {
+						this.syncMsg = {
+							ok: false,
+							text: `云端 ${cloudCount} 条，本地 ${localCount} 条，数量不一致。请点「☁ 同步」→「强制重新同步」`
+						};
+					} else {
+						this.syncMsg = { ok: true, text: `云端已有 ${cloudCount} 条数据，与本地一致` };
+					}
+				} else if ((result["migrated"] as number) >= 0) {
+					this.syncMsg = { ok: true, text: `同步成功，已上传 ${result["migrated"] as number} 条打卡点` };
+					const cloud = await getMarkersCloud() as Array<UTSJSONObject>;
+					if (cloud.length > 0) this.markers = cloud;
+				} else {
+					this.syncMsg = { ok: false, text: `同步失败：${result["error"] as string}` };
+				}
+			} catch (e) {
+				this.syncMsg = { ok: false, text: '同步失败：' + (((e as Error).message) != null ? (e as Error).message : '请检查网络和服务空间绑定') };
+			} finally {
+				this.syncing = false;
+				setTimeout(() => { this.syncMsg = null; }, 6000);
+			}
+		},
+
+		goDetail(task: UTSJSONObject) {
+			uni.navigateTo({ url: `/pages/map/task-detail?id=${task["id"]}` });
+		},
+
+		// 足迹相关
+		goAddSpot() {
+			uni.navigateTo({ url: '/pages/map/add-marker' });
+		},
+
+		focusOnMap(item: UTSJSONObject) {
+			uni.$emit('focus-marker', item);
+			uni.navigateBack();
+		},
+
+		confirmDelete(id: any | null) { //  改为普通函数，参数类型改为 any
+		  uni.showModal({
+		    title: '删除提示',
+		    content: '确定要删除这个打卡点吗？',
+		    success: (res) => {
+		      if (res.confirm) {
+		        // 这里的 this 必须指向实例，所以 confirmDelete 不能是箭头函数
+		        const marker: UTSJSONObject | null = this.markers.find(m => m["id"] === id) as UTSJSONObject | null;
+		        this.markers = this.markers.filter(m => m["id"] !== id);
+		        if (marker != null) {
+		          const m = marker as UTSJSONObject;
+		          const cloudId = (m["_id"] != null) ? ('' + m["_id"]) : '' + m["id"];
+		          deleteMarkerCloud(cloudId);
+		        }
+		      }
+		    }
+		  });
+		},
+
+		formatCoord(val: any | null): string{
+			return (val as number).toFixed(4);
+		},
+
+		formatDate(ts: any | null): string{
+			if (ts == null) return '';
+			const d = new Date(ts as number);
+			return `${d.getMonth() + 1}/${d.getDate()}`;
+		}
+	}
+};
+</script>
+
+<style scoped>
+.tasks-page {
+	height: 100%;
+	display: flex;
+	flex-direction: column;
+	background: linear-gradient(180deg, #f4f7ff 0%, #f8faff 100%);
+}
+
+/* 顶部统计面板 */
+.hero-panel {
+	padding: 28rpx 24rpx 30rpx;
+	background: linear-gradient(135deg, #1a237e 0%, #283593 55%, #3949ab 100%);
+	border-bottom-left-radius: 40rpx;
+	border-bottom-right-radius: 40rpx;
+	box-shadow: 0 24rpx 56rpx rgba(26, 35, 126, 0.2);
+}
+
+.hero-tag {
+	display: flex;
+	padding: 10rpx 18rpx;
+	border-radius: 999rpx;
+	background: rgba(255, 255, 255, 0.14);
+	font-size: 20rpx;
+	letter-spacing: 3rpx;
+	color: rgba(255, 255, 255, 0.85);
+}
+
+.hero-title {
+	margin-top: 16rpx;
+	font-size: 52rpx;
+	font-weight: 700;
+	color: #fff;
+}
+
+.hero-stats {
+	display: flex;
+	align-items: center;
+	margin-top: 24rpx;
+	padding: 24rpx;
+	border-radius: 28rpx;
+	background: rgba(255, 255, 255, 0.12);
+	border: 1px solid rgba(255, 255, 255, 0.16);
+}
+
+.hstat { flex: 1; text-align: center; }
+.hstat-val { font-size: 48rpx; font-weight: 700; color: #fff; }
+.hstat-label { margin-top: 6rpx; font-size: 21rpx; color: rgba(255,255,255,0.75); }
+.hstat-divider { width: 1px; height: 60rpx; background: rgba(255,255,255,0.22); }
+
+/* 主 Tab */
+.main-tabs {
+	display: flex;
+	margin: 20rpx 24rpx 0;
+	background: rgba(20, 33, 61, 0.05);
+	border-radius: 22rpx;
+	padding: 6rpx;
+}
+
+.main-tab {
+	flex: 1;
+	text-align: center;
+	padding: 16rpx 0;
+	border-radius: 16rpx;
+	font-size: 27rpx;
+	font-weight: bold;
+	color: #7b8496;
+	transition: all 0.2s;
+}
+
+.main-tab + .main-tab {
+	margin-left: 6rpx;
+}
+
+.main-tab--active {
+	background: #fff;
+	color: #3949ab;
+	box-shadow: 0 6rpx 20rpx rgba(57, 73, 171, 0.14);
+}
+
+/* 面板容器 */
+.panel {
+	flex: 1;
+	display: flex;
+	flex-direction: column;
+	min-height: 0;
+}
+
+/* 筛选 */
+.filter-row {
+	display: flex;
+	padding: 18rpx 24rpx 10rpx;
+	flex-shrink: 0;
+}
+.filter-row .filter-chip + .filter-chip { margin-left: 14rpx; }
+
+.filter-chip {
+	padding: 12rpx 22rpx;
+	border-radius: 999rpx;
+	font-size: 24rpx;
+	font-weight: bold;
+	background: rgba(20, 33, 61, 0.05);
+	color: #5b6475;
+	border: 1px solid rgba(20, 33, 61, 0.08);
+}
+
+.filter-chip--active {
+	background: #3949ab;
+	color: #fff;
+	border-color: transparent;
+	box-shadow: 0 10rpx 24rpx rgba(57, 73, 171, 0.25);
+}
+
+/* 滚动区域 */
+.scroll-area {
+	flex: 1;
+	padding: 8rpx 24rpx 0;
+}
+
+.list-bottom-pad { height: 40rpx; }
+
+/* 任务卡片 */
+.task-card {
+	background: rgba(255, 253, 250, 0.97);
+	border-radius: 26rpx;
+	padding: 28rpx 24rpx;
+	margin-bottom: 16rpx;
+	border: 1px solid rgba(20, 33, 61, 0.06);
+	box-shadow: 0 10rpx 28rpx rgba(31, 41, 55, 0.07);
+}
+
+.task-card:active { transform: scale(0.99); }
+
+.task-card__header {
+	display: flex;
+	align-items: center;
+}
+.task-card__header .task-status-dot { margin-right: 14rpx; }
+.task-card__header .task-badge { margin-left: 14rpx; }
+
+.task-status-dot {
+	width: 18rpx; height: 18rpx;
+	border-radius: 9rpx;
+	flex-shrink: 0;
+}
+
+.dot-done { background: #34c759; box-shadow: 0 0 0 8rpx rgba(52,199,89,0.12); }
+.dot-pending { background: #ff9500; box-shadow: 0 0 0 8rpx rgba(255,149,0,0.12); }
+
+.task-name { flex: 1; font-size: 30rpx; font-weight: 700; color: #14213d; }
+
+.task-badge {
+	font-size: 20rpx;
+	padding: 6rpx 14rpx;
+	border-radius: 999rpx;
+}
+
+.badge-done { background: rgba(52,199,89,0.1); color: #34c759; }
+.badge-pending { background: rgba(255,149,0,0.1); color: #ff9500; }
+
+.task-target { margin-top: 12rpx; font-size: 24rpx; color: #6b7280; }
+
+.task-card__footer {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	margin-top: 16rpx;
+}
+
+.task-reward { font-size: 24rpx; color: #3949ab; font-weight: bold; }
+.task-date { font-size: 22rpx; color: #aab3c0; }
+
+/* 奖励记录 */
+.rewards-section {
+	margin-top: 10rpx;
+	padding: 24rpx;
+	border-radius: 28rpx;
+	background: rgba(255, 253, 250, 0.97);
+	border: 1px solid rgba(20, 33, 61, 0.06);
+	box-shadow: 0 10rpx 28rpx rgba(31, 41, 55, 0.07);
+	margin-bottom: 16rpx;
+}
+
+.section-head { margin-bottom: 16rpx; }
+.section-title { font-size: 28rpx; font-weight: 700; color: #14213d; }
+
+.reward-item {
+	display: flex; align-items: center;
+	padding: 16rpx 0;
+	border-bottom: 1px solid rgba(20,33,61,0.05);
+}
+.reward-item .reward-icon { margin-right: 16rpx; }
+.reward-item .reward-info { flex: 1; }
+.reward-item .reward-date { margin-left: 16rpx; }
+.reward-item:last-child { border-bottom: none; }
+.reward-icon { font-size: 36rpx; flex-shrink: 0; }
+.reward-info { flex: 1; }
+.reward-name { font-size: 26rpx; font-weight: bold; color: #14213d; }
+.reward-val { font-size: 22rpx; color: #3949ab; margin-top: 4rpx; }
+.reward-date { font-size: 20rpx; color: #aab3c0; }
+
+/* 足迹 - 操作栏 */
+.add-spot-bar {
+	display: flex;
+	align-items: center;
+	padding: 16rpx 24rpx;
+	flex-shrink: 0;
+}
+.add-spot-bar .add-spot-btn { margin-right: 14rpx; }
+
+.add-spot-btn {
+	display: flex;
+	align-items: center;
+	padding: 16rpx 24rpx;
+	border-radius: 999rpx;
+	background: linear-gradient(135deg, #3949ab 0%, #5c6bc0 100%);
+	box-shadow: 0 10rpx 24rpx rgba(57,73,171,0.25);
+}
+.add-spot-btn .add-spot-icon { margin-right: 10rpx; }
+
+.add-spot-btn:active { transform: scale(0.97); }
+
+.add-spot-icon { font-size: 30rpx; color: #fff; font-weight: 700; }
+.add-spot-text { font-size: 26rpx; font-weight: 700; color: #fff; }
+
+.sync-btn {
+	padding: 16rpx 22rpx;
+	border-radius: 999rpx;
+	background: rgba(57, 73, 171, 0.08);
+	border: 1px solid rgba(57, 73, 171, 0.2);
+}
+
+.sync-btn:active { transform: scale(0.97); }
+.sync-btn--loading { opacity: 0.6; }
+.sync-btn-text { font-size: 24rpx; color: #3949ab; font-weight: bold; }
+
+.sync-msg {
+	margin: 0 24rpx 12rpx;
+	padding: 16rpx 20rpx;
+	border-radius: 18rpx;
+	font-size: 24rpx;
+}
+
+.sync-msg--ok {
+	background: rgba(52, 199, 89, 0.1);
+	color: #1a8a3a;
+	border: 1px solid rgba(52, 199, 89, 0.25);
+}
+
+.sync-msg--err {
+	background: rgba(255, 59, 48, 0.08);
+	color: #c0392b;
+	border: 1px solid rgba(255, 59, 48, 0.2);
+}
+
+/* 足迹卡片 */
+.spot-card {
+	background: rgba(255, 253, 250, 0.97);
+	border-radius: 24rpx;
+	padding: 26rpx 22rpx;
+	margin-bottom: 16rpx;
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+	border: 1px solid rgba(20, 33, 61, 0.06);
+	box-shadow: 0 10rpx 26rpx rgba(31, 41, 55, 0.07);
+}
+
+.spot-card:active { transform: scale(0.99); }
+
+.spot-card__left { flex: 1; min-width: 0; }
+
+.spot-name {
+	font-size: 30rpx;
+	font-weight: 700;
+	color: #1f2d3d;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.spot-coord {
+	margin-top: 8rpx;
+	font-size: 22rpx;
+	color: #8f9db0;
+}
+
+.spot-checked-time {
+	margin-top: 6rpx;
+	font-size: 20rpx;
+	color: #34c759;
+}
+
+.spot-card__right {
+	display: flex;
+	flex-direction: column;
+	align-items: flex-end;
+	margin-left: 16rpx;
+}
+.spot-card__right .spot-btn-row { margin-bottom: 14rpx; }
+
+.spot-btn-row { display: flex; }
+.spot-btn-row .locate-btn { margin-right: 14rpx; }
+
+.spot-action-btn {
+	width: 66rpx; height: 66rpx;
+	border-radius: 33rpx;
+	display: flex;
+	justify-content: center;
+	align-items: center;
+}
+
+.spot-action-btn:active { transform: scale(0.94); }
+
+.locate-btn { background: #eef6ff; border: 1px solid #cfe4ff; }
+.del-btn { background: #fff1f1; border: 1px solid #ffd1d1; }
+.spot-btn-icon { font-size: 30rpx; }
+
+.spot-status {
+	font-size: 20rpx;
+	padding: 6rpx 14rpx;
+	border-radius: 999rpx;
+}
+
+.status-done { background: #e7f6ff; color: #0a6bd7; }
+.status-pending { background: #f2f4f7; color: #7a8899; }
+
+/* 空状态 */
+.empty {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	padding: 80rpx 0;
+}
+.empty .empty-icon { margin-bottom: 18rpx; }
+.empty-icon { font-size: 80rpx; }
+.empty-text { font-size: 26rpx; color: #9aa6b2; }
+</style>

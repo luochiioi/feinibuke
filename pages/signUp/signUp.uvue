@@ -1,0 +1,212 @@
+<template>
+	<view class="page-container">
+		<view class="back-btn" @click="goBack">
+			<uni-icons type="left" size="28" color="#1a5599"></uni-icons>
+		</view>
+
+		<view class="porcelain-bar header-bar"></view>
+		
+		<view class="login-content">
+			<view class="login-card">
+				<text class="title">注册新账号</text>
+				
+				<view class="input-group">
+					<input class="custom-input" v-model="userName" placeholder="请输入用户名称" placeholder-class="placeholder-style" />
+				</view>
+				
+				<view class="input-group">
+					<input class="custom-input" v-model="userPassword" type="password" placeholder="请输入用户密码" placeholder-class="placeholder-style" />
+				</view>
+				
+				<view class="input-group captcha-group">
+					<input class="custom-input" v-model="captcha" placeholder="请输入验证码" placeholder-class="placeholder-style" />
+					<text class="get-captcha-btn" @click="getCaptcha">获取验证码</text>
+				</view>
+				
+				<button class="confirm-btn" hover-class="btn-hover" @click="confirm">立即注册</button>
+			</view>
+		</view>
+		
+		<view class="porcelain-bar footer-bar"></view>
+	</view>
+</template>
+
+<script>
+	export default {
+		data() {
+			return {
+				userId : '' ,
+				userPassword : '' ,
+				userName : '' ,
+				captcha : '' ,
+				code : '' ,
+			}
+		},
+		methods: {
+			// 返回上一页
+			goBack() {
+				uni.navigateBack();
+			},
+
+			async confirm(){
+				if(this.userName === ''){
+					uni.showToast({title : '请输入用户名称' , icon : 'none'}) ;
+					return ;
+				}
+				if(this.userPassword === ''){
+					uni.showToast({title : '请输入用户密码' , icon : 'none'}) ;
+					return ;
+				}
+				
+				if(this.code === ''){
+					uni.showToast({title : '请先获取验证码' , icon : 'none'}) ;
+					return ;
+				}
+				if(this.captcha === ''){
+					uni.showToast({title : '请输入验证码' , icon : 'none'});
+					return ;
+				}
+				if(this.captcha !== this.code){	
+					uni.showToast({title : '验证码错误' , icon : 'none'}) ;
+					return ;
+				}
+				
+				const userSignUp = uniCloud.importObject('user-center') ; 
+				const successCreate = await userSignUp.sign(this.userName , this.userPassword) ;
+				
+				if(successCreate.errCode === 0){
+					uni.showToast({title : '注册成功,正在返回登录页面' , icon : 'none' , duration : 1500}) ;
+					setTimeout(() => {
+						uni.navigateBack() ;
+					} , 1500) ;
+				}
+				else{
+					// uni.showToast({title : '注册未成功请重试!' , icon : 'none'})
+				}
+				
+				
+			} ,
+			
+			getCaptcha(){	
+				this.code = Math.random().toString().slice(-6) ;	
+				uni.showToast({title : `你的验证码是${this.code}` , icon : 'none' , duration : 3000}) ;	
+			}
+		
+		}
+	}
+</script>
+
+<style>
+/* 左上角返回按钮样式 */
+.back-btn {
+	position: absolute;
+	top: 140rpx; 
+	left: 30rpx;
+	padding: 20rpx;
+	z-index: 99;
+}
+
+/* 页面整体容器 */
+.page-container {
+	flex: 1;
+	display: flex;
+	flex-direction: column;
+	background-color: #f8fbff;
+	position: relative; /* 配合返回按钮的绝对定位 */
+}
+
+/* 青花瓷纹饰栏通用样式 */
+.porcelain-bar {
+	width: 100%;
+	height: 120rpx;
+	background-color: #d6e8f7;
+}
+
+.header-bar {
+	border-bottom: 4rpx solid #1a5599; 
+}
+
+.footer-bar {
+	border-top: 4rpx solid #1a5599;
+	margin-top: auto; 
+}
+
+.login-content {
+	flex: 1;
+	display: flex;
+	justify-content: center;
+	align-items: center;
+	padding: 40rpx;
+}
+
+.login-card {
+	width: 100%;
+	background-color: #ffffff;
+	padding: 60rpx 50rpx;
+	border-radius: 24rpx;
+	box-shadow: 0 10rpx 30rpx rgba(26, 85, 153, 0.15);
+	border: 2rpx solid #e6f0fa; 
+}
+
+.title {
+	font-size: 52rpx;
+	color: #1a5599; 
+	font-weight: bold;
+	margin-bottom: 80rpx;
+	text-align: center;
+}
+
+.input-group {
+	display: flex;
+	flex-direction: row;
+	align-items: center;
+	border-bottom: 2rpx solid #1a5599; 
+	padding-bottom: 20rpx;
+	margin-bottom: 50rpx;
+	width: 100%;
+}
+
+.custom-input {
+	flex: 1;
+	height: 60rpx;
+	font-size: 32rpx;
+	color: #333333;
+}
+
+.placeholder-style {
+	color: #aab8c2;
+	font-size: 28rpx;
+}
+
+.captcha-group {
+	justify-content: space-between;
+}
+
+.get-captcha-btn {
+	font-size: 28rpx;
+	color: #1a5599;
+	padding-left: 30rpx;
+	border-left: 2rpx solid #dcecf9;
+	height: 60rpx;
+	line-height: 60rpx;
+}
+
+.confirm-btn {
+	width: 100%;
+	height: 90rpx;
+	line-height: 90rpx;
+	background-color: #1a5599; 
+	color: #ffffff;
+	font-size: 34rpx;
+	font-weight: bold;
+	border-radius: 45rpx; 
+	margin-top: 60rpx;
+	box-shadow: 0 8rpx 16rpx rgba(26, 85, 153, 0.3);
+}
+
+.btn-hover {
+	transform: translateY(2rpx);
+	box-shadow: 0 4rpx 8rpx rgba(26, 85, 153, 0.3);
+	opacity: 0.9;
+}
+</style>

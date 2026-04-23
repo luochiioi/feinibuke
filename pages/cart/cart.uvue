@@ -1,0 +1,630 @@
+<template>
+  <view class="cart-page">
+
+    <!-- 顶部标题 -->
+    <view class="cart-header">
+		<view class="back-btn" @click="goBack">
+		  <text class="back-icon">‹</text>
+		</view>
+      <text class="header-title">购物车</text>
+      <view class="clear-btn" v-if="cartItems.length > 0" @click="clearCart">
+        <text class="clear-text">清空</text>
+      </view>
+    </view>
+
+    <!-- 空状态 -->
+    <view v-if="cartItems.length === 0" class="empty-wrapper">    
+      <view class="empty-content">
+        <view class="icon-circle">
+          <text class="cart-icon"></text>
+        </view>
+    
+        <view class="go-btn" @click="goShop">
+          <text class="go-text">去逛逛</text>
+        </view>
+    
+        <text class="empty-tip">购物车还没有东西</text>
+    
+      </view>
+    
+    </view>
+
+    <!-- 列表 -->
+    <view v-else class="cart-list">
+      <view 
+        class="cart-item" 
+        v-for="(item,index) in cartItems" 
+        :key="item._id"
+      >
+        <!-- 选择框 -->
+		<!-- ??运算如果??前面的东西不等于null取??前面 反之取后面 -->
+        <view class="checkbox-area" @click="item.selected = !(item.selected ?? false)"><!-- 非运算 -->
+          <text>{{ (item.selected ?? false) ? '☑' : '☐' }}</text>
+        </view>
+
+        <view class="item-content">
+          <image class="item-img" :src="item.coverImage" mode="aspectFill"></image>
+
+          <view class="item-info">
+            <text class="item-title">{{ item.itemName }}</text>
+
+            <view class="item-bottom">
+              <view class="price-box">
+                <text class="unit-price">单价：¥{{ item.unitPrice }}</text>
+                <text class="item-price">小计：¥{{ Math.round(item.unitPrice * item.count * 100 )/ 100 }}</text>
+              </view>
+
+              <!-- 数量 -->
+              <view class="num-box">
+                <view class="num-btn" @click="decrease(item, index)">
+                  <text class="btn-txt">-</text>
+                </view>
+                <input 
+                  class="num-input"
+                  type="number"
+                  :value="item.count"
+                  @blur="onCountInput($event as UniInputBlurEvent , item, index)"
+                />
+                <view class="num-btn" @click="increase(item)">
+                  <text class="btn-txt">+</text>
+                </view>
+              </view>
+            </view>
+          </view>
+        </view>
+
+        <!-- 删除 -->
+        <view class="delete-btn" @click="removeItem(index)">
+          <text></text>
+        </view>
+
+      </view>
+    </view>
+
+    <!-- 底部 -->
+    <view v-if="cartItems.length > 0" class="bottom-bar">
+      
+      <view class="select-all" @click="toggleAll">
+        <text>{{ isAllSelected ? '☑' : '☐' }}</text>
+        <text class="all-text">全选</text>
+      </view>
+
+      <view class="total-box">
+        <text class="total-label">合计：</text>
+        <text class="total-price">¥{{ totalPrice }}</text>
+      </view>
+
+      <view class="checkout-btn" @click="checkout">
+        <text class="checkout-text">结算</text>
+      </view>
+
+    </view>
+
+  </view>
+</template>
+<script>
+	
+import {type CartItem , state, type Order, type OrderItem} from '@/user/index.uts'
+
+	
+export default {
+  data() {
+    return {
+		//cartItems购物车数据 
+		//CartItem数据可以在user/index.uts中查看
+		cartItems : state.cartItems as CartItem[],
+		
+    }
+  },
+  computed: {
+  
+    // 总价
+    totalPrice() {    
+	  let total = 0 ;
+      this.cartItems.forEach((item) => {
+        if ((item.selected ?? false)) {
+          total += item.unitPrice * item.count
+        }
+      })
+    
+      return total.toFixed(2)
+    },
+  
+    // 是否全选
+    isAllSelected() {
+	  //购物车的商品不是全部被选中
+	  //购物车没有商品
+      if (this.cartItems.length === 0) return false
+	  //购物车有商品未被选中
+      for (let i = 0; i < this.cartItems.length; i++) {
+        if (!(this.cartItems[i].selected ?? false)) {
+          return false
+        }
+      }
+    
+	  //购物车的商品全部被选中
+      return true
+    }
+  
+  },
+  methods: {
+	  goBack() {
+	    uni.navigateBack()
+	  },
+	  
+      toggleAll() {
+        const newVal = !this.isAllSelected //当前是否全选的非运算
+		//遍历更新购物车每个商品的状态
+        this.cartItems.forEach(item => {
+		  //如果当前全选 
+		  //把每个商品的状态转为不选
+		  //如果当前非全选
+		  //把不选商品变为选中
+		  //选中商品依然是选中
+		  
+		  //所以商品的下一个状态可以由当前是否全选的非运算决定
+          item.selected = newVal	//更新商品的状态
+        })
+      },
+  
+      increase(item : CartItem) {
+        item.count++
+		uni.setStorageSync('cart', state.cartItems);
+      },
+  
+      decrease(item : CartItem , index : number) {
+        if ((item.count ?? 0) > 1) {
+          item.count--
+        } else {
+          uni.showModal({
+			title: '提示',
+			content: '确定删除该商品吗？',
+			success: (res) => {
+				if (res.confirm) {
+				this.cartItems.splice(index, 1)
+				state.cartItems = this.cartItems
+				uni.setStorageSync('cart', state.cartItems)
+				}
+			}	
+		})
+        }
+      
+        // 同步更新
+        state.cartItems = this.cartItems
+        uni.setStorageSync('cart', state.cartItems)
+      },
+      onCountInput(e : UniInputBlurEvent , item : CartItem , index : number) {
+        const inputValue = e.detail.value;
+        let value = parseInt(inputValue);
+		
+        // 非数字
+        if (isNaN(value)) {
+          value = 1
+        }
+		//数量超出限制
+		if (value > 5000) {
+		    uni.showToast({
+		      title: '数量超出限制',
+		      icon: 'none'
+		    })
+		    value = 5000
+		  }
+        // 小于1 → 删除
+        if (value <= 0) {
+          this.cartItems.splice(index, 1)
+        } else {
+          item.count = value
+        }
+      
+        state.cartItems = this.cartItems
+        uni.setStorageSync('cart', state.cartItems)
+      },	
+      removeItem(index : number) {
+        uni.showModal({
+          title: '提示',
+          content: '确定要删除该商品吗？',
+          success: (res) => {
+            if (res.confirm) {
+              this.cartItems.splice(index, 1)
+			  uni.setStorageSync('cart', state.cartItems);
+            }
+          }
+        })
+		
+      },
+  
+      clearCart() {
+        uni.showModal({
+          title: '提示',
+          content: '确定要清空购物车吗？',
+          success: (res) => {
+            if (res.confirm) {
+              this.cartItems.splice(0, this.cartItems.length)
+			  uni.setStorageSync('cart', state.cartItems);
+            }
+          }
+        })
+		
+      },
+  
+      async checkout() {
+			//检测是否登录了
+			if(state.userInfo == null){
+				uni.showToast({title: '请先登录' , icon : 'none'}) ;
+				return 
+			}
+			
+			//获取选中商品
+            const selected = this.cartItems.filter(i => i.selected)
+			
+			//当前未选中任何商品
+            if (selected.length === 0) {
+              uni.showToast({ title: '请选择商品', icon: 'none' })
+              return
+            }
+      
+			//使用map按shopId存储商品
+			const groups = new Map<string , CartItem[]>() ;	//CartItem是购物车中商品的数据类型
+			
+			//按shopId存储被选中的商品
+			selected.forEach(item =>{
+				const list = groups.get(item.shopId) ?? [] ;
+				list.push(item) ;
+				groups.set(item.shopId , list) ;	//按shopId存储被选中的item
+			}) ;
+			
+			//上传订单
+			//订单按商店和用户一一对应存储
+			const submitObj = uniCloud.importObject('cart-api') ;	//调用云对象
+			
+			//【兼容性最好的写法】手动提取所有 shopId 到数组
+			  const shopIds : string[] = [];
+			  groups.forEach((_, key) => {
+			    shopIds.push(key);
+			  });
+			
+			  // 3. 循环提交订单
+			  for (let i = 0; i < shopIds.length; i++) {
+			    const shopId = shopIds[i];	//获取商店id
+			    // 使用明确的类型断言帮助编译器
+			    const items = groups.get(shopId) as CartItem[];	//根据商店id获取商品
+			    
+				//时间
+			    const timestamp = Date.now();
+			    const date = new Date(timestamp);
+			    
+			    const newOrder = {
+			      orderId: timestamp.toString(), 
+			      shopId: shopId,
+			      items: items.map(item => ({
+			        itemId: item.itemId,
+			        itemName: item.itemName,
+			        count: item.count,
+			        unitPrice: item.unitPrice,
+			        subtotal: Math.round(item.unitPrice * item.count * 100) / 100
+			      })),
+			      totalAmount: Math.round(items.reduce((sum : number, item : CartItem) : number =>
+			        sum + item.unitPrice * item.count, 0) * 100) / 100,
+			      createTime: date.toISOString(),
+			      status: 'paid'
+			    };
+			
+			    try {
+			      // 这里的 as UTSJSONObject 是为了后续能用 ['errCode'] 访问
+			      const res = await submitObj.submitOrder(newOrder) as UTSJSONObject;
+			      if (res['errCode'] == 0) {
+			        console.log(`店铺 ${shopId} 下单成功`);
+			      }
+			    } catch (e : any) {
+			      console.error('提交失败', e);
+			    }
+			  }
+	  
+	  
+            //从购物车删除已结算的商品
+			//把未选中的商品留下放入新的数组
+			//此时state.cartItems与this.cartItems不再是共用内存关系
+            this.cartItems = this.cartItems.filter(i => !i.selected)	//保留未选中的商品
+            
+			//更新购物车
+			state.cartItems = this.cartItems 
+			
+			uni.setStorageSync('cart', state.cartItems);	//更新磁盘上购物车的数据
+      
+            uni.showToast({ title: '下单成功', icon: 'success' })
+      },
+  
+      goShop() {
+        uni.switchTab({
+          url: '/pages/shopping/shopping'
+        })
+      }
+  
+    }
+  }
+</script>
+<style scoped>
+.cart-page {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  background-color: #f5f5f5;
+  padding-top: 88rpx;
+}
+.cart-header {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 88rpx;
+  background-color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-bottom: 1rpx solid #eee;
+  z-index: 99;
+}
+.header-title {
+  font-size: 17px;
+  font-weight: bold;
+  color: #333;
+}
+.clear-btn {
+  position: absolute;
+  right: 30rpx;
+  height: 33%;
+  display: flex;
+  align-items: center;
+}
+.clear-text {
+  font-size: 28rpx;
+  color: #666;
+}
+
+.empty-wrapper {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+}
+
+.back-btn {
+  position: absolute;
+  left: 30rpx;
+  height: 135%;
+  display: flex;
+  align-items: center;
+}
+.back-icon {
+  font-size: 90rpx;
+  font-weight: normal;
+}
+.empty-content {
+  align-items: center;
+  justify-content: center;
+}
+.icon-circle {
+  width: 200rpx;
+  height: 200rpx;
+  border-radius: 100rpx;
+  background-color: #e6eef7;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 60rpx;
+}
+.cart-icon {
+  font-size: 80rpx;
+}
+.go-btn {
+  width: 360rpx;
+  height: 80rpx;
+  background-color: #3f78b5;
+  border-radius: 40rpx;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 30rpx;
+}
+.go-text {
+  color: #fff;
+  font-size: 28rpx;
+}
+.empty-tip {
+  font-size: 26rpx;
+  color: #999;
+}
+.icon-bg {
+  width: 120rpx;
+  height: 120rpx;
+  background-color: #eee;
+  border-radius: 60rpx; 
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 30rpx;
+}
+.empty-text {
+  font-size: 28rpx;
+  color: #999;
+  margin-bottom: 50rpx;
+}
+.go-shop-btn {
+  background-color: #7b61ff;
+  color: #fff;
+  font-size: 28rpx;
+  padding: 10rpx 80rpx;
+  border-radius: 40rpx;
+  border: none;
+}
+
+.cart-list {
+  flex: 1;
+  padding: 20rpx;
+}
+
+.cart-item {
+  background-color: #fff;
+  border-radius: 16rpx;
+  padding: 20rpx;
+  margin-bottom: 24rpx;
+  flex-direction: row; 
+  align-items: center;
+}
+
+.checkbox-area {
+  padding: 10rpx;
+  margin-right: 10rpx;
+}
+
+.item-content {
+  flex: 1;
+  flex-direction: row; 
+  align-items: center;
+}
+
+.item-img {
+  width: 140rpx;
+  height: 140rpx;
+  border-radius: 12rpx;
+  background-color: #f8f8f8;
+  margin-right: 20rpx;
+}
+
+.item-info {
+  flex: 1;
+  height: 140rpx;
+  justify-content: space-between;
+  padding-right: 40rpx;
+}
+
+.item-title {
+  font-size: 28rpx;
+  color: #333;
+  line-height: 1.4;
+}
+
+.item-bottom {
+  flex-direction: row; 
+  justify-content: space-between;
+  align-items: flex-end;
+}
+
+.item-price {
+  font-size: 32rpx;
+  color: #ff4d4f;
+  font-weight: bold;
+}
+.price-box {
+  display: flex;
+  flex-direction: column;
+}
+
+.unit-price {
+  font-size: 24rpx;
+  color: #999;
+  margin-bottom: 6rpx;
+}
+.num-box {
+  flex-direction: row; 
+  align-items: center;
+  border-width: 1rpx;
+  border-style: solid;
+  border-color: #ddd;
+  border-radius: 8rpx;
+  background-color: #fff;
+}
+.num-btn {
+  width: 44rpx;
+  height: 40rpx;
+  align-items: center;
+  justify-content: center;
+  background-color: #f9f9f9;
+}
+.num-input {
+  width: 60rpx;
+  text-align: center;
+  font-size: 24rpx;
+  border-left: 1rpx solid #eee;
+  border-right: 1rpx solid #eee;
+  height: 40rpx;
+}
+.btn-txt {
+  font-size: 30rpx;
+  color: #666;
+}
+.num-text {
+  width: 60rpx;
+  text-align: center;
+  font-size: 24rpx;
+  border-left-width: 1rpx;
+  border-left-style: solid;
+  border-left-color: #eee;
+  border-right-width: 1rpx;
+  border-right-style: solid;
+  border-right-color: #eee;
+  line-height: 40rpx;
+}
+
+.delete-btn {
+  position: absolute;
+  top: 10rpx;
+  right: 10rpx;
+  padding: 10rpx;
+}
+
+.bottom-bar {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 100rpx;
+  background-color: #fff;
+  flex-direction: row; 
+  align-items: center;
+  padding: 0 20rpx;
+  border-top-width: 1rpx;
+  border-top-style: solid;
+  border-top-color: #eee;
+  padding-bottom: 20rpx; 
+}
+
+.select-all {
+  flex-direction: row; 
+  align-items: center;
+}
+.all-text {
+  font-size: 26rpx;
+  color: #666;
+  margin-left: 10rpx;
+}
+
+.total-box {
+  flex: 1;
+  flex-direction: row; 
+  align-items: center;
+  justify-content: flex-end;
+  margin-right: 24rpx;
+}
+.total-label {
+  font-size: 26rpx;
+  color: #333;
+}
+.total-price {
+  font-size: 34rpx;
+  color: #ff4d4f;
+  font-weight: bold;
+  margin-left: 8rpx;
+}
+
+.checkout-btn {
+  background-color: #7b61ff;
+  padding: 0 40rpx;
+  height: 70rpx;
+  border-radius: 35rpx;
+  justify-content: center;
+}
+.checkout-text {
+  color: #fff;
+  font-size: 28rpx;
+  font-weight: bold;
+}
+</style>
