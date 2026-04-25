@@ -33,6 +33,28 @@ const _state = reactive({
  * 把 task_list 与 user_tasks 合并成统一视图。
  * 消除原本散落在 tasks.uvue / task-detail.uvue 的重复逻辑。
  */
+/**
+ * 私有 refresh 实现：避免在对象字面量 action 内部用 this.refresh() —— UTS 严格模式下
+ * 该写法会触发 'this' is not defined in this context 编译报错。
+ */
+async function _refresh(): Promise<void> {
+    const cacheT = uni.getStorageSync('task_list');
+    let tasks = (cacheT != null && cacheT !== "") ? cacheT as UTSJSONObject[] : [] as UTSJSONObject[];
+    if (tasks.length === 0) {
+        tasks = getDefaultTasks();
+        uni.setStorageSync('task_list', tasks);
+    }
+    _state.tasks = tasks;
+
+    const userMap = await getUserTasksCloud() as UTSJSONObject;
+    _state.userTaskMap = userMap;
+
+    const rewards = await getRewardsCloud() as UTSJSONObject[];
+    _state.rewards = rewards;
+
+    _state.loadedAt = Date.now();
+}
+
 function _merge(tasks: UTSJSONObject[], userMap: UTSJSONObject): UTSJSONObject[] {
     return tasks.map((t: UTSJSONObject): UTSJSONObject => {
         const id = "" + t["id"];
@@ -78,21 +100,7 @@ export const taskStore = {
 
     // ─── actions ────────────────────────────────────────────────────────────
     async refresh() {
-        const cacheT = uni.getStorageSync('task_list');
-        let tasks = (cacheT != null && cacheT !== "") ? cacheT as UTSJSONObject[] : [] as UTSJSONObject[];
-        if (tasks.length === 0) {
-            tasks = getDefaultTasks();
-            uni.setStorageSync('task_list', tasks);
-        }
-        _state.tasks = tasks;
-
-        const userMap = await getUserTasksCloud() as UTSJSONObject;
-        _state.userTaskMap = userMap;
-
-        const rewards = await getRewardsCloud() as UTSJSONObject[];
-        _state.rewards = rewards;
-
-        _state.loadedAt = Date.now();
+        await _refresh();
     },
 
     /**
@@ -116,7 +124,7 @@ export const taskStore = {
             } as UTSJSONObject);
         }
         if (completed.length > 0) {
-            await this.refresh();
+            await _refresh();
         }
         return completed;
     }
