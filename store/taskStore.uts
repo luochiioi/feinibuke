@@ -5,6 +5,9 @@
  * - 集中 task_list + user_tasks 的合并逻辑（修复 P0-#7：旧版在 tasks.uvue 与 task-detail.uvue 各写一遍）。
  * - merged() getter 输出已合并的任务视图，UI 只消费这一份。
  * - actions 委托 utils/map-storage.uts 与 utils/map-tasks.uts，不重复实现底层逻辑。
+ *
+ * UTS 适配：与 markerStore 同因——object literal 混用 get accessor + async method
+ * 在 UTS 编译会丢类型信息，改用 class 单例。
  */
 import { reactive } from 'vue';
 import {
@@ -33,9 +36,20 @@ const _state = reactive({
  * 把 task_list 与 user_tasks 合并成统一视图。
  * 消除原本散落在 tasks.uvue / task-detail.uvue 的重复逻辑。
  */
+function _merge(tasks: UTSJSONObject[], userMap: UTSJSONObject): UTSJSONObject[] {
+    return tasks.map((t: UTSJSONObject): UTSJSONObject => {
+        const id = "" + t["id"];
+        const userEntry = userMap[id];
+        if (userEntry instanceof UTSJSONObject) {
+            return { ...t, status: userEntry["status"], completedAt: userEntry["completedAt"] } as UTSJSONObject;
+        }
+        return t;
+    });
+}
+
 /**
- * 私有 refresh 实现：避免在对象字面量 action 内部用 this.refresh() —— UTS 严格模式下
- * 该写法会触发 'this' is not defined in this context 编译报错。
+ * 私有 refresh 实现：避免在对象/类内部用 this.refresh()——UTS 严格模式下
+ * 跨方法的 this 调用容易触发 'this' is not defined / 找不到名称 编译报错。
  */
 async function _refresh(): Promise<void> {
     const cacheT = uni.getStorageSync('task_list');
@@ -55,59 +69,48 @@ async function _refresh(): Promise<void> {
     _state.loadedAt = Date.now();
 }
 
-function _merge(tasks: UTSJSONObject[], userMap: UTSJSONObject): UTSJSONObject[] {
-    return tasks.map((t: UTSJSONObject): UTSJSONObject => {
-        const id = "" + t["id"];
-        const userEntry = userMap[id];
-        if (userEntry instanceof UTSJSONObject) {
-            return { ...t, status: userEntry["status"], completedAt: userEntry["completedAt"] } as UTSJSONObject;
-        }
-        return t;
-    });
-}
-
-export const taskStore = {
+class TaskStore {
     // ─── 只读视图 ───────────────────────────────────────────────────────────
     get tasks(): UTSJSONObject[] {
         return _state.tasks;
-    },
+    }
     get userTaskMap(): UTSJSONObject {
         return _state.userTaskMap;
-    },
+    }
     get rewards(): UTSJSONObject[] {
         return _state.rewards;
-    },
+    }
     get loadedAt(): number {
         return _state.loadedAt;
-    },
+    }
 
     // ─── getters ────────────────────────────────────────────────────────────
     merged(): UTSJSONObject[] {
         return _merge(_state.tasks, _state.userTaskMap);
-    },
+    }
 
     getById(taskId: string): UTSJSONObject | null {
         const merged = _merge(_state.tasks, _state.userTaskMap);
         const found = merged.find((t: UTSJSONObject): boolean => ("" + t["id"]) === taskId);
         return found != null ? found : null;
-    },
+    }
 
     ofMarker(markerId: any): UTSJSONObject[] {
         return _merge(_state.tasks, _state.userTaskMap).filter((t: UTSJSONObject): boolean => {
             return t["targetMarkerId"] === markerId;
         });
-    },
+    }
 
     // ─── actions ────────────────────────────────────────────────────────────
-    async refresh() {
+    async refresh(): Promise<void> {
         await _refresh();
-    },
+    }
 
     /**
      * 打卡触发任务检查（同步本地）+ 云端登记 + 写入奖励。
      * 旧版逻辑分散在 checkin.uvue submit() 中，现集中到此。
      */
-    async triggerByMarker(marker: UTSJSONObject) {
+    async triggerByMarker(marker: UTSJSONObject): Promise<UTSJSONObject[]> {
         const completed = triggerTaskCheck(marker);
         for (let i = 0; i < completed.length; i++) {
             const task = completed[i];
@@ -128,4 +131,6 @@ export const taskStore = {
         }
         return completed;
     }
-};
+}
+
+export const taskStore = new TaskStore();

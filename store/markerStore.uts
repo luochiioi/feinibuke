@@ -6,6 +6,10 @@
  * - 暴露只读 getter，写入必须经 actions（避免外部赋值破坏响应式）。
  * - 不直接读写 storage，委托给 utils/map-storage.uts 已有的云函数封装。
  * - upsert / removeById 使用不可变写法（创建新数组，触发响应式）。
+ *
+ * UTS 适配：用 class 而非 object literal 暴露单例。混用 get accessor + async method 的
+ * object literal 在 UTS 编译到 Kotlin 时会丢失类型信息（getter 透出类型变 String，
+ * action 方法报"找不到名称"）。class 编译为 Kotlin class，类型推断稳定。
  */
 import { reactive } from 'vue';
 import {
@@ -33,26 +37,26 @@ function _findIndex(id: string): number {
     });
 }
 
-export const markerStore = {
+class MarkerStore {
     // ─── 只读视图 ───────────────────────────────────────────────────────────
     get markers(): UTSJSONObject[] {
         return _state.markers;
-    },
+    }
     get loadedAt(): number {
         return _state.loadedAt;
-    },
+    }
     get isSyncing(): boolean {
         return _state.isSyncing;
-    },
+    }
 
     // ─── getters ────────────────────────────────────────────────────────────
     byId(id: string): UTSJSONObject | null {
         const idx = _findIndex(id);
         return idx >= 0 ? _state.markers[idx] : null;
-    },
+    }
 
     // ─── actions ────────────────────────────────────────────────────────────
-    async loadFromCloud() {
+    async loadFromCloud(): Promise<void> {
         _state.isSyncing = true;
         try {
             const list = await getMarkersCloud() as UTSJSONObject[];
@@ -61,15 +65,15 @@ export const markerStore = {
         } finally {
             _state.isSyncing = false;
         }
-    },
+    }
 
-    async add(payload: UTSJSONObject) {
+    async add(payload: UTSJSONObject): Promise<UTSJSONObject> {
         const created = await addMarkerCloud(payload) as UTSJSONObject;
         _state.markers = [..._state.markers, created];
         return created;
-    },
+    }
 
-    async update(id: string, updates: UTSJSONObject) {
+    async update(id: string, updates: UTSJSONObject): Promise<void> {
         await updateMarkerCloud(id, updates);
         const idx = _findIndex(id);
         if (idx >= 0) {
@@ -77,12 +81,14 @@ export const markerStore = {
             next[idx] = { ..._state.markers[idx], ...updates } as UTSJSONObject;
             _state.markers = next;
         }
-    },
+    }
 
-    async removeById(id: string) {
+    async removeById(id: string): Promise<void> {
         await deleteMarkerCloud(id);
         _state.markers = _state.markers.filter((m: UTSJSONObject): boolean => {
             return m["_id"] !== id && ("" + m["id"]) !== id;
         });
     }
-};
+}
+
+export const markerStore = new MarkerStore();
