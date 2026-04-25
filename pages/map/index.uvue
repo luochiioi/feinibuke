@@ -257,11 +257,12 @@ export default {
 		},
 
 		calculateLiveDistance() : string | number {
-			if (!this.hasCurrentLocation || this.activeMarker == null) return '--';
+			const am = this.activeMarker;
+			if (!this.hasCurrentLocation || am == null) return '--';
 			const R = 6371e3;
 			const p1 = this.curLat * Math.PI / 180;
-			const targetLat = parseFloat('' + this.activeMarker["latitude"]);
-			const targetLng = parseFloat('' + this.activeMarker["longitude"]);
+			const targetLat = parseFloat('' + am["latitude"]);
+			const targetLng = parseFloat('' + am["longitude"]);
 			const p2 = targetLat * Math.PI / 180;
 			const dp = p2 - p1;
 			const dl = (targetLng - this.curLng) * Math.PI / 180;
