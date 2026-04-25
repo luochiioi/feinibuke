@@ -141,9 +141,16 @@ export default {
 			// markers 加载完成后，若有待聚焦 id 则激活底部抽屉
 			if (this._pendingFocusId != '') {
 				const fid = this._pendingFocusId;
-				const target = markerStore.markers.find((m: UTSJSONObject): boolean => {
-					return ('' + m["id"]) === fid;
-				});
+				// UTS 严格模式 Array<UTSJSONObject>.find 不可用 + 返回 Any 与 UTSJSONObject? 不兼容，改用 for 循环
+				let target: UTSJSONObject | null = null;
+				const list = markerStore.markers;
+				for (let i = 0; i < list.length; i++) {
+					const m = list[i];
+					if (('' + m["id"]) === fid) {
+						target = m;
+						break;
+					}
+				}
 				if (target != null) {
 					this.activeMarker = target;
 					this.hasActiveMarker = true;
