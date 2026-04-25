@@ -49,6 +49,7 @@
 
 <script lang="ts">
 import { formatDateTime, getMarkers } from '@/utils/map-utils.uts';
+import { taskStore } from '@/store/taskStore.uts';
 
 export default {
 	data() {
@@ -126,44 +127,23 @@ export default {
 		if (this.hasTask) this.loadTask('' + (this.rawTask as UTSJSONObject)["id"]);
 	},
 	methods: {
-		loadTask(id: string) {
-			const tasksRaw = uni.getStorageSync('task_list');
-			let tasks: Array<UTSJSONObject> = [];
-			if (tasksRaw != null && Array.isArray(tasksRaw)) {
-				tasks = tasksRaw as Array<UTSJSONObject>;
+		async loadTask(id: string) {
+			// P0-#7：合并逻辑统一收敛到 taskStore，本页面不再重写 task_list+user_tasks 合并
+			if (taskStore.loadedAt === 0) {
+				await taskStore.refresh();
 			}
-			const userTasksRaw = uni.getStorageSync('user_tasks');
-			let userTasks: UTSJSONObject = new UTSJSONObject();
-			if (userTasksRaw != null && typeof userTasksRaw === 'object') {
-				userTasks = userTasksRaw as UTSJSONObject;
-			}
-			let found: UTSJSONObject | null = null;
-			for (let i = 0; i < tasks.length; i++) {
-				const t = tasks[i] as UTSJSONObject;
-				if ('' + t["id"] === id) {
-					found = t;
-					break;
-				}
-			}
-			if (found == null) return;
-			const base = found as UTSJSONObject;
-			const extraRaw = userTasks['' + base["id"]];
-			const merged: UTSJSONObject = JSON.parse(JSON.stringify(base)) as UTSJSONObject;
-			if (extraRaw != null && typeof extraRaw === 'object') {
-				const ej = extraRaw as UTSJSONObject;
-				if (ej["status"] != null) { merged["status"] = ej["status"]; }
-				if (ej["completedAt"] != null) { merged["completedAt"] = ej["completedAt"]; }
-				if (ej["progress"] != null) { merged["progress"] = ej["progress"]; }
-			}
+			const merged = taskStore.getById(id);
+			if (merged == null) return;
 			this.rawTask = merged;
 
 			// find corresponding checkin record
 			const markers = getMarkers();
 			this.rawCheckedMarker = null;
+			const targetTitle = merged["targetTitle"] as string;
 			for (let i = 0; i < markers.length; i++) {
 				const mk = markers[i] as UTSJSONObject;
 				const matchesId = '' + mk["id"] === id;
-				const matchesTitle = '' + mk["title"] === (base["targetTitle"] as string);
+				const matchesTitle = '' + mk["title"] === targetTitle;
 				if ((matchesId || matchesTitle) && mk["checked"] === true) {
 					this.rawCheckedMarker = mk;
 					break;
