@@ -149,12 +149,11 @@
 
 <script lang="ts">
 import { uniCloud } from '@/utils/map-tasks.uts';
-import { getDefaultTasks } from '@/utils/map-tasks.uts';
 import {
 	getMarkersCloud, getMarkers, deleteMarkerCloud,
-	migrateLocalToCloud, forceResyncToCloud,
-	getUserTasksCloud, getRewardsCloud
+	migrateLocalToCloud, forceResyncToCloud
 } from '@/utils/map-storage.uts';
+import { taskStore } from '@/store/taskStore.uts';
 
 export default {
 	data() {
@@ -212,69 +211,15 @@ export default {
 			return (item["checked"] === true) ? '已打卡' : '待探索';
 		},
 		async refresh() {
-			// 任务定义（本地）
-			const tasksRaw = uni.getStorageSync('task_list');
-			let tasks: Array<UTSJSONObject>;
-			if (tasksRaw != null && Array.isArray(tasksRaw) && (tasksRaw as Array<UTSJSONObject>).length > 0) {
-				tasks = tasksRaw as Array<UTSJSONObject>;
-			} else {
-				tasks = getDefaultTasks();
-				uni.setStorageSync('task_list', tasks);
-			}
+			// P0-#7：task_list + user_tasks 合并逻辑统一收敛到 taskStore，不再各页面重复实现
+			await taskStore.refresh();
+			this.tasks = taskStore.merged();
+			this.rewards = taskStore.rewards;
 
-			// 优先用本地缓存快速渲染
-			const userTasksRaw = uni.getStorageSync('user_tasks');
-			let userTasks: UTSJSONObject = new UTSJSONObject();
-			if (userTasksRaw != null && typeof userTasksRaw === 'object') {
-				userTasks = userTasksRaw as UTSJSONObject;
-			}
-			const mergedTasks: Array<UTSJSONObject> = [];
-			for (let i = 0; i < tasks.length; i++) {
-				const t = tasks[i] as UTSJSONObject;
-				const merged: UTSJSONObject = JSON.parse(JSON.stringify(t)) as UTSJSONObject;
-				const tid = '' + t["id"];
-				const extraRaw = userTasks[tid];
-				if (extraRaw != null && typeof extraRaw === 'object') {
-					const extra = extraRaw as UTSJSONObject;
-					if (extra["status"] != null) { merged["status"] = extra["status"]; }
-					if (extra["completedAt"] != null) { merged["completedAt"] = extra["completedAt"]; }
-					if (extra["progress"] != null) { merged["progress"] = extra["progress"]; }
-				}
-				mergedTasks.push(merged);
-			}
-			this.tasks = mergedTasks;
-			const rewardsRaw = uni.getStorageSync('rewards');
-			this.rewards = (rewardsRaw != null && Array.isArray(rewardsRaw)) ? (rewardsRaw as Array<UTSJSONObject>) : [];
+			// markers 仍由本页面承担（markerStore 接入是 map/index.uvue 的范围，本会话不扩张）
 			this.markers = getMarkers() as Array<UTSJSONObject>;
-
-			// 再从云端刷新（覆盖本地）
 			try {
-				const cloudUserTasks: UTSJSONObject = await getUserTasksCloud() as UTSJSONObject;
-				const cloudRewards: Array<UTSJSONObject> = await getRewardsCloud() as Array<UTSJSONObject>;
 				const cloudMarkers: Array<UTSJSONObject> = await getMarkersCloud() as Array<UTSJSONObject>;
-				// 合并任务进度
-				const cloudMerged: Array<UTSJSONObject> = [];
-				for (let i = 0; i < tasks.length; i++) {
-					const t = tasks[i] as UTSJSONObject;
-					const merged: UTSJSONObject = JSON.parse(JSON.stringify(t)) as UTSJSONObject;
-					const tid = '' + t["id"];
-					let extra: UTSJSONObject = new UTSJSONObject();
-					const cloudExtraRaw = cloudUserTasks[tid];
-					if (cloudExtraRaw != null && typeof cloudExtraRaw === 'object') {
-						extra = cloudExtraRaw as UTSJSONObject;
-					} else {
-						const localExtraRaw = userTasks[tid];
-						if (localExtraRaw != null && typeof localExtraRaw === 'object') {
-							extra = localExtraRaw as UTSJSONObject;
-						}
-					}
-					if (extra["status"] != null) { merged["status"] = extra["status"]; }
-					if (extra["completedAt"] != null) { merged["completedAt"] = extra["completedAt"]; }
-					if (extra["progress"] != null) { merged["progress"] = extra["progress"]; }
-					cloudMerged.push(merged);
-				}
-				this.tasks = cloudMerged;
-				if (cloudRewards.length > 0) this.rewards = cloudRewards;
 				if (cloudMarkers.length > 0) this.markers = cloudMarkers;
 			} catch (_) {}
 		},
