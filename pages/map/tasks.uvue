@@ -214,7 +214,7 @@ export default {
 			// P0-#7：task_list + user_tasks 合并逻辑统一收敛到 taskStore，不再各页面重复实现
 			await taskStore.refresh();
 			this.tasks = taskStore.merged();
-			this.rewards = taskStore.rewards;
+			this.rewards = taskStore.rewards();
 
 			// markers 仍由本页面承担（markerStore 接入是 map/index.uvue 的范围，本会话不扩张）
 			this.markers = getMarkers() as Array<UTSJSONObject>;

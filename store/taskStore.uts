@@ -70,17 +70,17 @@ async function _refresh(): Promise<void> {
 }
 
 class TaskStore {
-    // ─── 只读视图 ───────────────────────────────────────────────────────────
-    get tasks(): UTSJSONObject[] {
+    // ─── 只读视图（方法形式：UTS class get accessor 类型会被推断成 String，改方法） ──
+    tasks(): UTSJSONObject[] {
         return _state.tasks;
     }
-    get userTaskMap(): UTSJSONObject {
+    userTaskMap(): UTSJSONObject {
         return _state.userTaskMap;
     }
-    get rewards(): UTSJSONObject[] {
+    rewards(): UTSJSONObject[] {
         return _state.rewards;
     }
-    get loadedAt(): number {
+    loadedAt(): number {
         return _state.loadedAt;
     }
 

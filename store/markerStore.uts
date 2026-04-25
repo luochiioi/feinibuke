@@ -38,14 +38,15 @@ function _findIndex(id: string): number {
 }
 
 class MarkerStore {
-    // ─── 只读视图 ───────────────────────────────────────────────────────────
-    get markers(): UTSJSONObject[] {
+    // ─── 只读视图（方法形式：UTS 对 class get accessor 的类型推断不可靠，
+    //     会把返回类型退化成 String，故统一改方法） ─────────────────────────
+    markers(): UTSJSONObject[] {
         return _state.markers;
     }
-    get loadedAt(): number {
+    loadedAt(): number {
         return _state.loadedAt;
     }
-    get isSyncing(): boolean {
+    isSyncing(): boolean {
         return _state.isSyncing;
     }
 

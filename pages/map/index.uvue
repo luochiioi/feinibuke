@@ -94,7 +94,7 @@ export default {
 	computed: {
 		// markers 视图代理到 store，跨页共享单一数据源
 		markers() : Array<Any> {
-			return markerStore.markers as Array<Any>;
+			return markerStore.markers() as Array<Any>;
 		},
 		// UTS Kotlin 端 data() 字段是 delegated property，无法对 this.activeMarker 智能转型；
 		// 必须先复制到局部 const，让 Kotlin 在局部上做 null 检查后再访问字段。
@@ -148,10 +148,9 @@ export default {
 			// markers 加载完成后，若有待聚焦 id 则激活底部抽屉
 			if (this._pendingFocusId != '') {
 				const fid = this._pendingFocusId;
-				// UTS 严格模式 Array<UTSJSONObject>.find 不可用；store getter 透出的类型也需显式 cast，
-				// 否则 Kotlin 端会把 list 当 String 处理（list[i] 返回 Char）。
+				// UTS 严格模式 Array<UTSJSONObject>.find 不可用；store 视图改方法形式调用以保留类型
 				let target: UTSJSONObject | null = null;
-				const list = markerStore.markers as Array<UTSJSONObject>;
+				const list = markerStore.markers();
 				for (let i = 0; i < list.length; i++) {
 					const m = list[i];
 					if (('' + m["id"]) === fid) {
@@ -329,7 +328,7 @@ export default {
 		},
 
 		async deleteMarker(id : number) {
-			const list = markerStore.markers as Array<UTSJSONObject>;
+			const list = markerStore.markers();
 			let toDelete: UTSJSONObject | null = null;
 			for (let i = 0; i < list.length; i++) {
 				const m = list[i];

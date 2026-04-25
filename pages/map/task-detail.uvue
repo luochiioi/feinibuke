@@ -129,7 +129,7 @@ export default {
 	methods: {
 		async loadTask(id: string) {
 			// P0-#7：合并逻辑统一收敛到 taskStore，本页面不再重写 task_list+user_tasks 合并
-			if (taskStore.loadedAt === 0) {
+			if (taskStore.loadedAt() === 0) {
 				await taskStore.refresh();
 			}
 			const merged = taskStore.getById(id);
