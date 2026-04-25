@@ -70,8 +70,7 @@
 </template>
 
 <script lang="ts">
-import { getMarkersCloud, getMarkers, deleteMarkerCloud } from '@/utils/map-storage.uts';
-import { getDefaultMarkers } from '@/utils/map-utils.uts';
+import { markerStore } from '@/store/markerStore.uts';
 
 export default {
 	data() {
@@ -83,7 +82,6 @@ export default {
 			curLng: 0.0,
 			hasCurrentLocation: false,
 			mapCtx: null,
-			markers: [] as Array<Any>,
 			activeMarker: null as UTSJSONObject | null,
 			hasActiveMarker: false,
 			locationRetryCount: 0,
@@ -92,6 +90,10 @@ export default {
 }
 	},
 	computed: {
+		// markers 视图代理到 store，跨页共享单一数据源
+		markers() : Array<Any> {
+			return markerStore.markers as Array<Any>;
+		},
 		amTitle() : string {
 			if (this.activeMarker == null) return '';
 			return '' + this.activeMarker["title"];
@@ -166,27 +168,10 @@ export default {
 		},
 		
 		async loadMarkers() {
-			// 先用本地缓存快速渲染，再从云端刷新
-			const cached = getMarkers();
-			if (cached.length > 0) this.markers = cached;
-
+			// 数据流：markerStore 是权威；页面只触发刷新，错误内化由 store 处理
 			try {
-				const cloud = await getMarkersCloud();
-				if (cloud.length > 0) {
-					this.markers = cloud;
-				} else if (cached.length === 0) {
-					// 云端和本地都没有数据，写入默认示例
-					const defaults = getDefaultMarkers();
-					this.markers = defaults as Array<Any>;
-					uni.setStorageSync('tourism_markers', defaults);
-				}
-			} catch (_) {
-				// 云端失败，使用本地缓存或默认数据
-				if (this.markers.length === 0) {
-					this.markers = getDefaultMarkers() as Array<Any>;
-					uni.setStorageSync('tourism_markers', this.markers);
-				}
-			}
+				await markerStore.loadFromCloud();
+			} catch (_) {}
 		},
 
 		backToCurrentLocation() {
@@ -311,21 +296,15 @@ export default {
 		},
 
 		async deleteMarker(id : number) {
-			const toDelete = this.markers.find(m => {
-				const mo = m as UTSJSONObject;
-				return mo["id"] == id;
-			});
-			this.markers = this.markers.filter(m => {
-				const mo = m as UTSJSONObject;
-				return mo["id"] != id;
+			const toDelete = markerStore.markers.find((m: UTSJSONObject): boolean => {
+				return m["id"] == id;
 			});
 			this.activeMarker = null;
 			this.hasActiveMarker = false;
 			if (toDelete != null) {
 				try {
-					const del = toDelete as UTSJSONObject;
-					const cloudId = del["_id"] != null ? '' + del["_id"] : '' + del["id"];
-					await deleteMarkerCloud(cloudId);
+					const cloudId = toDelete["_id"] != null ? '' + toDelete["_id"] : '' + toDelete["id"];
+					await markerStore.removeById(cloudId);
 				} catch (_) {}
 			}
 		},
@@ -333,10 +312,7 @@ export default {
 		previewPhoto(path: string) { // type annotation added
 					uni.previewImage({ urls: [path], current: path });
 				},
-				saveMarkers() { 
-					uni.setStorageSync('tourism_markers', this.markers); 
-				},
-				zoomIn() { 
+				zoomIn() {
 					if (this.scale < 20) this.scale += 1; 
 				},
 				zoomOut() {
