@@ -80,7 +80,7 @@
 <script lang="ts">
 import { getMarkers } from '@/utils/map-storage.uts';
 import { doCheckin, completeTaskCloud, addRewardCloud } from '@/utils/map-storage.uts';
-import { calculateDistanceWithAccuracy } from '@/utils/coordinate.uts';
+import { haversine } from '@/utils/geo.uts';
 import { triggerTaskCheck } from '@/utils/map-tasks.uts';
 
 const CHECKIN_RADIUS = 500; // 米
@@ -153,7 +153,7 @@ export default {
 			const targetLatRaw = to["latitude"];
 			const targetLngRaw = to["longitude"];
 			if (targetLatRaw == null || targetLngRaw == null) return;
-			this.distance = '' + calculateDistanceWithAccuracy(
+			this.distance = '' + haversine(
 				this.locLat,
 				this.locLng,
 				parseFloat('' + targetLatRaw),
