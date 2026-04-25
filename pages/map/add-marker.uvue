@@ -87,11 +87,12 @@ export default {
 			formTitle: '',
 			formLatitude: '',
 			formLongitude: '',
-			mapCenterLat: -1,
-			mapCenterLng: -1,
+			// P2-#15：null 表示未设置；-1 在赤道/本初子午线属合法坐标，不能作哨兵
+			mapCenterLat: null as number | null,
+			mapCenterLng: null as number | null,
 			mapCenterValid: false,
-			currentLat: -1,
-			currentLng: -1,
+			currentLat: null as number | null,
+			currentLng: null as number | null,
 			currentLocationValid: false,
 			activeSource: '',
 			isLoadingLocation: false
@@ -99,11 +100,11 @@ export default {
 	},
 	computed: {
 		sourceTip() : string {
-			if (this.activeSource === 'current' && this.currentLocationValid) {
-				return `当前使用”我的位置”：${this.currentLat.toFixed(6)}, ${this.currentLng.toFixed(6)}`;
+			if (this.activeSource === 'current' && this.currentLocationValid && this.currentLat != null && this.currentLng != null) {
+				return `当前使用”我的位置”：${this.currentLat!!.toFixed(6)}, ${this.currentLng!!.toFixed(6)}`;
 			}
-			if (this.activeSource === 'center' && this.mapCenterValid) {
-				return `当前使用”地图中心”：${this.mapCenterLat.toFixed(6)}, ${this.mapCenterLng.toFixed(6)}`;
+			if (this.activeSource === 'center' && this.mapCenterValid && this.mapCenterLat != null && this.mapCenterLng != null) {
+				return `当前使用”地图中心”：${this.mapCenterLat!!.toFixed(6)}, ${this.mapCenterLng!!.toFixed(6)}`;
 			}
 			return '没有自动坐标时，也可以直接手动输入经纬度。';
 		},
@@ -171,18 +172,18 @@ export default {
 		},
 		applyCoordinates(source : string) {
 			if (source === 'center') {
-				if (!this.mapCenterValid) {
+				if (!this.mapCenterValid || this.mapCenterLat == null || this.mapCenterLng == null) {
 					return;
 				}
-				this.fillFormCoordinates(this.mapCenterLat, this.mapCenterLng);
+				this.fillFormCoordinates(this.mapCenterLat!!, this.mapCenterLng!!);
 				this.activeSource = 'center';
 				return;
 			}
-			if (!this.currentLocationValid) {
+			if (!this.currentLocationValid || this.currentLat == null || this.currentLng == null) {
 				this.refreshCurrentLocation();
 				return;
 			}
-			this.fillFormCoordinates(this.currentLat, this.currentLng);
+			this.fillFormCoordinates(this.currentLat!!, this.currentLng!!);
 			this.activeSource = 'current';
 		},
 		refreshCurrentLocation() {
