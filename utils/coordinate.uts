@@ -1,8 +1,11 @@
 /**
- * 坐标系转换工具
- * WGS-84: 国际标准坐标系
- * GCJ-02: 国测局坐标系（火星坐标系）
+ * 坐标系转换工具（兼容层 · 30 天过渡期）
+ * - calculateDistanceWithAccuracy 已转发到 utils/geo.uts:haversine
+ * - wgs84ToGcj02 / gcj02ToWgs84 暂保留本地实现，待页面层迁移完成后删除整个文件
+ *
+ * 新代码请直接 import 自 '@/utils/geo.uts'。
  */
+import { haversine } from '@/utils/geo.uts';
 
 const PI = Math.PI;
 const AXIS = 6378245.0; // 长半轴
@@ -78,19 +81,9 @@ export function gcj02ToWgs84(lng, lat) {
 }
 
 /**
- * 计算两点间距离（改进版）
+ * 计算两点间距离（米，四舍五入）
+ * @deprecated 使用 utils/geo.uts:haversine 替代
  */
-export function calculateDistanceWithAccuracy(lat1 : number, lng1 : number, lat2 : number, lng2 : number) : number {
-  const R = 6371e3;
-  const rad1 = lat1 * PI / 180;
-  const rad2 = lat2 * PI / 180;
-  const dLat = (lat2 - lat1) * PI / 180;
-  const dLng = (lng2 - lng1) * PI / 180;
-
-  const sinDLat = Math.sin(dLat / 2);
-  const sinDLng = Math.sin(dLng / 2);
-  const a = sinDLat * sinDLat + Math.cos(rad1) * Math.cos(rad2) * sinDLng * sinDLng;
-  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-
-  return Math.round(R * c);
+export function calculateDistanceWithAccuracy(lat1: number, lng1: number, lat2: number, lng2: number): number {
+    return haversine(lat1, lng1, lat2, lng2);
 }

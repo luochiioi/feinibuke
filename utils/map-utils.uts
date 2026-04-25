@@ -26,17 +26,14 @@ export const formatDistance = (val: any): string => {
 	return `${meters}米`;
 };
 
-// 为所有经纬度参数加上明确的 number 类型
+// Haversine 距离已迁至 utils/geo.uts，下方仅作转发以保持兼容
+import { haversine } from '@/utils/geo.uts';
+
+/**
+ * @deprecated 使用 utils/geo.uts:haversine 替代
+ */
 export const calculateDistance = (lat1: number, lng1: number, lat2: number, lng2: number): number => {
-	const R = 6371e3;
-	const p1 = lat1 * Math.PI / 180;
-	const p2 = lat2 * Math.PI / 180;
-	const dp = (lat2 - lat1) * Math.PI / 180;
-	const dl = (lng2 - lng1) * Math.PI / 180;
-	
-	// 在 UTS 中尽量避免用 ** 2，用乘法最安全
-	const a = Math.sin(dp / 2) * Math.sin(dp / 2) + Math.cos(p1) * Math.cos(p2) * Math.sin(dl / 2) * Math.sin(dl / 2);
-	return Math.round(R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a)));
+	return haversine(lat1, lng1, lat2, lng2);
 };
 
 export const getMarkers = (): UTSJSONObject[] => {
