@@ -1,0 +1,88 @@
+/**
+ * markerStore · 打卡点全局状态单例
+ *
+ * 设计要点：
+ * - reactive 模块单例：ESM 模块缓存确保跨页只有一份 _state。
+ * - 暴露只读 getter，写入必须经 actions（避免外部赋值破坏响应式）。
+ * - 不直接读写 storage，委托给 utils/map-storage.uts 已有的云函数封装。
+ * - upsert / removeById 使用不可变写法（创建新数组，触发响应式）。
+ */
+import { reactive } from 'vue';
+import {
+    getMarkersCloud,
+    addMarkerCloud,
+    updateMarkerCloud,
+    deleteMarkerCloud
+} from '@/utils/map-storage.uts';
+
+type MarkerStoreState = {
+    markers: UTSJSONObject[];
+    loadedAt: number;
+    isSyncing: boolean;
+};
+
+const _state = reactive({
+    markers: [] as UTSJSONObject[],
+    loadedAt: 0,
+    isSyncing: false
+} as MarkerStoreState);
+
+function _findIndex(id: string): number {
+    return _state.markers.findIndex((m: UTSJSONObject): boolean => {
+        return m["_id"] === id || ("" + m["id"]) === id;
+    });
+}
+
+export const markerStore = {
+    // ─── 只读视图 ───────────────────────────────────────────────────────────
+    get markers(): UTSJSONObject[] {
+        return _state.markers;
+    },
+    get loadedAt(): number {
+        return _state.loadedAt;
+    },
+    get isSyncing(): boolean {
+        return _state.isSyncing;
+    },
+
+    // ─── getters ────────────────────────────────────────────────────────────
+    byId(id: string): UTSJSONObject | null {
+        const idx = _findIndex(id);
+        return idx >= 0 ? _state.markers[idx] : null;
+    },
+
+    // ─── actions ────────────────────────────────────────────────────────────
+    async loadFromCloud() {
+        _state.isSyncing = true;
+        try {
+            const list = await getMarkersCloud() as UTSJSONObject[];
+            _state.markers = list;
+            _state.loadedAt = Date.now();
+        } finally {
+            _state.isSyncing = false;
+        }
+    },
+
+    async add(payload: UTSJSONObject) {
+        const created = await addMarkerCloud(payload) as UTSJSONObject;
+        _state.markers = [..._state.markers, created];
+        return created;
+    },
+
+    async update(id: string, updates: UTSJSONObject) {
+        await updateMarkerCloud(id, updates);
+        const idx = _findIndex(id);
+        if (idx >= 0) {
+            const next = [..._state.markers];
+            next[idx] = { ..._state.markers[idx], ...updates } as UTSJSONObject;
+            _state.markers = next;
+        }
+    },
+
+    async removeById(id: string) {
+        await deleteMarkerCloud(id);
+        _state.markers = _state.markers.filter((m: UTSJSONObject): boolean => {
+            return m["_id"] !== id && ("" + m["id"]) !== id;
+        });
+    }
+};

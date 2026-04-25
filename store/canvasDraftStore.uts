@@ -1,0 +1,101 @@
+/**
+ * canvasDraftStore · AI 画板草稿持久化全局单例
+ *
+ * 设计要点：
+ * - 草稿读写收敛到此 store，避免散落在 ai-canva/index.uvue 中的 storage 直接调用。
+ * - hasDraft 派生属性，UI 用于决定是否显示「恢复上次绘画」入口。
+ * - save 节流由调用方（useDraft hook）控制，store 自身只暴露原子写入。
+ */
+import { reactive } from 'vue';
+
+const STORAGE_KEY = 'ai-canva-draft';
+
+type CanvasDraft = {
+    strokes: any[];
+    mode: string;            // 'preset' | 'custom'
+    stylePromptIds: string[];
+    ideaPromptIds: string[];
+    customText: string;
+    savedAt: number;
+};
+
+type CanvasDraftStoreState = {
+    draft: CanvasDraft | null;
+    hydrated: boolean;
+};
+
+const _state = reactive({
+    draft: null as CanvasDraft | null,
+    hydrated: false
+} as CanvasDraftStoreState);
+
+function _emptyDraft(): CanvasDraft {
+    return {
+        strokes: [] as any[],
+        mode: 'preset',
+        stylePromptIds: [] as string[],
+        ideaPromptIds: [] as string[],
+        customText: '',
+        savedAt: 0
+    } as CanvasDraft;
+}
+
+export const canvasDraftStore = {
+    // ─── 只读视图 ───────────────────────────────────────────────────────────
+    get draft(): CanvasDraft | null {
+        return _state.draft;
+    },
+    get hydrated(): boolean {
+        return _state.hydrated;
+    },
+    get hasDraft(): boolean {
+        if (_state.draft == null) return false;
+        const d = _state.draft as CanvasDraft;
+        return d.strokes.length > 0 || d.customText.length > 0;
+    },
+
+    // ─── actions ────────────────────────────────────────────────────────────
+    /**
+     * 从 storage 读出草稿（应用启动 / 进入页面时调用）。
+     */
+    restore() {
+        try {
+            const cache = uni.getStorageSync(STORAGE_KEY);
+            if (cache != null && cache !== "") {
+                _state.draft = cache as CanvasDraft;
+            } else {
+                _state.draft = null;
+            }
+        } catch (e) {
+            console.warn('[canvasDraftStore] restore 失败', e);
+            _state.draft = null;
+        }
+        _state.hydrated = true;
+    },
+
+    /**
+     * 增量更新草稿字段（合并语义）。
+     */
+    save(partial: UTSJSONObject) {
+        const base = _state.draft != null ? _state.draft as CanvasDraft : _emptyDraft();
+        const next = { ...base, ...partial, savedAt: Date.now() } as CanvasDraft;
+        _state.draft = next;
+        try {
+            uni.setStorageSync(STORAGE_KEY, next);
+        } catch (e) {
+            console.warn('[canvasDraftStore] save 失败', e);
+        }
+    },
+
+    /**
+     * 清空草稿（提交成功后调用）。
+     */
+    clear() {
+        _state.draft = null;
+        try {
+            uni.removeStorageSync(STORAGE_KEY);
+        } catch (e) {
+            console.warn('[canvasDraftStore] clear 失败', e);
+        }
+    }
+};
