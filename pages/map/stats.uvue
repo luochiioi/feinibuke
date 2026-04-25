@@ -86,14 +86,16 @@ class TimelineItem {
 	_photoPath: string
 	_note: string
 	_hasNote: boolean
+	_ts: number
 
-	constructor(id: number, title: string, _timeStr: string, _photoPath: string, _note: string, _hasNote: boolean) {
+	constructor(id: number, title: string, _timeStr: string, _photoPath: string, _note: string, _hasNote: boolean, _ts: number) {
 		this.id = id
 		this.title = title
 		this._timeStr = _timeStr
 		this._photoPath = _photoPath
 		this._note = _note
 		this._hasNote = _hasNote
+		this._ts = _ts
 	}
 }
 
@@ -133,25 +135,13 @@ export default {
 					formatDateTime(checkedAt as number),
 					photoPath,
 					note,
-					hasNote
+					hasNote,
+					checkedAt as number
 				);
 				results.push(item);
 			}
-			// sort descending by checkedAt
-			for (let i = 0; i < results.length - 1; i++) {
-				for (let j = i + 1; j < results.length; j++) {
-					const ai = this.markerList.findIndex(m => parseInt('' + m["id"]) === results[i].id);
-					const aj = this.markerList.findIndex(m => parseInt('' + m["id"]) === results[j].id);
-					if (ai < 0 || aj < 0) continue;
-					const av = this.markerList[ai] as UTSJSONObject;
-					const bv = this.markerList[aj] as UTSJSONObject;
-					if ((bv["checkedAt"] as number) > (av["checkedAt"] as number)) {
-						const tmp = results[i];
-						results[i] = results[j];
-						results[j] = tmp;
-					}
-				}
-			}
+			// 按 checkedAt 降序（O(n log n)，替代旧 O(n²) 冒泡）
+			results.sort((a: TimelineItem, b: TimelineItem): number => b._ts - a._ts);
 			return results;
 		}
 	},
