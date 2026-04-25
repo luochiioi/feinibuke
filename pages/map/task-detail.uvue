@@ -196,9 +196,14 @@ export default {
 				}
 			}
 			if (targetMarker != null) {
-				uni.$emit('focus-marker', targetMarker);
+				// P1-#9：路由 query 替代 uni.$emit 事件总线，消除 emit 与 once 注册的时序竞态
+				const fid = '' + targetMarker["id"];
+				const flat = '' + targetMarker["latitude"];
+				const flng = '' + targetMarker["longitude"];
+				uni.navigateTo({ url: `/pages/map/index?focusId=${fid}&lat=${flat}&lng=${flng}` });
+			} else {
+				uni.navigateTo({ url: '/pages/map/index' });
 			}
-			uni.navigateTo({ url: '/pages/map/index' });
 		},
 		previewPhoto(path: string) {
 			if (typeof path === 'string' && path.length > 0) {

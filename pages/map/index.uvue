@@ -86,7 +86,9 @@ export default {
 			hasActiveMarker: false,
 			locationRetryCount: 0,
 			// 定位轮询定时器句柄；0 表示未启动。修复 P0-#4 内存泄漏
-			_locationTimer: 0
+			_locationTimer: 0,
+			// 路由 query 带入的待聚焦 marker id，等 markers 加载完后消费（P1-#9）
+			_pendingFocusId: ''
 }
 	},
 	computed: {
@@ -117,29 +119,44 @@ export default {
 			return parseInt('' + this.activeMarker["id"]);
 		},
 	},
+	onLoad(query: UTSJSONObject | null) {
+		// P1-#9：接收来自 task-detail 的定位跳转参数；事件总线已移除
+		if (query == null) return;
+		const focusIdRaw = query["focusId"];
+		const latRaw = query["lat"];
+		const lngRaw = query["lng"];
+		if (focusIdRaw != null && latRaw != null && lngRaw != null) {
+			const lat = parseFloat('' + latRaw);
+			const lng = parseFloat('' + lngRaw);
+			if (isFinite(lat) && isFinite(lng)) {
+				this.latitude = lat;
+				this.longitude = lng;
+				this.scale = 16;
+				this._pendingFocusId = '' + focusIdRaw;
+			}
+		}
+	},
 	onShow() {
-		this.loadMarkers();
+		this.loadMarkers().then((): void => {
+			// markers 加载完成后，若有待聚焦 id 则激活底部抽屉
+			if (this._pendingFocusId != '') {
+				const fid = this._pendingFocusId;
+				const target = markerStore.markers.find((m: UTSJSONObject): boolean => {
+					return ('' + m["id"]) === fid;
+				});
+				if (target != null) {
+					this.activeMarker = target;
+					this.hasActiveMarker = true;
+				}
+				this._pendingFocusId = '';
+			}
+		});
 		// 启动定位轮询（如未启动）。onHide 时会清掉，再次进入需重启。
 		if (this._locationTimer == 0) {
 			this._locationTimer = setInterval(() => {
 				this.getRealLocation();
 			}, 8000);
 		}
-		// 監聽來自清單頁的定位跳轉請求
-		uni.$once('focus-marker', (data : UTSJSONObject) => {
-			this.latitude = parseFloat('' + data["latitude"]);
-			this.longitude = parseFloat('' + data["longitude"]);
-			this.scale = 16; // 固定縮放等級
-			const dataId = data["id"];
-			const target = this.markers.find(m => {
-				const mo = m as UTSJSONObject;
-				return mo["id"] == dataId;
-			});
-			if (target != null) {
-				this.activeMarker = target as UTSJSONObject;
-				this.hasActiveMarker = true;
-			}
-		});
 	},
 	onHide() {
 		// 页面隐藏时停止定位轮询，避免后台空转耗电
