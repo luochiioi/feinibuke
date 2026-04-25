@@ -86,7 +86,9 @@ export default {
 			markers: [] as Array<Any>,
 			activeMarker: null as UTSJSONObject | null,
 			hasActiveMarker: false,
-			locationRetryCount: 0
+			locationRetryCount: 0,
+			// 定位轮询定时器句柄；0 表示未启动。修复 P0-#4 内存泄漏
+			_locationTimer: 0
 }
 	},
 	computed: {
@@ -115,6 +117,12 @@ export default {
 	},
 	onShow() {
 		this.loadMarkers();
+		// 启动定位轮询（如未启动）。onHide 时会清掉，再次进入需重启。
+		if (this._locationTimer == 0) {
+			this._locationTimer = setInterval(() => {
+				this.getRealLocation();
+			}, 8000);
+		}
 		// 監聽來自清單頁的定位跳轉請求
 		uni.$once('focus-marker', (data : UTSJSONObject) => {
 			this.latitude = parseFloat('' + data["latitude"]);
@@ -131,14 +139,23 @@ export default {
 			}
 		});
 	},
+	onHide() {
+		// 页面隐藏时停止定位轮询，避免后台空转耗电
+		if (this._locationTimer != 0) {
+			clearInterval(this._locationTimer);
+			this._locationTimer = 0;
+		}
+	},
+	onUnload() {
+		// 页面销毁时确保 timer 已清理
+		if (this._locationTimer != 0) {
+			clearInterval(this._locationTimer);
+			this._locationTimer = 0;
+		}
+	},
 	mounted() {
 		this.mapCtx = uni.createMapContext('myMap', this);
 		this.getRealLocation();
-		
-		// 每5秒刷新定位
-		setInterval(() => {
-				this.getRealLocation();
-			}, 8000);
 	},
 	methods: {
 		goBack() {
