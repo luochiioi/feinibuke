@@ -41,14 +41,14 @@ function _emptyDraft(): CanvasDraft {
 }
 
 export const canvasDraftStore = {
-    // ─── 只读视图 ───────────────────────────────────────────────────────────
-    get draft(): CanvasDraft | null {
+    // ─── 只读视图（方法形式 · UTS 严格模式禁用 get accessor，参见 project_uts_compile_pitfalls #1） ─
+    draft(): CanvasDraft | null {
         return _state.draft;
     },
-    get hydrated(): boolean {
+    hydrated(): boolean {
         return _state.hydrated;
     },
-    get hasDraft(): boolean {
+    hasDraft(): boolean {
         if (_state.draft == null) return false;
         const d = _state.draft as CanvasDraft;
         return d.strokes.length > 0 || d.customText.length > 0;
