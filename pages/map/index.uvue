@@ -93,8 +93,36 @@ export default {
 	},
 	computed: {
 		// markers 视图代理到 store，跨页共享单一数据源
-		markers() : Array<Any> {
-			return markerStore.markers() as Array<Any>;
+		// uni-app x 的 <map :markers> 内部对每个元素做 `as Marker` 强制转型；
+		// 直接传 store 的 UTSJSONObject[] 会触发 ClassCastException
+		// (UTSJSONObject cannot be cast to uts.sdk.modules.DCloudUniMapTencent.Marker)。
+		// 修复：在此 computed 内重新构造对象字面量，依赖 uvue 编译器按目标 Marker 类型生成。
+		// 参见 project_uts_compile_pitfalls #12。
+		markers() : Array<UTSJSONObject> {
+			const list = markerStore.markers();
+			const result: UTSJSONObject[] = [];
+			for (let i = 0; i < list.length; i++) {
+				const m = list[i];
+				const idRaw = m["id"];
+				const latRaw = m["latitude"];
+				const lngRaw = m["longitude"];
+				if (idRaw == null || latRaw == null || lngRaw == null) {
+					continue;
+				}
+				const iconRaw = m["iconPath"];
+				const titleRaw = m["title"];
+				const item: UTSJSONObject = {
+					id: parseInt('' + idRaw),
+					latitude: parseFloat('' + latRaw),
+					longitude: parseFloat('' + lngRaw),
+					iconPath: iconRaw != null ? '' + iconRaw : '',
+					title: titleRaw != null ? '' + titleRaw : '',
+					width: 32,
+					height: 32
+				};
+				result.push(item);
+			}
+			return result;
 		},
 		// UTS Kotlin 端 data() 字段是 delegated property，无法对 this.activeMarker 智能转型；
 		// 必须先复制到局部 const，让 Kotlin 在局部上做 null 检查后再访问字段。
