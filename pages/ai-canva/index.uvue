@@ -1389,15 +1389,16 @@ async function submitToAI() {
 // 用 typed 字段 (.touches[0].clientX 等) 直接抽出 canvas-local 坐标，
 // 绕过 startStroke/moveStroke 的 UTSJSONObject 索引访问链路。
 function pointFromUniTouchEvent(event : UniTouchEvent) : UTSJSONObject | null {
-  const rectW = canvasRect.width
-  const rectH = canvasRect.height
+  // canvasRect 是无类型字面量，字段在 UTS 端是 Any?，必须显式 as number 才能算术
+  const rectW : number = canvasRect.width as number
+  const rectH : number = canvasRect.height as number
   if (rectW <= 0 || rectH <= 0) {
     return null
   }
-  const rectL = canvasRect.left
-  const rectT = canvasRect.top
-  const displayWidth = rectW
-  const displayHeight = rectH
+  const rectL : number = canvasRect.left as number
+  const rectT : number = canvasRect.top as number
+  const displayWidth : number = rectW
+  const displayHeight : number = rectH
 
   let touch : UniTouch | null = null
   if (event.touches.length > 0) {
@@ -1410,15 +1411,20 @@ function pointFromUniTouchEvent(event : UniTouchEvent) : UTSJSONObject | null {
   }
   const t = touch!!
 
-  const localX = t.clientX - rectL
-  const localY = t.clientY - rectT
+  // UniTouch.clientX/clientY 在 UTS 是 boxed Number，必须 as number 才能参与减法
+  const cx : number = t.clientX as number
+  const cy : number = t.clientY as number
+  const localX = cx - rectL
+  const localY = cy - rectT
   if (isPointInBounds(localX, localY, displayWidth, displayHeight, 24)) {
     return scalePoint(localX, localY, displayWidth, displayHeight)
   }
 
   // pageX/Y 兜底（部分容器只填这一组）
-  const pageLocalX = t.pageX - rectL
-  const pageLocalY = t.pageY - rectT
+  const px : number = t.pageX as number
+  const py : number = t.pageY as number
+  const pageLocalX = px - rectL
+  const pageLocalY = py - rectT
   if (isPointInBounds(pageLocalX, pageLocalY, displayWidth, displayHeight, 24)) {
     return scalePoint(pageLocalX, pageLocalY, displayWidth, displayHeight)
   }
@@ -1471,9 +1477,9 @@ function touchEnd() {
 }
 
 function probePointer(event : UniPointerEvent) {
-  // UniPointerEvent 自身有 typed clientX/clientY，无需走 UTSJSONObject
-  const xNum = event.clientX
-  const yNum = event.clientY
+  // UniPointerEvent 自身有 typed clientX/clientY；同样需要 as number 摆脱 boxed Number
+  const xNum : number = event.clientX as number
+  const yNum : number = event.clientY as number
   debugText.value = '点击坐标：(' + Math.round(xNum) + ', ' + Math.round(yNum) + ')'
 }
 
@@ -1523,10 +1529,12 @@ async function initCanvas() {
       resolvedCanvas = ctxAny != null ? ((ctxAny as UTSJSONObject)["canvas"] as UTSJSONObject | null) : null
       // #endif
       // #ifdef APP
-      // CanvasContext 不是 CanvasRenderingContext2D 的子类，必须再调 .getContext('2d')。
-      // 直接 cast 会被 Kotlin 折叠成 Unit，运行时崩 "kotlin.Unit cannot be cast"。
-      const appCtx = canvasContext.getContext('2d')
-      resolvedContext = appCtx
+      // canvasContext 必须再调 .getContext('2d') 才拿到渲染上下文；
+      // 直接 cast 到 CanvasRenderingContext2D 会被 Kotlin 折叠成 Unit，
+      // 运行时崩 "kotlin.Unit cannot be cast"。
+      // 与 WEB 分支一致：先 cast 到 any 摆脱 typed 限制，再调 getContext
+      const appCtxAny : any = (canvasContext as any).getContext('2d')
+      resolvedContext = appCtxAny != null ? (appCtxAny as CanvasRenderingContext2D) : null
       // #endif
     }
 
