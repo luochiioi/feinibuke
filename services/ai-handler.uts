@@ -1,0 +1,129 @@
+/**
+ * services/ai-handler · AI 画板云函数封装
+ *
+ * 职责：
+ * - 把分散在 pages/ai-canva/index.uvue 与 result.uvue 中
+ *   `uniCloud.callFunction({ name: 'ai-handler', data: { action: ... } })`
+ *   的散点调用收敛到方法签名上，UI 层不再关心 action 字段。
+ * - 解析云端 envelope（res.result.success / msg），失败统一抛 Error，
+ *   调用方只需 try/catch。
+ * - 不维护任何业务状态；仅做参数→结果的薄壳转换。
+ *
+ * UTS 严格模式约束（参见 project_uts_compile_pitfalls）：
+ * - class 单例 + 方法形式，禁用 get accessor。
+ * - 所有方法显式 number/string/Promise<T> 注解。
+ * - 跨方法调用使用 service 实例引用，不依赖 this 链。
+ */
+
+type SubmitTaskPayload = {
+  /** Web 端：base64 dataUrl；MP-WEIXIN：留空，使用 sketchUrl */
+  sketchDataUrl: string;
+  /** MP-WEIXIN：上传到 unicloud 后拿到的 fileID；Web 端留空 */
+  sketchUrl: string;
+  /** 提交给模型的最终 prompt */
+  prompt: string;
+};
+
+type SubmitTaskResult = {
+  taskId: string;
+  /** 原始云端 result，便于 UI 透传调试 */
+  raw: UTSJSONObject;
+};
+
+class AIHandlerService {
+
+  /**
+   * 提交一次 AI 生成任务。
+   * 失败时抛 Error（消息已含云端 msg），调用方在 catch 中给用户提示。
+   */
+  async submitTask(payload: SubmitTaskPayload): Promise<SubmitTaskResult> {
+    const reqData: UTSJSONObject = {
+      action: 'submitTask',
+      sketchDataUrl: payload.sketchDataUrl,
+      sketchUrl: payload.sketchUrl,
+      prompt: payload.prompt
+    };
+    const result = await this._invoke(reqData);
+    if (result == null) {
+      throw new Error('提交任务失败：云端无返回。');
+    }
+    const r = result;
+    const success = r['success'];
+    const taskIdRaw = r['taskId'];
+    if (success != true || taskIdRaw == null) {
+      const msgRaw = r['msg'];
+      const msg = msgRaw != null ? ('' + msgRaw) : '提交任务失败，请稍后重试。';
+      throw new Error(msg);
+    }
+    return {
+      taskId: '' + taskIdRaw,
+      raw: r
+    } as SubmitTaskResult;
+  }
+
+  /**
+   * 查询任务状态。
+   * 返回云端 `data` 对象（含 task_status / results / message），或 null（云端未返回）。
+   * 注意：仍返回失败状态的 data，由调用方判断 task_status 决定是继续轮询还是终止。
+   */
+  async queryTask(taskId: string): Promise<UTSJSONObject | null> {
+    const reqData: UTSJSONObject = {
+      action: 'queryTask',
+      taskId: taskId
+    };
+    const result = await this._invoke(reqData);
+    if (result == null) {
+      return null;
+    }
+    const success = result['success'];
+    const dataRaw = result['data'];
+    if (success != true || dataRaw == null) {
+      // 云端返回失败 envelope，把 msg 包成最小 data 让调用方拿到
+      const msgRaw = result['msg'];
+      const failData: UTSJSONObject = {
+        task_status: 'FAILED',
+        message: msgRaw != null ? ('' + msgRaw) : '查询任务失败。'
+      };
+      return failData;
+    }
+    return dataRaw as UTSJSONObject;
+  }
+
+  /**
+   * 取消任务（best-effort）。
+   * result 页未来若加"取消"按钮直接消费；当前无调用方但前瞻保留。
+   * 失败不抛，只 console.warn——避免取消按钮变成阻塞操作。
+   */
+  async cancelTask(taskId: string): Promise<void> {
+    const reqData: UTSJSONObject = {
+      action: 'cancelTask',
+      taskId: taskId
+    };
+    try {
+      await this._invoke(reqData);
+    } catch (e) {
+      console.warn('[ai-handler] cancelTask 失败', e);
+    }
+  }
+
+  /**
+   * 内部：统一调用 ai-handler 云函数并解包 result。
+   * 出错抛原始 Error；返回值可能为 null（云端无 result 字段）。
+   */
+  private async _invoke(data: UTSJSONObject): Promise<UTSJSONObject | null> {
+    const res = await uniCloud.callFunction({
+      name: 'ai-handler',
+      data: data
+    });
+    if (res == null) {
+      return null;
+    }
+    const resultRaw = (res as UTSJSONObject)['result'];
+    if (resultRaw == null) {
+      return null;
+    }
+    return resultRaw as UTSJSONObject;
+  }
+}
+
+export const aiHandlerService = new AIHandlerService();
