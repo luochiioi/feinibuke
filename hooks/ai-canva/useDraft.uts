@@ -1,0 +1,113 @@
+/**
+ * hooks/ai-canva/useDraft · 草稿持久化（节流写入 + 恢复）
+ *
+ * 职责：
+ * - 包装 canvasDraftStore，给页面层提供节流写入 API。
+ * - mount 时一次性 restore；unmount 时自动 flush 未写入的节流批次。
+ * - 不知道画布、不知道 prompt——纯持久化协调层；调用方决定 partial 字段。
+ *
+ * 重构来源：pages/ai-canva/index.uvue 的 restoreDraft / persistDraft
+ * 散点调用（每次 input/change 都同步写 storage）→ 收敛到本 hook，
+ * 节流避免高频 IO。
+ *
+ * UTS 严格模式约束：
+ * - 所有方法显式类型注解。
+ * - 节流定时器使用 number 类型（uni-app x setTimeout 返回 number）。
+ * - canvasDraftStore 的只读视图通过方法调用消费（draft() / hasDraft()），
+ *   不依赖 get accessor。
+ */
+import { onUnmounted } from 'vue';
+import { canvasDraftStore } from '@/store/canvasDraftStore';
+
+const SAVE_THROTTLE_MS: number = 400;
+
+export type DraftAPI = {
+  /** 触发 store.restore 并返回当前草稿（可能为 null）。 */
+  restore(): UTSJSONObject | null;
+  /** 节流写入（默认 400ms 合并），适合 input/change 高频事件。 */
+  saveThrottled(partial: UTSJSONObject): void;
+  /** 立即写入（提交前 / 路由跳转前必须调用以 flush 未决批次）。 */
+  saveNow(partial: UTSJSONObject): void;
+  /** 仅 flush 当前节流批次，不接受新 partial。 */
+  flush(): void;
+  /** 清空草稿（提交成功后调用）。 */
+  clear(): void;
+  /** 是否存在可恢复的草稿。 */
+  hasDraft(): boolean;
+};
+
+export function useDraft(): DraftAPI {
+  let timerId: number = 0;
+  let pending: UTSJSONObject | null = null;
+
+  function _writeNow(): void {
+    if (pending == null) return;
+    const payload = pending as UTSJSONObject;
+    pending = null;
+    canvasDraftStore.save(payload);
+  }
+
+  function _cancelTimer(): void {
+    if (timerId > 0) {
+      clearTimeout(timerId);
+      timerId = 0;
+    }
+  }
+
+  function restore(): UTSJSONObject | null {
+    canvasDraftStore.restore();
+    const d = canvasDraftStore.draft();
+    return d == null ? null : (d as UTSJSONObject);
+  }
+
+  function saveThrottled(partial: UTSJSONObject): void {
+    if (partial == null) return;
+    // 合并 pending 与本次 partial（后到字段覆盖前一个）
+    const base = pending != null ? (pending as UTSJSONObject) : ({} as UTSJSONObject);
+    const merged: UTSJSONObject = { ...base, ...partial };
+    pending = merged;
+    _cancelTimer();
+    timerId = setTimeout((): void => {
+      timerId = 0;
+      _writeNow();
+    }, SAVE_THROTTLE_MS);
+  }
+
+  function saveNow(partial: UTSJSONObject): void {
+    if (partial != null) {
+      const base = pending != null ? (pending as UTSJSONObject) : ({} as UTSJSONObject);
+      pending = { ...base, ...partial } as UTSJSONObject;
+    }
+    _cancelTimer();
+    _writeNow();
+  }
+
+  function flush(): void {
+    _cancelTimer();
+    _writeNow();
+  }
+
+  function clear(): void {
+    _cancelTimer();
+    pending = null;
+    canvasDraftStore.clear();
+  }
+
+  function hasDraft(): boolean {
+    return canvasDraftStore.hasDraft();
+  }
+
+  // 卸载时 flush 未决批次，避免用户切页时丢最后一次输入
+  onUnmounted((): void => {
+    flush();
+  });
+
+  return {
+    restore,
+    saveThrottled,
+    saveNow,
+    flush,
+    clear,
+    hasDraft
+  } as DraftAPI;
+}

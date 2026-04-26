@@ -1,0 +1,175 @@
+/**
+ * hooks/ai-canva/usePromptBuilder · prompt 构造与模式/风格选择
+ *
+ * 职责：
+ * - 集中所有 prompt 相关的常量（styleOptions / ideaOptions / modeOptions / 预设文案）。
+ * - 暴露 mode / styleKey / customText 三个状态 + previewPromptText / submitPrompt 两个计算值。
+ * - 不知道画布、不知道 AI 提交、不读写 storage——纯逻辑 hook。
+ *
+ * 重构来源：pages/ai-canva/index.uvue 中分散的 styleOptions / ideaOptions /
+ * modeOptions / PRESET_* 常量 + getSelectedStyle* / previewPromptText / submitPrompt。
+ *
+ * P2-#16 顺手修：所有中文字面量直接写汉字，删除原文件的 \uXXXX 转义 workaround。
+ *
+ * UTS 严格模式约束：
+ * - 所有方法显式类型注解（string / void / Array<T>）。
+ * - 不在 hook 内部使用 get accessor；外部消费方 `pb.mode.value` 访问 ref。
+ */
+import { computed, ref, type ComputedRef, type Ref } from 'vue';
+
+// ─── 常量（命名导出，组件可直接 import 用于 v-for） ─────────────────────────
+
+export type StyleOption = {
+  key: string;
+  label: string;
+  desc: string;
+  /** 拼接到 submit prompt 末尾的英文风格描述 */
+  prompt: string;
+};
+
+export type ModeOption = {
+  key: string;     // 'preset' | 'custom'
+  label: string;
+};
+
+export const STYLE_OPTIONS: StyleOption[] = [
+  { key: 'illustration', label: '插画叙事', desc: '画面柔和，主体清晰，适合故事感表达。', prompt: 'clean illustration, soft light, refined composition' },
+  { key: 'watercolor', label: '水彩质感', desc: '色彩轻盈，过渡自然，适合温柔氛围。', prompt: 'watercolor texture, airy color palette, soft transitions' },
+  { key: 'poster', label: '海报设计', desc: '图形鲜明，对比强烈，适合视觉冲击。', prompt: 'graphic poster style, bold shapes, strong contrast' },
+  { key: 'future', label: '未来概念', desc: '科技感和空间感更强，适合概念图方向。', prompt: 'futuristic concept art, cinematic lighting, detailed background' }
+];
+
+export const IDEA_OPTIONS: string[] = ['柔和光线', '干净背景', '蓝白装饰感', '对称构图', '细腻纹理', '平面图案'];
+
+export const MODE_OPTIONS: ModeOption[] = [
+  { key: 'preset', label: '预设模式' },
+  { key: 'custom', label: '自定义模式' }
+];
+
+export const PRESET_TAB_LABEL: string = '预设模式';
+export const CUSTOM_TAB_LABEL: string = '自定义模式';
+export const PRESET_MODE_LABEL: string = '葡萄牙瓷砖预设';
+export const CUSTOM_MODE_LABEL: string = '自定义风格';
+export const PRESET_BOX_TITLE: string = '葡萄牙瓷砖预设';
+export const PRESET_BOX_TEXT: string = '系统会根据你的线稿和图案自动生成葡萄牙瓷砖风格画面，保留主体结构，采用蓝白配色和平面装饰感。';
+
+const PRESET_PREVIEW_TEXT: string = '将根据你的线稿和图案生成葡萄牙瓷砖风格画面，保留主体轮廓，突出蓝白配色和平面装饰感。';
+const PRESET_TILE_PROMPT_SAFE: string = '根据用户的线稿和图案生成葡萄牙瓷砖风格插画，保留线稿主体结构和轮廓关系，采用经典蓝白 azulejo 配色，平面装饰感强，图案清晰，边界规整，具有陶瓷釉面质感、传统葡式花砖的对称与重复美感，背景干净，避免写实照片风格。';
+const PROMPT_MAX_LENGTH: number = 120;
+const DEFAULT_CUSTOM_BASE: string = '根据这张线稿生成完整画面，保留主体结构，突出你选择的风格。';
+const DEFAULT_SUBMIT_BASE: string = '根据这张线稿生成完整画面，保留主体结构和轮廓关系。';
+
+// ─── Hook 返回类型 ─────────────────────────────────────────────────────────
+
+export type PromptBuilder = {
+  mode: Ref<string>;
+  styleKey: Ref<string>;
+  customText: Ref<string>;
+
+  modeLabel: ComputedRef<string>;
+  styleLabel: ComputedRef<string>;
+  promptLength: ComputedRef<number>;
+  previewPromptText: ComputedRef<string>;
+  submitPrompt: ComputedRef<string>;
+
+  selectMode(modeKey: string): void;
+  selectStyle(styleKey: string): void;
+  setCustomText(text: string): void;
+  appendIdea(idea: string): void;
+};
+
+// ─── Hook 实现 ─────────────────────────────────────────────────────────────
+
+export function usePromptBuilder(): PromptBuilder {
+  const mode = ref<string>('preset');
+  const styleKey = ref<string>('illustration');
+  const customText = ref<string>('');
+
+  function findStyleLabel(key: string): string {
+    for (let i = 0; i < STYLE_OPTIONS.length; i += 1) {
+      if (STYLE_OPTIONS[i].key === key) {
+        return STYLE_OPTIONS[i].label;
+      }
+    }
+    return STYLE_OPTIONS[0].label;
+  }
+
+  function findStylePrompt(key: string): string {
+    for (let i = 0; i < STYLE_OPTIONS.length; i += 1) {
+      if (STYLE_OPTIONS[i].key === key) {
+        return STYLE_OPTIONS[i].prompt;
+      }
+    }
+    return STYLE_OPTIONS[0].prompt;
+  }
+
+  const modeLabel = computed<string>((): string => {
+    return mode.value === 'preset' ? PRESET_MODE_LABEL : CUSTOM_MODE_LABEL;
+  });
+
+  const styleLabel = computed<string>((): string => findStyleLabel(styleKey.value));
+
+  const promptLength = computed<number>((): number => customText.value.trim().length);
+
+  const previewPromptText = computed<string>((): string => {
+    if (mode.value === 'preset') {
+      return PRESET_PREVIEW_TEXT;
+    }
+    const trimmed = customText.value.trim();
+    const base = trimmed.length > 0 ? trimmed : DEFAULT_CUSTOM_BASE;
+    return base + ' 风格方向：' + findStyleLabel(styleKey.value);
+  });
+
+  const submitPrompt = computed<string>((): string => {
+    if (mode.value === 'preset') {
+      return PRESET_TILE_PROMPT_SAFE;
+    }
+    const trimmed = customText.value.trim();
+    const base = trimmed.length > 0 ? trimmed : DEFAULT_SUBMIT_BASE;
+    return base + ' | style: ' + findStylePrompt(styleKey.value) + ' | follow the sketch closely';
+  });
+
+  function selectMode(modeKey: string): void {
+    if (modeKey == null || modeKey === '') return;
+    mode.value = modeKey;
+  }
+
+  function selectStyle(nextKey: string): void {
+    if (nextKey == null || nextKey === '') return;
+    styleKey.value = nextKey;
+  }
+
+  function setCustomText(text: string): void {
+    if (text == null) {
+      customText.value = '';
+      return;
+    }
+    if (text.length > PROMPT_MAX_LENGTH) {
+      customText.value = text.substring(0, PROMPT_MAX_LENGTH);
+      return;
+    }
+    customText.value = text;
+  }
+
+  function appendIdea(idea: string): void {
+    if (idea == null || idea === '') return;
+    const current = customText.value.trim();
+    const next = current.length > 0 ? current + ', ' + idea : idea;
+    setCustomText(next);
+  }
+
+  return {
+    mode,
+    styleKey,
+    customText,
+    modeLabel,
+    styleLabel,
+    promptLength,
+    previewPromptText,
+    submitPrompt,
+    selectMode,
+    selectStyle,
+    setCustomText,
+    appendIdea
+  } as PromptBuilder;
+}
