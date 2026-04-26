@@ -1515,6 +1515,7 @@ async function initCanvas() {
     // #endif
 
     if (resolvedContext == null) {
+      // #ifdef WEB
       const canvasContext = await uni.createCanvasContextAsync({
         id: 'sketchCanvas',
         component: pageInstance
@@ -1523,18 +1524,35 @@ async function initCanvas() {
         throw new Error('无法创建 CanvasContext。')
       }
       canvasContextRef = canvasContext
-      // #ifdef WEB
       const ctxAny : any = (canvasContext as any).getContext('2d')
       resolvedContext = ctxAny != null ? (ctxAny as CanvasRenderingContext2D) : null
       resolvedCanvas = ctxAny != null ? ((ctxAny as UTSJSONObject)["canvas"] as UTSJSONObject | null) : null
       // #endif
+
       // #ifdef APP
-      // canvasContext 必须再调 .getContext('2d') 才拿到渲染上下文；
-      // 直接 cast 到 CanvasRenderingContext2D 会被 Kotlin 折叠成 Unit，
-      // 运行时崩 "kotlin.Unit cannot be cast"。
-      // 与 WEB 分支一致：先 cast 到 any 摆脱 typed 限制，再调 getContext
-      const appCtxAny : any = (canvasContext as any).getContext('2d')
-      resolvedContext = appCtxAny != null ? (appCtxAny as CanvasRenderingContext2D) : null
+      // uniapp x APP 端 createCanvasContextAsync 返回 void，await 取到的是 Unit，
+      // 直接 cast 会被 Kotlin 折叠成 Unit → 运行时 ClassCastException。
+      // 必须走 success 回调形式，自己包一层 Promise 以接入 async 流。
+      let appCanvas : CanvasContext | null = null
+      await new Promise<boolean>((resolve) => {
+        uni.createCanvasContextAsync({
+          id: 'sketchCanvas',
+          component: pageInstance,
+          success: (ctx : CanvasContext) => {
+            appCanvas = ctx
+            resolve(true)
+          },
+          fail: () => {
+            resolve(false)
+          }
+        })
+      })
+      if (appCanvas == null) {
+        throw new Error('无法创建 CanvasContext。')
+      }
+      const ac = appCanvas!!
+      canvasContextRef = ac
+      resolvedContext = ac.getContext('2d')
       // #endif
     }
 
