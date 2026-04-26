@@ -1523,7 +1523,10 @@ async function initCanvas() {
       resolvedCanvas = ctxAny != null ? ((ctxAny as UTSJSONObject)["canvas"] as UTSJSONObject | null) : null
       // #endif
       // #ifdef APP
-      resolvedContext = canvasContext as CanvasRenderingContext2D
+      // CanvasContext 不是 CanvasRenderingContext2D 的子类，必须再调 .getContext('2d')。
+      // 直接 cast 会被 Kotlin 折叠成 Unit，运行时崩 "kotlin.Unit cannot be cast"。
+      const appCtx = canvasContext.getContext('2d')
+      resolvedContext = appCtx
       // #endif
     }
 
