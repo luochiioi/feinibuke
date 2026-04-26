@@ -1385,14 +1385,64 @@ async function submitToAI() {
   }
 }
 
-// uvue 模板事件回调形参必须用平台 Uni*Event 类型，否则 Kotlin 端实参不匹配抛 IllegalArgumentException（陷阱 #9）
+// UniTouchEvent 在 Kotlin 端不是 UTSJSONObject，无法 cast。
+// 用 typed 字段 (.touches[0].clientX 等) 直接抽出 canvas-local 坐标，
+// 绕过 startStroke/moveStroke 的 UTSJSONObject 索引访问链路。
+function pointFromUniTouchEvent(event : UniTouchEvent) : UTSJSONObject | null {
+  const rectW = canvasRect.width
+  const rectH = canvasRect.height
+  if (rectW <= 0 || rectH <= 0) {
+    return null
+  }
+  const rectL = canvasRect.left
+  const rectT = canvasRect.top
+  const displayWidth = rectW
+  const displayHeight = rectH
+
+  let touch : UniTouch | null = null
+  if (event.touches.length > 0) {
+    touch = event.touches[0]
+  } else if (event.changedTouches.length > 0) {
+    touch = event.changedTouches[0]
+  }
+  if (touch == null) {
+    return null
+  }
+  const t = touch!!
+
+  const localX = t.clientX - rectL
+  const localY = t.clientY - rectT
+  if (isPointInBounds(localX, localY, displayWidth, displayHeight, 24)) {
+    return scalePoint(localX, localY, displayWidth, displayHeight)
+  }
+
+  // pageX/Y 兜底（部分容器只填这一组）
+  const pageLocalX = t.pageX - rectL
+  const pageLocalY = t.pageY - rectT
+  if (isPointInBounds(pageLocalX, pageLocalY, displayWidth, displayHeight, 24)) {
+    return scalePoint(pageLocalX, pageLocalY, displayWidth, displayHeight)
+  }
+
+  return null
+}
+
+// uvue 模板事件回调形参必须用平台 Uni*Event 类型（陷阱 #9）
 function touchStart(event : UniTouchEvent) {
   // #ifdef WEB
   if (!useLegacyCanvas && surfaceNode && surfaceNode.__aiCanvaBound) {
     return
   }
   // #endif
-  startStroke(event as UTSJSONObject)
+  if ((context2d == null && useLegacyCanvas == false) || canvasReady.value == false) {
+    return
+  }
+  measureCanvasRect()
+  const point = pointFromUniTouchEvent(event)
+  if (point == null) {
+    debugText.value = '收到开始绘制事件，但未解析出坐标。'
+    return
+  }
+  startStrokeWithPoint(point)
 }
 
 function touchMove(event : UniTouchEvent) {
@@ -1401,7 +1451,14 @@ function touchMove(event : UniTouchEvent) {
     return
   }
   // #endif
-  moveStroke(event as UTSJSONObject)
+  if ((context2d == null && useLegacyCanvas == false) || currentStroke == null || isDrawing == false) {
+    return
+  }
+  const point = pointFromUniTouchEvent(event)
+  if (point == null) {
+    return
+  }
+  moveStrokeWithPoint(point)
 }
 
 function touchEnd() {
@@ -1414,16 +1471,9 @@ function touchEnd() {
 }
 
 function probePointer(event : UniPointerEvent) {
-  const point = getPointFromEvent(event as UTSJSONObject)
-  if (point == null) {
-    debugText.value = '已收到点击，但未解析出坐标。'
-    return
-  }
-  const info = point as UTSJSONObject
-  const px = info["x"]
-  const py = info["y"]
-  const xNum = px != null ? (px as number) : 0
-  const yNum = py != null ? (py as number) : 0
+  // UniPointerEvent 自身有 typed clientX/clientY，无需走 UTSJSONObject
+  const xNum = event.clientX
+  const yNum = event.clientY
   debugText.value = '点击坐标：(' + Math.round(xNum) + ', ' + Math.round(yNum) + ')'
 }
 
