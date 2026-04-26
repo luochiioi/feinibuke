@@ -18,6 +18,9 @@ import {
     updateMarkerCloud,
     deleteMarkerCloud
 } from '@/utils/map-storage.uts';
+import { taskStore } from '@/store/taskStore.uts';
+
+const ICON_CHECKED = 'https://img.icons8.com/flat-round/48/checkmark.png';
 
 type MarkerStoreState = {
     markers: UTSJSONObject[];
@@ -89,6 +92,63 @@ class MarkerStore {
         _state.markers = _state.markers.filter((m: UTSJSONObject): boolean => {
             return m["_id"] !== id && ("" + m["id"]) !== id;
         });
+    }
+
+    /**
+     * 打卡事务：乐观更新本地 marker → 云端 update → 任务触发；失败整体回滚。
+     *
+     * 旧版 checkin.uvue submit() 中 doCheckin / triggerTaskCheck / completeTaskCloud /
+     * addRewardCloud 四步散落在 UI 层，错误路径只能局部回滚。改由 store 拥有事务边界。
+     *
+     * 注：updateMarkerCloud 内部已对网络错误做 _enqueue 兜底，所以真正进入 catch 的
+     * 多为 taskStore.triggerByMarker 的异常。即便如此，UI 仍能依赖统一抛出的失败语义。
+     *
+     * 返回本次连带完成的任务列表，调用方可据此弹出"任务完成"提示。签名上从规范的
+     * Promise<void> 扩展为 Promise<UTSJSONObject[]>——取消返回值会迫使 UI 反查
+     * taskStore 才能拿到"刚完成"的子集，得不偿失。
+     */
+    async checkInOptimistic(markerId: string, payload: UTSJSONObject): Promise<UTSJSONObject[]> {
+        const idx = _findIndex(markerId);
+        if (idx < 0) {
+            throw new Error('景点不存在');
+        }
+        const original = _state.markers[idx];
+        const cloudId = original["_id"] != null ? ("" + original["_id"]) : ("" + original["id"]);
+
+        const updates = {
+            checked: true,
+            checkedAt: Date.now(),
+            iconPath: ICON_CHECKED
+        } as UTSJSONObject;
+        const photoPath = payload["photoPath"];
+        const note = payload["note"];
+        if (photoPath != null) {
+            updates["photoPath"] = photoPath;
+        }
+        if (note != null) {
+            updates["note"] = note;
+        }
+
+        // 乐观写入：不可变替换数组，触发响应式
+        const optimistic = [..._state.markers];
+        const merged = { ...original, ...updates } as UTSJSONObject;
+        optimistic[idx] = merged;
+        _state.markers = optimistic;
+
+        try {
+            await updateMarkerCloud(cloudId, updates);
+            const completed = await taskStore.triggerByMarker(merged);
+            return completed;
+        } catch (e) {
+            // 回滚：按 id 重新定位（事务期间 _state.markers 可能已被其他流程重新赋值）
+            const rIdx = _findIndex(markerId);
+            if (rIdx >= 0) {
+                const rollback = [..._state.markers];
+                rollback[rIdx] = original;
+                _state.markers = rollback;
+            }
+            throw e;
+        }
     }
 }
 
