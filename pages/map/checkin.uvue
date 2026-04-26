@@ -79,9 +79,8 @@
 
 <script lang="ts">
 import { getMarkers } from '@/utils/map-storage.uts';
-import { doCheckin, completeTaskCloud, addRewardCloud } from '@/utils/map-storage.uts';
 import { haversine } from '@/utils/geo.uts';
-import { triggerTaskCheck } from '@/utils/map-tasks.uts';
+import { markerStore } from '@/store/markerStore.uts';
 
 const CHECKIN_RADIUS = 500; // 米
 
@@ -202,37 +201,18 @@ export default {
 			this.submitting = true;
 			uni.showLoading({ title: '打卡中…', mask: true });
 
-			const markers = getMarkers();
-			const markerRaw = markers.find(m => {
-				const mo = m as UTSJSONObject;
-				return mo["id"] == this.markerId;
-			});
-			if (markerRaw == null) {
-				uni.hideLoading();
-				uni.showToast({ title: '景点不存在', icon: 'none' });
-				this.submitting = false;
-				return;
-			}
-			const marker = markerRaw as UTSJSONObject;
-
+			const idStr = '' + this.markerId;
 			try {
-				const photoArg = this.photoPath != '' ? this.photoPath : null;
-				const noteArg = this.note.trim() != '' ? this.note.trim() : null;
-				await doCheckin(marker, photoArg, noteArg);
-
-				const completedTasks = triggerTaskCheck(marker);
-				for (const task of completedTasks) {
-					const taskId = '' + task["id"];
-					const taskCompletedAt = parseFloat('' + task["completedAt"]);
-					await completeTaskCloud(taskId, taskCompletedAt);
-					await addRewardCloud({
-						id: `reward_${Date.now()}`,
-						taskId: taskId,
-						taskName: '' + task["name"],
-						reward: task["reward"],
-						earnedAt: task["completedAt"]
-					});
+				const payload = {} as UTSJSONObject;
+				if (this.photoPath != '') {
+					payload["photoPath"] = this.photoPath;
 				}
+				const trimmedNote = this.note.trim();
+				if (trimmedNote != '') {
+					payload["note"] = trimmedNote;
+				}
+
+				const completedTasks = await markerStore.checkInOptimistic(idStr, payload);
 
 				uni.hideLoading();
 				uni.showToast({ title: '打卡成功！', icon: 'success' });
