@@ -1148,17 +1148,19 @@ function formatErrorMessage(error : any | null) : string {
       return "" + errMsg
     }
   } catch (castError) {
-    // 不是 UTSJSONObject，落到下一档
+    // 不是 UTSJSONObject（典型情况：Java Throwable），落到下一档
   }
+  // 二档：UTS 标准 Error 类型有 typed .message 字段
   try {
-    const anyErr = error as any
-    const m = anyErr.message
-    if (m != null) {
-      return "" + m
+    const errInstance = error as Error
+    const m = errInstance.message
+    if (m != null && m.length > 0) {
+      return m
     }
-  } catch (anyError) {
-    // .message 取不到，落到 toString
+  } catch (errCast) {
+    // 不是 Error，落到 toString
   }
+  // 三档：Kotlin Object.toString() — Java Throwable 默认实现会带 "类名: message"
   try {
     return "" + error
   } catch (stringError) {
@@ -1383,22 +1385,23 @@ async function submitToAI() {
   }
 }
 
-function touchStart(event : UTSJSONObject) {
+// uvue 模板事件回调形参必须用平台 Uni*Event 类型，否则 Kotlin 端实参不匹配抛 IllegalArgumentException（陷阱 #9）
+function touchStart(event : UniTouchEvent) {
   // #ifdef WEB
   if (!useLegacyCanvas && surfaceNode && surfaceNode.__aiCanvaBound) {
     return
   }
   // #endif
-  startStroke(event)
+  startStroke(event as UTSJSONObject)
 }
 
-function touchMove(event : UTSJSONObject) {
+function touchMove(event : UniTouchEvent) {
   // #ifdef WEB
   if (!useLegacyCanvas && surfaceNode && surfaceNode.__aiCanvaBound) {
     return
   }
   // #endif
-  moveStroke(event)
+  moveStroke(event as UTSJSONObject)
 }
 
 function touchEnd() {
@@ -1410,8 +1413,8 @@ function touchEnd() {
   endStroke()
 }
 
-function probePointer(event : UTSJSONObject) {
-  const point = getPointFromEvent(event)
+function probePointer(event : UniPointerEvent) {
+  const point = getPointFromEvent(event as UTSJSONObject)
   if (point == null) {
     debugText.value = '已收到点击，但未解析出坐标。'
     return
