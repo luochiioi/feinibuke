@@ -354,16 +354,14 @@ function measureCanvasRect() {
     if (data == null) {
       return
     }
-    const info = data as UTSJSONObject
-    const l = info["left"]
-    const t = info["top"]
-    const w = info["width"]
-    const h = info["height"]
+    // APP 端 data 是 NodeInfo typed 对象，不是 UTSJSONObject；直接 cast 会抛
+    // ClassCastException，导致 canvasRect 永远是 0 → 触摸算不出 local 坐标 → 无笔画
+    const info = data as NodeInfo
     canvasRect = {
-      left: l != null ? (l as number) : 0,
-      top: t != null ? (t as number) : 0,
-      width: w != null ? (w as number) : canvasDisplaySize.value,
-      height: h != null ? (h as number) : canvasDisplaySize.value
+      left: info.left != null ? (info.left as number) : 0,
+      top: info.top != null ? (info.top as number) : 0,
+      width: info.width != null ? (info.width as number) : canvasDisplaySize.value,
+      height: info.height != null ? (info.height as number) : canvasDisplaySize.value
     }
   }).exec()
 }
