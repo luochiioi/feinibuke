@@ -1136,18 +1136,32 @@ function formatErrorMessage(error : any | null) : string {
   if (typeof error === 'string') {
     return error as string
   }
-  const errObj = error as UTSJSONObject
-  const message = errObj["message"]
-  if (message != null) {
-    return "" + message
-  }
-  const errMsg = errObj["errMsg"]
-  if (errMsg != null) {
-    return "" + errMsg
+  // Java 异常对象直接 `as UTSJSONObject` 会 ClassCastException，必须包 try/catch
+  try {
+    const errObj = error as UTSJSONObject
+    const message = errObj["message"]
+    if (message != null) {
+      return "" + message
+    }
+    const errMsg = errObj["errMsg"]
+    if (errMsg != null) {
+      return "" + errMsg
+    }
+  } catch (castError) {
+    // 不是 UTSJSONObject，落到下一档
   }
   try {
-    return JSON.stringify(error)
-  } catch (jsonError) {
+    const anyErr = error as any
+    const m = anyErr.message
+    if (m != null) {
+      return "" + m
+    }
+  } catch (anyError) {
+    // .message 取不到，落到 toString
+  }
+  try {
+    return "" + error
+  } catch (stringError) {
     return '发生了未知错误，请稍后重试。'
   }
 }
