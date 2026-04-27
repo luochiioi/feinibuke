@@ -1,0 +1,78 @@
+<template>
+  <view>
+    <view class="summary-box">
+      <text class="summary-mode">{{ activeModeLabel }}</text>
+      <text class="summary-title">提交预览</text>
+      <text class="summary-text">{{ previewPromptText }}</text>
+    </view>
+
+    <view :class="['primary-btn', submitting ? 'primary-btn-disabled' : '']" @click="onSubmit">
+      <text class="primary-btn-text">{{ submitting ? '正在提交任务...' : '开始生成图片' }}</text>
+    </view>
+  </view>
+</template>
+
+<script setup lang="ts">
+const props = defineProps({
+  activeModeLabel: { type: String, required: true },
+  previewPromptText: { type: String, required: true },
+  submitting: { type: Boolean, default: false }
+})
+
+const emits = defineEmits<{
+  (e: 'submit'): void
+}>()
+
+function onSubmit() {
+  if (props.submitting) return
+  emits('submit')
+}
+</script>
+
+<style scoped>
+.summary-box {
+  margin-top: 18px;
+  padding: 14px;
+  border-radius: 18px;
+  background: #fff8eb;
+}
+
+.summary-mode {
+  color: #0f766e;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.summary-title {
+  margin-top: 4px;
+  color: #7d6540;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.summary-text {
+  margin-top: 6px;
+  color: #342816;
+  font-size: 12px;
+  line-height: 20px;
+}
+
+.primary-btn {
+  margin-top: 18px;
+  height: 52px;
+  border-radius: 18px;
+  background: linear-gradient(135deg, #203331 0%, #0f766e 100%);
+  justify-content: center;
+  align-items: center;
+}
+
+.primary-btn-text {
+  color: #ffffff;
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.primary-btn-disabled {
+  opacity: 0.6;
+}
+</style>
