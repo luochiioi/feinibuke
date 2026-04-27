@@ -8,7 +8,7 @@
 
         <view class="hero-stats uni-row">
           <view class="stat-card">
-            <text class="stat-value">{{ strokeCount }}</text>
+            <text class="stat-value">{{ strokes.strokeCount.value }}</text>
             <text class="stat-label">笔画数量</text>
           </view>
           <view class="stat-card">
@@ -16,7 +16,7 @@
             <text class="stat-label">笔刷粗细</text>
           </view>
           <view class="stat-card">
-            <text class="stat-value">{{ activeModeLabel }}</text>
+            <text class="stat-value">{{ prompt.modeLabel.value }}</text>
             <text class="stat-label">当前模式</text>
           </view>
         </view>
@@ -29,104 +29,38 @@
             <text class="card-subtitle">建议先勾出主体轮廓和大致结构，再补充提示词。</text>
           </view>
           <view class="status-pill">
-            <text class="status-pill-text">{{ canvasReady ? '画布已就绪' : '初始化中' }}</text>
+            <text class="status-pill-text">{{ canvas.ready.value ? '画布已就绪' : '初始化中' }}</text>
           </view>
         </view>
 
-        <view class="canvas-stage">
-          <view class="canvas-shell" :style="'width:' + canvasDisplaySize + 'px;height:' + canvasDisplaySize + 'px;'">
-            <canvas
-              v-if="!useLegacyCanvas"
-              id="sketchCanvas"
-              type="2d"
-              class="canvas"
-              :style="'width:' + canvasDisplaySize + 'px;height:' + canvasDisplaySize + 'px;'"
-              :width="canvasPixelSize"
-              :height="canvasPixelSize"
-              disable-scroll="true"
-            ></canvas>
-            <canvas
-              v-else
-              id="sketchCanvas"
-              canvas-id="sketchCanvas"
-              class="canvas"
-              :style="'width:' + canvasDisplaySize + 'px;height:' + canvasDisplaySize + 'px;'"
-              :width="canvasPixelSize"
-              :height="canvasPixelSize"
-              disable-scroll="true"
-              @touchstart="touchStart"
-              @touchmove="touchMove"
-              @touchend="touchEnd"
-              @touchcancel="touchEnd"
-            ></canvas>
-            <view
-              v-if="!useLegacyCanvas"
-              id="sketchSurface"
-              class="canvas-surface"
-              @touchstart="touchStart"
-              @touchmove="touchMove"
-              @touchend="touchEnd"
-              @touchcancel="touchEnd"
-              @tap="probePointer"
-            ></view>
-          </view>
-        </view>
+        <CanvasSurface
+          :use-legacy="canvas.useLegacy"
+          :display-size="canvas.displaySize.value"
+          :pixel-size="canvas.exportSize"
+          :canvas-ready="canvas.ready.value"
+          :canvas-tip="canvasTip"
+          :debug-text="pointer.debugMessage.value"
+          @touchstart="pointer.handleTouchStart"
+          @touchmove="pointer.handleTouchMove"
+          @touchend="pointer.handleTouchEnd"
+          @tap="pointer.handleProbe"
+        />
 
-        <view class="canvas-meta">
-          <text class="canvas-tip">{{ canvasTip }}</text>
-          <text class="canvas-debug">{{ debugText }}</text>
-        </view>
-
-        <view class="panel">
-          <text class="panel-title">工具</text>
-          <view class="tool-row uni-row">
-            <view :class="['tool-chip', activeTool === 'brush' ? 'tool-chip-active' : '']" @click="setTool('brush')">画笔</view>
-            <view :class="['tool-chip', activeTool === 'eraser' ? 'tool-chip-active' : '']" @click="setTool('eraser')">橡皮</view>
-            <view :class="['tool-chip', !canUndo ? 'tool-chip-disabled' : '']" @click="undoLast">撤销</view>
-            <view :class="['tool-chip', !canRedo ? 'tool-chip-disabled' : '']" @click="redoLast">重做</view>
-            <view :class="['tool-chip', strokeCount === 0 ? 'tool-chip-disabled' : '']" @click="clearCanvas">清空</view>
-          </view>
-        </view>
-
-        <view class="panel">
-          <view class="panel-head uni-row">
-            <view>
-              <text class="panel-title">笔刷粗细</text>
-              <text class="panel-desc">浏览器端会按画布尺寸自动缩放笔刷，线条显示更稳定。</text>
-            </view>
-            <text class="panel-value">{{ brushSize }}</text>
-          </view>
-          <slider
-            class="slider"
-            :value="brushSize"
-            :min="2"
-            :max="24"
-            :step="1"
-            activeColor="#0f766e"
-            backgroundColor="#d7e6e2"
-            block-color="#0f766e"
-            @change="handleBrushSizeChange"
-          />
-        </view>
-
-        <view class="panel">
-          <view class="panel-head uni-row">
-            <view>
-              <text class="panel-title">笔刷颜色</text>
-              <text class="panel-desc">默认深色，避免与白色背景混在一起看不清。</text>
-            </view>
-            <view class="color-preview" :style="'background:' + brushColor + ';'"></view>
-          </view>
-          <view class="color-row uni-row">
-            <view
-              v-for="color in colorOptions"
-              :key="color"
-              :class="['color-chip', brushColor === color ? 'color-chip-active' : '']"
-              :style="'background:' + color + ';'"
-              @click="selectBrushColor(color)"
-            ></view>
-          </view>
-        </view>
+        <BrushToolbar
+          :active-tool="activeTool"
+          :can-undo="strokes.canUndo.value"
+          :can-redo="strokes.canRedo.value"
+          :stroke-count="strokes.strokeCount.value"
+          :brush-size="brushSize"
+          :brush-color="brushColor"
+          :color-options="colorOptions"
+          @set-tool="setTool"
+          @undo="strokes.undo"
+          @redo="strokes.redo"
+          @clear="onClear"
+          @brush-size-change="onBrushSizeChange"
+          @select-color="onSelectColor"
+        />
       </view>
 
       <view class="prompt-card">
@@ -137,1466 +71,185 @@
           </view>
         </view>
 
-        <view class="mode-switch uni-row">
-          <view
-            v-for="item in modeOptions"
-            :key="item.key"
-            :class="['mode-chip', activeMode === item.key ? 'mode-chip-active' : '']"
-            @click="selectMode(item.key)"
-          >
-            {{ item.key === 'preset' ? PRESET_TAB_LABEL : CUSTOM_TAB_LABEL }}
-          </view>
-        </view>
+        <ModeSwitcher
+          :active-mode="prompt.mode.value"
+          @select-mode="onSelectMode"
+        />
 
-        <view v-if="activeMode === 'preset'" class="preset-box">
-          <text class="preset-title-safe">{{ PRESET_BOX_TITLE }}</text>
-          <text class="preset-text-safe">{{ PRESET_BOX_TEXT }}</text>
-        </view>
+        <PromptPanel
+          :active-mode="prompt.mode.value"
+          :prompt-input="prompt.customText.value"
+          :prompt-length="prompt.promptLength.value"
+          :active-style-key="prompt.styleKey.value"
+          :style-options="STYLE_OPTIONS"
+          :idea-options="IDEA_OPTIONS"
+          @input="onPromptInput"
+          @select-style="onSelectStyle"
+          @append-idea="onAppendIdea"
+        />
 
-        <view v-if="activeMode === 'custom'">
-          <textarea
-            class="prompt-input"
-            maxlength="120"
-            auto-height
-            placeholder="例如：把这张线稿变成柔和的儿童绘本插画，主体清晰，背景干净，有暖色灯光。"
-            :value="promptInput"
-            @input="handlePromptInput"
-          />
-
-          <view class="prompt-meta uni-row">
-            <text class="prompt-hint">建议控制在 20 到 60 字，突出主体、风格和光影。</text>
-            <text class="prompt-count">{{ promptLength }}/120</text>
-          </view>
-
-          <text class="section-label">风格</text>
-          <view class="chips-row uni-row">
-            <view
-              v-for="item in styleOptions"
-              :key="item.key"
-              :class="['choice-chip', activeStyleKey === item.key ? 'choice-chip-active' : '']"
-              @click="selectStyle(item.key)"
-            >
-              <text class="choice-title">{{ item.label }}</text>
-              <text class="choice-desc">{{ item.desc }}</text>
-            </view>
-          </view>
-
-          <text class="section-label">快捷灵感</text>
-          <view class="idea-row uni-row">
-            <view
-              v-for="idea in ideaOptions"
-              :key="idea"
-              class="idea-chip"
-              @click="appendIdea(idea)"
-            >
-              {{ idea }}
-            </view>
-          </view>
-        </view>
-
-        <view class="summary-box">
-          <text class="summary-mode">{{ activeModeLabel }}</text>
-          <text class="summary-title">提交预览</text>
-          <text class="summary-text">{{ previewPromptText }}</text>
-        </view>
-
-        <view :class="['primary-btn', submitting ? 'primary-btn-disabled' : '']" @click="submitToAI">
-          {{ submitting ? '正在提交任务...' : '开始生成图片' }}
-        </view>
+        <ActionBar
+          :active-mode-label="prompt.modeLabel.value"
+          :preview-prompt-text="prompt.previewPromptText.value"
+          :submitting="submitting"
+          @submit="onSubmit"
+        />
       </view>
     </view>
   </scroll-view>
 </template>
 
 <script setup lang="ts">
-import { computed, getCurrentInstance, ref } from 'vue'
+import { computed, ref, getCurrentInstance, watch, onReady } from 'vue'
+import { useStrokes } from '@/hooks/ai-canva/useStrokes'
+import { useAITask } from '@/hooks/ai-canva/useAITask'
+import { useCanvas } from '@/hooks/ai-canva/useCanvas'
+import { usePointer } from '@/hooks/ai-canva/usePointer'
+import { usePromptBuilder, STYLE_OPTIONS, IDEA_OPTIONS } from '@/hooks/ai-canva/usePromptBuilder'
+import { useDraft } from '@/hooks/ai-canva/useDraft'
+import CanvasSurface from '@/components/ai-canva/CanvasSurface.uvue'
+import BrushToolbar from '@/components/ai-canva/BrushToolbar.uvue'
+import ModeSwitcher from '@/components/ai-canva/ModeSwitcher.uvue'
+import PromptPanel from '@/components/ai-canva/PromptPanel.uvue'
+import ActionBar from '@/components/ai-canva/ActionBar.uvue'
 
-const CANVAS_EXPORT_SIZE = 1024
-const STORAGE_KEY = 'ai-canva-draft'
-
-let useLegacyCanvas = false
-// #ifdef MP-WEIXIN
-useLegacyCanvas = true
-// #endif
-
-const styleOptions = [
-  { key: 'illustration', label: '插画叙事', desc: '画面柔和，主体清晰，适合故事感表达。', prompt: 'clean illustration, soft light, refined composition' },
-  { key: 'watercolor', label: '水彩质感', desc: '色彩轻盈，过渡自然，适合温柔氛围。', prompt: 'watercolor texture, airy color palette, soft transitions' },
-  { key: 'poster', label: '海报设计', desc: '图形鲜明，对比强烈，适合视觉冲击。', prompt: 'graphic poster style, bold shapes, strong contrast' },
-  { key: 'future', label: '未来概念', desc: '科技感和空间感更强，适合概念图方向。', prompt: 'futuristic concept art, cinematic lighting, detailed background' }
-]
-
-const ideaOptions = ['柔和光线', '干净背景', '蓝白装饰感', '对称构图', '细腻纹理', '平面图案']
-const modeOptions = [
-  { key: 'preset', label: '预设模式' },
-  { key: 'custom', label: '自定义模式' }
-]
-const PRESET_TILE_PROMPT = '基于用户原创线稿，完整保留主体结构、轮廓比例与核心造型关系，不改变原有主体形态，采用经典蓝白 azulejo 配色，平面装饰感强，图案清晰，边界规整，具有陶瓷釉面质感、传统葡式花砖的对称与重复美感，背景干净，避免写实照片风格。'
 const colorOptions = ['#111111', '#203331', '#0f766e', '#1d4ed8', '#b45309', '#9f1239']
-const PRESET_TAB_LABEL = '\u9884\u8bbe\u6a21\u5f0f'
-const CUSTOM_TAB_LABEL = '\u81ea\u5b9a\u4e49\u6a21\u5f0f'
-const PRESET_MODE_LABEL = '\u8461\u8404\u7259\u74f7\u7816\u9884\u8bbe'
-const CUSTOM_MODE_LABEL = '\u81ea\u5b9a\u4e49\u98ce\u683c'
-const PRESET_TILE_PROMPT_SAFE = '\u6839\u636e\u7528\u6237\u7684\u7ebf\u7a3f\u548c\u56fe\u6848\u751f\u6210\u8461\u8404\u7259\u74f7\u7816\u98ce\u683c\u63d2\u753b\uff0c\u4fdd\u7559\u7ebf\u7a3f\u4e3b\u4f53\u7ed3\u6784\u548c\u8f6e\u5ed3\u5173\u7cfb\uff0c\u91c7\u7528\u7ecf\u5178\u84dd\u767d azulejo \u914d\u8272\uff0c\u5e73\u9762\u88c5\u9970\u611f\u5f3a\uff0c\u56fe\u6848\u6e05\u6670\uff0c\u8fb9\u754c\u89c4\u6574\uff0c\u5177\u6709\u9676\u74f7\u91c9\u9762\u8d28\u611f\u3001\u4f20\u7edf\u8461\u5f0f\u82b1\u7816\u7684\u5bf9\u79f0\u4e0e\u91cd\u590d\u7f8e\u611f\uff0c\u80cc\u666f\u5e72\u51c0\uff0c\u907f\u514d\u5199\u5b9e\u7167\u7247\u98ce\u683c\u3002'
-const PRESET_BOX_TITLE = '\u8461\u8404\u7259\u74f7\u7816\u9884\u8bbe'
-const PRESET_BOX_TEXT = '\u7cfb\u7edf\u4f1a\u6839\u636e\u4f60\u7684\u7ebf\u7a3f\u548c\u56fe\u6848\u81ea\u52a8\u751f\u6210\u8461\u8404\u7259\u74f7\u7816\u98ce\u683c\u753b\u9762\uff0c\u4fdd\u7559\u4e3b\u4f53\u7ed3\u6784\uff0c\u91c7\u7528\u84dd\u767d\u914d\u8272\u548c\u5e73\u9762\u88c5\u9970\u611f\u3002'
-const PRESET_PREVIEW_TEXT = '\u5c06\u6839\u636e\u4f60\u7684\u7ebf\u7a3f\u548c\u56fe\u6848\u751f\u6210\u8461\u8404\u7259\u74f7\u7816\u98ce\u683c\u753b\u9762\uff0c\u4fdd\u7559\u4e3b\u4f53\u8f6e\u5ed3\uff0c\u7a81\u51fa\u84dd\u767d\u914d\u8272\u548c\u5e73\u9762\u88c5\u9970\u611f\u3002'
-
-const canvasDisplaySize = ref(320)
-const canvasPixelSize = CANVAS_EXPORT_SIZE
-const brushSize = ref(6)
-const brushColor = ref('#111111')
-const promptInput = ref('')
-const activeMode = ref('preset')
-const activeStyleKey = ref('illustration')
-const activeTool = ref('brush')
-const strokeCount = ref(0)
-const canUndo = ref(false)
-const canRedo = ref(false)
-const submitting = ref(false)
-const canvasReady = ref(false)
-const debugText = ref('等待画布初始化...')
-
 const pageInstance = getCurrentInstance() != null ? getCurrentInstance()!!.proxy : null
 
-function getSelectedStyleLabel() : string {
-  for (let i = 0; i < styleOptions.length; i += 1) {
-    if (styleOptions[i]["key"] === activeStyleKey.value) {
-      return "" + styleOptions[i]["label"]
-    }
+// 笔刷状态（本地 ref，因需要嵌入 getMeta 闭包 + 模板直接绑定）
+const brushSize = ref<number>(6)
+const brushColor = ref<string>('#111111')
+const activeTool = ref<string>('brush')
+
+// hooks 装配
+const strokes = useStrokes()
+const canvas = useCanvas({ canvasId: 'sketchCanvas', surfaceId: 'sketchSurface', pageInstance })
+const pointer = usePointer(canvas, {
+  onStart: (p: UTSJSONObject): void => strokes.addPoint(p, getMeta()),
+  onMove: (p: UTSJSONObject): void => strokes.addPoint(p, getMeta()),
+  onEnd: (): void => strokes.endStroke()
+})
+const task = useAITask()
+const prompt = usePromptBuilder()
+const draft = useDraft()
+
+const submitting = ref<boolean>(false)
+
+function getMeta() {
+  return {
+    color: activeTool.value === 'eraser' ? '#ffffff' : brushColor.value,
+    width: activeTool.value === 'eraser' ? brushSize.value * 1.8 : brushSize.value
   }
-  return '插画叙事'
 }
 
-function getSelectedStylePrompt() : string {
-  for (let i = 0; i < styleOptions.length; i += 1) {
-    if (styleOptions[i]["key"] === activeStyleKey.value) {
-      return "" + styleOptions[i]["prompt"]
-    }
-  }
-  return "" + styleOptions[0]["prompt"]
+// 数据驱动重绘：strokes / currentStroke 任一变化触发画布重绘
+watch([strokes.strokes, strokes.currentStroke], (): void => {
+  canvas.redraw(strokes.strokes.value, strokes.currentStroke.value)
+}, { deep: true })
+
+// ─── 工具栏 handlers ───────────────────────────────
+function setTool(tool: string): void { activeTool.value = tool }
+
+function onBrushSizeChange(size: number): void {
+  brushSize.value = size
+  draft.saveThrottled({ brushSize: size })
 }
 
-let canvasNode : UTSJSONObject | null = null
-let canvasContextRef : CanvasContext | null = null
-let context2d : CanvasRenderingContext2D | null = null
-let surfaceNode : UTSJSONObject | null = null
-let isDrawing = false
-let currentStroke : UTSJSONObject | null = null
-let pageScrollLocked = false
-let canvasRect = {
-  left: 0,
-  top: 0,
-  width: 0,
-  height: 0
+function onSelectColor(color: string): void {
+  brushColor.value = color
+  draft.saveThrottled({ brushColor: color })
 }
 
-const strokes = [] as UTSJSONObject[]
-const redoStack = [] as UTSJSONObject[]
+function onClear(): void {
+  strokes.clear()
+  canvas.redraw([], null)
+}
 
-const promptLength = computed(() => promptInput.value.trim().length)
-
-const activeStyleLabel = computed(() => getSelectedStyleLabel())
-const activeModeLabel = computed(() => activeMode.value === 'preset' ? PRESET_MODE_LABEL : CUSTOM_MODE_LABEL)
-
-const canvasTip = computed(() => {
-  if (!canvasReady.value) {
-    return '画布初始化中，请稍后。'
-  }
-  if (strokeCount.value > 0) {
-    return '线稿已记录，可以继续补充轮廓或直接生成。'
-  }
+// ─── 画布提示 ─────────────────────────────────────
+const canvasTip = computed<string>((): string => {
+  if (!canvas.ready.value) return '画布初始化中，请稍后。'
+  if (strokes.strokeCount.value > 0) return '线稿已记录，可以继续补充轮廓或直接生成。'
   return '先勾出主体轮廓，再补充细节，效果会更稳定。'
 })
 
-const previewPromptText = computed(() => {
-  if (activeMode.value === 'preset') {
-    return PRESET_PREVIEW_TEXT
-  }
-  const customPrompt = promptInput.value.trim()
-  const basePrompt = customPrompt.length > 0 ? customPrompt : '根据这张线稿生成完整画面，保留主体结构，突出你选择的风格。'
-  return basePrompt + ' 风格方向：' + getSelectedStyleLabel()
-})
-
-const submitPrompt = computed(() => {
-  if (activeMode.value === 'preset') {
-    return PRESET_TILE_PROMPT_SAFE
-  }
-  const customPrompt = promptInput.value.trim()
-  const stylePrompt = getSelectedStylePrompt()
-  const basePrompt = customPrompt.length > 0 ? customPrompt : '根据这张线稿生成完整画面，保留主体结构和轮廓关系。'
-  return basePrompt + ' | style: ' + stylePrompt + ' | follow the sketch closely'
-})
-
-function setupCanvasSize() {
-  const systemInfo = uni.getSystemInfoSync()
-  let size = (systemInfo.windowWidth > 0 ? systemInfo.windowWidth : 360) - 40
-  if (size > 560) {
-    size = 560
-  }
-  if (size < 280) {
-    size = 280
-  }
-  canvasDisplaySize.value = size
+// ─── 草稿联动 handlers ────────────────────────────
+function onPromptInput(value: string): void {
+  prompt.setCustomText(value)
+  draft.saveThrottled({ prompt: value })
 }
 
-function wait(duration : number) {
-  return new Promise((resolve) => {
-    setTimeout(() => {
-      resolve(null)
-    }, duration)
-  })
+function onSelectMode(modeKey: string): void {
+  prompt.selectMode(modeKey)
+  draft.saveThrottled({ modeKey: modeKey })
 }
 
-function measureCanvasRect() {
-  const query = uni.createSelectorQuery()
-  query.select(useLegacyCanvas ? '#sketchCanvas' : '#sketchSurface').boundingClientRect((data) => {
-    if (data == null) {
-      return
-    }
-    // APP 端 data 是 NodeInfo typed 对象，不是 UTSJSONObject；直接 cast 会抛
-    // ClassCastException，导致 canvasRect 永远是 0 → 触摸算不出 local 坐标 → 无笔画
-    const info = data as NodeInfo
-    canvasRect = {
-      left: info.left != null ? (info.left as number) : 0,
-      top: info.top != null ? (info.top as number) : 0,
-      width: info.width != null ? (info.width as number) : canvasDisplaySize.value,
-      height: info.height != null ? (info.height as number) : canvasDisplaySize.value
-    }
-  }).exec()
+function onSelectStyle(styleKey: string): void {
+  prompt.selectStyle(styleKey)
+  draft.saveThrottled({ styleKey: styleKey })
 }
 
-function restoreDraft() {
+function onAppendIdea(idea: string): void {
+  prompt.appendIdea(idea)
+  draft.saveThrottled({ prompt: prompt.customText.value })
+}
+
+// ─── 提交流程 ─────────────────────────────────────
+async function onSubmit(): Promise<void> {
+  if (submitting.value || !canvas.ready.value) return
+  if (!strokes.hasContent.value) {
+    uni.showModal({ title: '生成失败', content: '请先画一些线稿后再生成。', showCancel: false })
+    return
+  }
+  strokes.endStroke()
+  canvas.redraw(strokes.strokes.value, strokes.currentStroke.value)
+  submitting.value = true
+  uni.showLoading({ title: '正在提交任务...', mask: true })
   try {
-    const raw = uni.getStorageSync(STORAGE_KEY)
-    if (raw == null) {
-      return
-    }
-    const rawStr = "" + raw
-    if (rawStr.length === 0) {
-      return
-    }
-    const parsed = JSON.parse(rawStr)
-    if (parsed == null) {
-      return
-    }
-    const draft = parsed as UTSJSONObject
-    const p = draft["prompt"]
-    if (p != null) {
-      promptInput.value = "" + p
-    }
-    const m = draft["modeKey"]
-    if (m != null) {
-      activeMode.value = "" + m
-    }
-    const s = draft["styleKey"]
-    if (s != null) {
-      activeStyleKey.value = "" + s
-    }
-    const bs = draft["brushSize"]
-    if (bs != null) {
-      brushSize.value = parseFloat("" + bs)
-    }
-    const bc = draft["brushColor"]
-    if (bc != null) {
-      brushColor.value = "" + bc
-    }
-  } catch (error) {
-    console.warn('restore draft failed', error)
-  }
-}
-
-function persistDraft() {
-  uni.setStorageSync(STORAGE_KEY, JSON.stringify({
-    prompt: promptInput.value,
-    modeKey: activeMode.value,
-    styleKey: activeStyleKey.value,
-    brushSize: brushSize.value,
-    brushColor: brushColor.value
-  }))
-}
-
-function clamp(value : number, min : number, max : number) : number {
-  return Math.min(max, Math.max(min, value))
-}
-
-function pickNumber(a : any | null = null, b : any | null = null, c : any | null = null, d : any | null = null, e : any | null = null) : number | null {
-  const values = [a, b, c, d, e]
-  for (let i = 0; i < values.length; i += 1) {
-    const value = values[i]
-    if (value == null) {
-      continue
-    }
-    const str = "" + value
-    if (str.length === 0) {
-      continue
-    }
-    const parsed = parseFloat(str)
-    if (!isNaN(parsed)) {
-      return parsed
-    }
-  }
-  return null
-}
-
-function getInputValue(event : UTSJSONObject) : string {
-  const detail = event["detail"]
-  if (detail != null) {
-    const dv = (detail as UTSJSONObject)["value"]
-    if (dv != null) {
-      return "" + dv
-    }
-  }
-  const ev = event["value"]
-  if (ev != null) {
-    return "" + ev
-  }
-  return ''
-}
-
-function handlePromptInput(event : UTSJSONObject) {
-  promptInput.value = getInputValue(event)
-  persistDraft()
-}
-
-function setTool(tool : string) {
-  activeTool.value = tool
-}
-
-function selectMode(modeKey : any | null) {
-  if (modeKey == null) {
-    return
-  }
-  activeMode.value = "" + modeKey
-  persistDraft()
-}
-
-function selectStyle(styleKey : any | null) {
-  if (styleKey == null) {
-    return
-  }
-  activeStyleKey.value = "" + styleKey
-  persistDraft()
-}
-
-function appendIdea(idea : string) {
-  const current = promptInput.value.trim()
-  promptInput.value = current.length > 0 ? current + ', ' + idea : idea
-  persistDraft()
-}
-
-function handleBrushSizeChange(event : UTSJSONObject) {
-  const detail = event["detail"]
-  const detailValue = detail != null ? (detail as UTSJSONObject)["value"] : null
-  const eventValue = event["value"]
-  const nextValue = pickNumber(detailValue, eventValue)
-  if (nextValue != null) {
-    brushSize.value = Math.round(nextValue)
-    persistDraft()
-  }
-}
-
-function selectBrushColor(color : string) {
-  brushColor.value = color
-  persistDraft()
-}
-
-function lockPageScroll() {
-  // #ifdef WEB
-  if (pageScrollLocked || typeof document === 'undefined') {
-    return
-  }
-  pageScrollLocked = true
-  document.body.classList.add('drawing-lock')
-  document.documentElement.classList.add('drawing-lock')
-  // #endif
-}
-
-function unlockPageScroll() {
-  // #ifdef WEB
-  if (!pageScrollLocked || typeof document === 'undefined') {
-    return
-  }
-  pageScrollLocked = false
-  document.body.classList.remove('drawing-lock')
-  document.documentElement.classList.remove('drawing-lock')
-  // #endif
-}
-
-function bindWebPointerEvents() {
-  // #ifdef WEB
-  if (!surfaceNode || !surfaceNode.addEventListener) {
-    return
-  }
-  if (surfaceNode.__aiCanvaBound) {
-    return
-  }
-
-  surfaceNode.addEventListener('mousedown', (event) => {
-    if (event && event.preventDefault) {
-      event.preventDefault()
-    }
-    const point = getPointFromWebMouseEvent(event)
-    if (!point) {
-      debugText.value = '收到 Web mousedown，但未解析出坐标。'
-      return
-    }
-    startStrokeWithPoint(point)
-  })
-
-  surfaceNode.addEventListener('mousemove', (event) => {
-    if (!isDrawing) {
-      return
-    }
-    if (event && event.preventDefault) {
-      event.preventDefault()
-    }
-    const point = getPointFromWebMouseEvent(event)
-    if (!point) {
-      return
-    }
-    moveStrokeWithPoint(point)
-  })
-
-  surfaceNode.addEventListener('mouseup', () => {
-    endStroke()
-  })
-
-  surfaceNode.addEventListener('mouseleave', () => {
-    endStroke()
-  })
-
-  surfaceNode.addEventListener('touchstart', (event) => {
-    if (event && event.preventDefault) {
-      event.preventDefault()
-    }
-    lockPageScroll()
-    startStroke(event)
-  }, { passive: false })
-
-  surfaceNode.addEventListener('touchmove', (event) => {
-    if (event && event.preventDefault) {
-      event.preventDefault()
-    }
-    moveStroke(event)
-  }, { passive: false })
-
-  surfaceNode.addEventListener('touchend', (event) => {
-    if (event && event.preventDefault) {
-      event.preventDefault()
-    }
-    endStroke()
-    unlockPageScroll()
-  }, { passive: false })
-
-  surfaceNode.addEventListener('touchcancel', (event) => {
-    if (event && event.preventDefault) {
-      event.preventDefault()
-    }
-    endStroke()
-    unlockPageScroll()
-  }, { passive: false })
-
-  surfaceNode.__aiCanvaBound = true
-  debugText.value = 'Web 鼠标事件已绑定。'
-  // #endif
-}
-
-function getFirstTouch(event : UTSJSONObject | null = null) : UTSJSONObject | null {
-  if (event == null) {
-    return null
-  }
-  const touches = event["touches"]
-  if (touches != null) {
-    const arr = touches as Array<any>
-    if (arr.length > 0) { return arr[0] as UTSJSONObject }
-  }
-  const changedTouches = event["changedTouches"]
-  if (changedTouches != null) {
-    const arr = changedTouches as Array<any>
-    if (arr.length > 0) { return arr[0] as UTSJSONObject }
-  }
-  const detail = event["detail"]
-  if (detail != null) {
-    const d = detail as UTSJSONObject
-    const dt = d["touches"]
-    if (dt != null) {
-      const arr = dt as Array<any>
-      if (arr.length > 0) { return arr[0] as UTSJSONObject }
-    }
-    const dct = d["changedTouches"]
-    if (dct != null) {
-      const arr = dct as Array<any>
-      if (arr.length > 0) { return arr[0] as UTSJSONObject }
-    }
-  }
-  return null
-}
-
-function isPointInBounds(x : number | null, y : number | null, width : number, height : number, tolerance : number | null = null) : boolean {
-  if (x == null || y == null) {
-    return false
-  }
-  const extra = tolerance != null ? tolerance : 0
-  return x >= -extra && x <= width + extra && y >= -extra && y <= height + extra
-}
-
-function scalePoint(localX : number, localY : number, width : number, height : number) : UTSJSONObject {
-  const scaleX = CANVAS_EXPORT_SIZE / width
-  const scaleY = CANVAS_EXPORT_SIZE / height
-  const result : UTSJSONObject = {
-    x: clamp(localX, 0, width) * scaleX,
-    y: clamp(localY, 0, height) * scaleY
-  }
-  return result
-}
-
-function getRenderWidth() : number {
-  if (canvasNode != null) {
-    const w = canvasNode!!["width"]
-    if (w != null) {
-      const parsed = parseFloat("" + w)
-      if (!isNaN(parsed) && parsed > 0) { return parsed }
-    }
-  }
-  return CANVAS_EXPORT_SIZE
-}
-
-function getRenderHeight() : number {
-  if (canvasNode != null) {
-    const h = canvasNode!!["height"]
-    if (h != null) {
-      const parsed = parseFloat("" + h)
-      if (!isNaN(parsed) && parsed > 0) { return parsed }
-    }
-  }
-  return CANVAS_EXPORT_SIZE
-}
-
-function toRenderPoint(point : UTSJSONObject) : UTSJSONObject {
-  const scaleX = getRenderWidth() / CANVAS_EXPORT_SIZE
-  const scaleY = getRenderHeight() / CANVAS_EXPORT_SIZE
-  const px = parseFloat("" + point["x"])
-  const py = parseFloat("" + point["y"])
-  const result : UTSJSONObject = {
-    x: px * scaleX,
-    y: py * scaleY
-  }
-  return result
-}
-
-function applyRenderStrokeStyle(stroke : UTSJSONObject) {
-  if (context2d == null) { return }
-  const scaleX = getRenderWidth() / CANVAS_EXPORT_SIZE
-  const scaleY = getRenderHeight() / CANVAS_EXPORT_SIZE
-  const lineScale = Math.min(scaleX, scaleY)
-  const color = "" + stroke["color"]
-  const width = parseFloat("" + stroke["width"])
-  context2d!!.strokeStyle = color
-  context2d!!.lineWidth = Math.max(1, width * lineScale)
-  context2d!!.lineCap = "round"
-  context2d!!.lineJoin = "round"
-}
-
-function getPointFromEvent(event : UTSJSONObject) : UTSJSONObject | null {
-  const rectW = parseFloat("" + canvasRect.width)
-  const rectH = parseFloat("" + canvasRect.height)
-  const rectL = parseFloat("" + canvasRect.left)
-  const rectT = parseFloat("" + canvasRect.top)
-  const displayWidth = rectW > 0 ? rectW : canvasDisplaySize.value
-  const displayHeight = rectH > 0 ? rectH : canvasDisplaySize.value
-
-  const touch = getFirstTouch(event)
-  let detailObj : UTSJSONObject | null = null
-  const rawDetail = event["detail"]
-  if (rawDetail != null) {
-    detailObj = rawDetail as UTSJSONObject
-  }
-
-  let source : UTSJSONObject = event
-  if (touch != null) {
-    source = touch
-  } else if (detailObj != null) {
-    source = detailObj!!
-  }
-
-  const detailX = detailObj != null ? detailObj!!["x"] : null
-  const detailY = detailObj != null ? detailObj!!["y"] : null
-
-  const localX = pickNumber(source["offsetX"], source["layerX"], source["x"], source["localX"], detailX)
-  const localY = pickNumber(source["offsetY"], source["layerY"], source["y"], source["localY"], detailY)
-  if (isPointInBounds(localX, localY, displayWidth, displayHeight)) {
-    return scalePoint(localX!!, localY!!, displayWidth, displayHeight)
-  }
-
-  const absoluteX = pickNumber(source["clientX"], source["pageX"], source["screenX"])
-  const absoluteY = pickNumber(source["clientY"], source["pageY"], source["screenY"])
-  if (absoluteX != null && absoluteY != null && rectW > 0 && rectH > 0) {
-    const offsetX = absoluteX!! - rectL
-    const offsetY = absoluteY!! - rectT
-    if (isPointInBounds(offsetX, offsetY, displayWidth, displayHeight, 24)) {
-      return scalePoint(offsetX, offsetY, displayWidth, displayHeight)
-    }
-  }
-
-  return null
-}
-
-function getPointFromWebMouseEvent(event : UTSJSONObject | null = null) : UTSJSONObject | null {
-  if (event == null) {
-    return null
-  }
-
-  const rectW = parseFloat("" + canvasRect.width)
-  const rectH = parseFloat("" + canvasRect.height)
-  const displayWidth = rectW > 0 ? rectW : canvasDisplaySize.value
-  const displayHeight = rectH > 0 ? rectH : canvasDisplaySize.value
-
-  let rect : UTSJSONObject | null = null
-  if (surfaceNode != null) {
-    const fn = surfaceNode!!["getBoundingClientRect"]
-    if (fn != null) {
-      // #ifdef WEB
-      const r = (surfaceNode as any).getBoundingClientRect()
-      if (r != null) {
-        rect = r as UTSJSONObject
-      }
-      // #endif
-    }
-  }
-
-  const clientX = pickNumber(event["clientX"], event["x"], event["pageX"], event["screenX"])
-  const clientY = pickNumber(event["clientY"], event["y"], event["pageY"], event["screenY"])
-  if (rect != null && clientX != null && clientY != null) {
-    const rectLeft = parseFloat("" + rect!!["left"])
-    const rectTop = parseFloat("" + rect!!["top"])
-    const leftVal = isNaN(rectLeft) ? 0 : rectLeft
-    const topVal = isNaN(rectTop) ? 0 : rectTop
-    const localX = clientX!! - leftVal
-    const localY = clientY!! - topVal
-    if (isPointInBounds(localX, localY, displayWidth, displayHeight, 24)) {
-      return scalePoint(localX, localY, displayWidth, displayHeight)
-    }
-  }
-
-  const offsetX = pickNumber(event["offsetX"], event["layerX"])
-  const offsetY = pickNumber(event["offsetY"], event["layerY"])
-  if (isPointInBounds(offsetX, offsetY, displayWidth, displayHeight, 24)) {
-    return scalePoint(offsetX!!, offsetY!!, displayWidth, displayHeight)
-  }
-
-  return null
-}
-
-function applyStrokeStyle(stroke : UTSJSONObject) {
-  if (context2d == null) { return }
-  const color = "" + stroke["color"]
-  const width = parseFloat("" + stroke["width"])
-  context2d!!.strokeStyle = color
-  context2d!!.lineWidth = width
-  context2d!!.lineCap = "round"
-  context2d!!.lineJoin = "round"
-}
-
-function drawDot(stroke : UTSJSONObject) {
-  if (context2d == null) { return }
-  const pointsRaw = stroke["points"]
-  if (pointsRaw == null) { return }
-  const pointsArr = pointsRaw as Array<any>
-  if (pointsArr.length == 0) { return }
-  const point = pointsArr[0] as UTSJSONObject
-  applyRenderStrokeStyle(stroke)
-  const renderPoint = toRenderPoint(point)
-  const rpx = parseFloat("" + renderPoint["x"])
-  const rpy = parseFloat("" + renderPoint["y"])
-  context2d!!.beginPath()
-  context2d!!.moveTo(rpx, rpy)
-  context2d!!.lineTo(rpx + 0.1, rpy + 0.1)
-  context2d!!.stroke()
-}
-
-function drawSegment(previousPoint : UTSJSONObject, currentPoint : UTSJSONObject, stroke : UTSJSONObject) {
-  if (context2d == null) { return }
-  applyRenderStrokeStyle(stroke)
-  const renderPreviousPoint = toRenderPoint(previousPoint)
-  const renderCurrentPoint = toRenderPoint(currentPoint)
-  const px = parseFloat("" + renderPreviousPoint["x"])
-  const py = parseFloat("" + renderPreviousPoint["y"])
-  const cx = parseFloat("" + renderCurrentPoint["x"])
-  const cy = parseFloat("" + renderCurrentPoint["y"])
-  context2d!!.beginPath()
-  context2d!!.moveTo(px, py)
-  context2d!!.lineTo(cx, cy)
-  context2d!!.stroke()
-}
-
-function drawStroke(stroke : UTSJSONObject) {
-  if (context2d == null) { return }
-  const pointsRaw = stroke["points"]
-  if (pointsRaw == null) { return }
-  const pointsArr = pointsRaw as Array<any>
-  if (pointsArr.length == 0) { return }
-  if (pointsArr.length == 1) {
-    drawDot(stroke)
-    return
-  }
-  applyRenderStrokeStyle(stroke)
-  context2d!!.beginPath()
-  const firstPoint = toRenderPoint(pointsArr[0] as UTSJSONObject)
-  const fx = parseFloat("" + firstPoint["x"])
-  const fy = parseFloat("" + firstPoint["y"])
-  context2d!!.moveTo(fx, fy)
-  for (let i = 1; i < pointsArr.length; i += 1) {
-    const nextPoint = toRenderPoint(pointsArr[i] as UTSJSONObject)
-    const nx = parseFloat("" + nextPoint["x"])
-    const ny = parseFloat("" + nextPoint["y"])
-    context2d!!.lineTo(nx, ny)
-  }
-  context2d!!.stroke()
-}
-
-// #ifdef MP-WEIXIN
-function drawStrokeLegacy(ctx : CanvasContext, stroke : UTSJSONObject) {
-  const pointsRaw = stroke["points"]
-  if (pointsRaw == null) { return }
-  const pointsArr = pointsRaw as Array<any>
-  if (pointsArr.length == 0) { return }
-  const color = "" + stroke["color"]
-  const width = parseFloat("" + stroke["width"])
-  ctx.setStrokeStyle(color)
-  ctx.setLineWidth(width)
-  ctx.setLineCap("round")
-  ctx.setLineJoin("round")
-  ctx.beginPath()
-  const p0 = pointsArr[0] as UTSJSONObject
-  const p0x = parseFloat("" + p0["x"])
-  const p0y = parseFloat("" + p0["y"])
-  ctx.moveTo(p0x, p0y)
-  if (pointsArr.length == 1) {
-    ctx.lineTo(p0x + 0.1, p0y + 0.1)
-  } else {
-    for (let i = 1; i < pointsArr.length; i += 1) {
-      const pi = pointsArr[i] as UTSJSONObject
-      const pix = parseFloat("" + pi["x"])
-      const piy = parseFloat("" + pi["y"])
-      ctx.lineTo(pix, piy)
-    }
-  }
-  ctx.stroke()
-}
-// #endif
-
-function drawGuideGrid() {
-  if (context2d == null) {
-    return
-  }
-  const renderWidth = getRenderWidth()
-  const renderHeight = getRenderHeight()
-  const scaleX = renderWidth / CANVAS_EXPORT_SIZE
-  const scaleY = renderHeight / CANVAS_EXPORT_SIZE
-  context2d!!.save()
-  context2d!!.strokeStyle = '#edf2f0'
-  context2d!!.lineWidth = 1
-  const gap = CANVAS_EXPORT_SIZE / 4
-  for (let i = 1; i < 4; i += 1) {
-    const offsetX = gap * i * scaleX
-    const offsetY = gap * i * scaleY
-    context2d!!.beginPath()
-    context2d!!.moveTo(offsetX, 0)
-    context2d!!.lineTo(offsetX, renderHeight)
-    context2d!!.stroke()
-    context2d!!.beginPath()
-    context2d!!.moveTo(0, offsetY)
-    context2d!!.lineTo(renderWidth, offsetY)
-    context2d!!.stroke()
-  }
-  context2d!!.restore()
-}
-
-// #ifdef MP-WEIXIN
-function drawGuideGridLegacy(ctx : CanvasContext) {
-  ctx.setStrokeStyle('#edf2f0')
-  ctx.setLineWidth(1)
-  const gap = CANVAS_EXPORT_SIZE / 4
-  for (let i = 1; i < 4; i += 1) {
-    const offset = gap * i
-    ctx.beginPath()
-    ctx.moveTo(offset, 0)
-    ctx.lineTo(offset, CANVAS_EXPORT_SIZE)
-    ctx.stroke()
-    ctx.beginPath()
-    ctx.moveTo(0, offset)
-    ctx.lineTo(CANVAS_EXPORT_SIZE, offset)
-    ctx.stroke()
-  }
-}
-// #endif
-
-function getStrokeColor() {
-  return activeTool.value === 'eraser' ? '#ffffff' : brushColor.value
-}
-
-function getStrokeWidth() {
-  const rectW = parseFloat("" + canvasRect.width)
-  const displayWidth = rectW > 0 ? rectW : canvasDisplaySize.value
-  const scale = CANVAS_EXPORT_SIZE / displayWidth
-  const baseWidth = activeTool.value === 'eraser' ? brushSize.value * 1.8 : brushSize.value
-  return Math.max(2, baseWidth * scale)
-}
-
-function syncHistoryState() {
-  strokeCount.value = strokes.length + (currentStroke != null ? 1 : 0)
-  canUndo.value = strokes.length > 0
-  canRedo.value = redoStack.length > 0
-}
-
-function redrawCanvas() {
-  // #ifdef MP-WEIXIN
-  if (useLegacyCanvas) {
-    if (canvasContextRef == null) {
-      return
-    }
-    const ctx = canvasContextRef!!
-    ctx.clearRect(0, 0, CANVAS_EXPORT_SIZE, CANVAS_EXPORT_SIZE)
-    ctx.setFillStyle('#ffffff')
-    ctx.fillRect(0, 0, CANVAS_EXPORT_SIZE, CANVAS_EXPORT_SIZE)
-    drawGuideGridLegacy(ctx)
-    for (let i = 0; i < strokes.length; i += 1) {
-      drawStrokeLegacy(ctx, strokes[i] as UTSJSONObject)
-    }
-    if (currentStroke != null) {
-      const cs = currentStroke!!
-      const csPoints = cs["points"]
-      if (csPoints != null && (csPoints as Array<any>).length > 0) {
-        drawStrokeLegacy(ctx, cs)
-      }
-    }
-    ctx.draw()
-    return
-  }
-  // #endif
-
-  if (context2d == null) {
-    return
-  }
-  context2d!!.clearRect(0, 0, CANVAS_EXPORT_SIZE, CANVAS_EXPORT_SIZE)
-  context2d!!.fillStyle = '#ffffff'
-  context2d!!.fillRect(0, 0, CANVAS_EXPORT_SIZE, CANVAS_EXPORT_SIZE)
-  for (let i = 0; i < strokes.length; i += 1) {
-    drawStroke(strokes[i])
-  }
-  if (currentStroke != null) {
-    const cs = currentStroke!!
-    const csPoints = cs["points"]
-    if (csPoints != null && (csPoints as Array<any>).length > 0) {
-      drawStroke(cs)
-    }
-  }
-}
-
-function finishCurrentStroke() {
-  if (currentStroke != null) {
-    const cs = currentStroke!!
-    const csPoints = cs["points"]
-    if (csPoints != null && (csPoints as Array<any>).length > 0) {
-      strokes.push(cs)
-      currentStroke = null
-      syncHistoryState()
-    }
-  }
-}
-
-function startStrokeWithPoint(point : UTSJSONObject) {
-  isDrawing = true
-  redoStack.length = 0
-  const points : Array<UTSJSONObject> = [point]
-  const newStroke : UTSJSONObject = {
-    color: getStrokeColor(),
-    width: getStrokeWidth(),
-    points: points
-  }
-  currentStroke = newStroke
-  syncHistoryState()
-  if (useLegacyCanvas) {
-    redrawCanvas()
-  } else {
-    drawDot(newStroke)
-  }
-  const px = parseFloat("" + point["x"])
-  const py = parseFloat("" + point["y"])
-  debugText.value = '开始绘制：(' + Math.round(px) + ', ' + Math.round(py) + ')'
-}
-
-function moveStrokeWithPoint(point : UTSJSONObject) {
-  if (currentStroke == null) { return }
-  const cs = currentStroke!!
-  const pointsRaw = cs["points"]
-  if (pointsRaw == null) { return }
-  const pointsArr = pointsRaw as Array<UTSJSONObject>
-  if (pointsArr.length == 0) { return }
-  const previousPoint = pointsArr[pointsArr.length - 1]
-  const prevX = parseFloat("" + previousPoint["x"])
-  const prevY = parseFloat("" + previousPoint["y"])
-  const px = parseFloat("" + point["x"])
-  const py = parseFloat("" + point["y"])
-  if (Math.abs(prevX - px) < 1 && Math.abs(prevY - py) < 1) {
-    return
-  }
-  pointsArr.push(point)
-  if (useLegacyCanvas) {
-    redrawCanvas()
-  } else {
-    drawSegment(previousPoint, point, cs)
-  }
-  debugText.value = '绘制中：(' + Math.round(px) + ', ' + Math.round(py) + ')'
-}
-
-function endStroke() {
-  if (isDrawing == false) {
-    unlockPageScroll()
-    return
-  }
-  isDrawing = false
-  finishCurrentStroke()
-  unlockPageScroll()
-}
-
-function startStroke(event : UTSJSONObject) {
-  if ((context2d == null && useLegacyCanvas == false) || canvasReady.value == false) {
-    return
-  }
-  measureCanvasRect()
-  const point = getPointFromEvent(event)
-  if (point == null) {
-    debugText.value = '收到开始绘制事件，但未解析出坐标。'
-    return
-  }
-  startStrokeWithPoint(point)
-}
-
-function moveStroke(event : UTSJSONObject) {
-  if ((context2d == null && useLegacyCanvas == false) || currentStroke == null || isDrawing == false) {
-    return
-  }
-  const point = getPointFromEvent(event)
-  if (point == null) {
-    return
-  }
-  moveStrokeWithPoint(point)
-}
-
-function clearCanvas() {
-  strokes.length = 0
-  redoStack.length = 0
-  currentStroke = null
-  syncHistoryState()
-  redrawCanvas()
-}
-
-function undoLast() {
-  if (strokes.length === 0) {
-    return
-  }
-  const stroke = strokes.pop()
-  if (stroke != null) {
-    redoStack.push(stroke!!)
-  }
-  syncHistoryState()
-  redrawCanvas()
-}
-
-function redoLast() {
-  if (redoStack.length === 0) {
-    return
-  }
-  const stroke = redoStack.pop()
-  if (stroke != null) {
-    strokes.push(stroke!!)
-  }
-  syncHistoryState()
-  redrawCanvas()
-}
-
-function handleSubmitError(message : string) {
-  submitting.value = false
-  uni.hideLoading()
-  uni.showModal({
-    title: '生成失败',
-    content: message,
-    showCancel: false
-  })
-}
-
-function formatErrorMessage(error : any | null) : string {
-  if (error == null) {
-    return '发生了未知错误，请稍后重试。'
-  }
-  if (typeof error === 'string') {
-    return error as string
-  }
-  // Java 异常对象直接 `as UTSJSONObject` 会 ClassCastException，必须包 try/catch
-  try {
-    const errObj = error as UTSJSONObject
-    const message = errObj["message"]
-    if (message != null) {
-      return "" + message
-    }
-    const errMsg = errObj["errMsg"]
-    if (errMsg != null) {
-      return "" + errMsg
-    }
-  } catch (castError) {
-    // 不是 UTSJSONObject（典型情况：Java Throwable），落到下一档
-  }
-  // 二档：UTS 标准 Error 类型有 typed .message 字段
-  try {
-    const errInstance = error as Error
-    const m = errInstance.message
-    if (m != null && m.length > 0) {
-      return m
-    }
-  } catch (errCast) {
-    // 不是 Error，落到 toString
-  }
-  // 三档：Kotlin Object.toString() — Java Throwable 默认实现会带 "类名: message"
-  try {
-    return "" + error
-  } catch (stringError) {
-    return '发生了未知错误，请稍后重试。'
-  }
-}
-
-function buildWebSketchDataUrl() : string {
-  // #ifdef WEB
-  if (typeof document === 'undefined') {
-    return ''
-  }
-  const exportCanvas = document.createElement('canvas')
-  exportCanvas.width = CANVAS_EXPORT_SIZE
-  exportCanvas.height = CANVAS_EXPORT_SIZE
-  const exportCtx = exportCanvas.getContext('2d')
-  if (!exportCtx) {
-    return ''
-  }
-
-  exportCtx.fillStyle = '#ffffff'
-  exportCtx.fillRect(0, 0, CANVAS_EXPORT_SIZE, CANVAS_EXPORT_SIZE)
-
-  for (let i = 0; i < strokes.length; i += 1) {
-    drawStrokeForExport(exportCtx, strokes[i])
-  }
-  if (currentStroke && currentStroke.points.length > 0) {
-    drawStrokeForExport(exportCtx, currentStroke)
-  }
-
-  return exportCanvas.toDataURL('image/png')
-  // #endif
-  return ''
-}
-
-// #ifdef WEB
-function drawStrokeForExport(exportCtx : any, stroke : any) {
-  if (!stroke || !stroke.points || stroke.points.length === 0) {
-    return
-  }
-  exportCtx.strokeStyle = '#111111'
-  exportCtx.lineWidth = Math.max(4, stroke.width)
-  exportCtx.lineCap = 'round'
-  exportCtx.lineJoin = 'round'
-  exportCtx.beginPath()
-  exportCtx.moveTo(stroke.points[0].x, stroke.points[0].y)
-  if (stroke.points.length === 1) {
-    exportCtx.lineTo(stroke.points[0].x + 0.1, stroke.points[0].y + 0.1)
-  } else {
-    for (let i = 1; i < stroke.points.length; i += 1) {
-      exportCtx.lineTo(stroke.points[i].x, stroke.points[i].y)
-    }
-  }
-  exportCtx.stroke()
-}
-// #endif
-
-function exportLegacyCanvas() {
-  // #ifdef MP-WEIXIN
-  if (canvasContextRef == null) {
-    handleSubmitError('小程序画布上下文不可用，请重试。')
-    return
-  }
-
-  redrawCanvas()
-  setTimeout(() => {
-    uni.canvasToTempFilePath({
-      canvasId: 'sketchCanvas',
-      destWidth: CANVAS_EXPORT_SIZE,
-      destHeight: CANVAS_EXPORT_SIZE,
-      success: async (res) => {
-        try {
-          console.log('legacy canvas export', res)
-          if (!res || !res.tempFilePath) {
-            throw new Error('未获取到临时草图文件。')
-          }
-          await uploadLegacySketch(res.tempFilePath)
-        } catch (error) {
-          handleSubmitError('小程序草图导出失败：' + formatErrorMessage(error))
-        }
-      },
-      fail: (error) => {
-        console.error('legacy canvas export failed', error)
-        handleSubmitError('画布导出失败：' + formatErrorMessage(error))
-      }
-    }, pageInstance)
-  }, 180)
-  // #endif
-  return
-}
-
-// #ifdef MP-WEIXIN
-async function uploadLegacySketch(tempFilePath : string) {
-  const uploadRes = await uniCloud.uploadFile({
-    filePath: tempFilePath,
-    cloudPath: 'sketch-' + Date.now() + '.png'
-  })
-  if (!uploadRes || !uploadRes.fileID) {
-    throw new Error('云存储上传成功，但没有返回 fileID。')
-  }
-  const payload : UTSJSONObject = { sketchUrl: uploadRes.fileID }
-  await callAICloudFunction(payload)
-}
-// #endif
-
-async function callAICloudFunction(payload : UTSJSONObject) {
-  try {
-    const sketchDataUrlRaw = payload["sketchDataUrl"]
-    const sketchUrlRaw = payload["sketchUrl"]
-    const sketchDataUrl = sketchDataUrlRaw != null ? ("" + sketchDataUrlRaw) : ""
-    const sketchUrl = sketchUrlRaw != null ? ("" + sketchUrlRaw) : ""
-    const reqData : UTSJSONObject = {
-      action: 'submitTask',
-      sketchDataUrl: sketchDataUrl,
-      sketchUrl: sketchUrl,
-      prompt: submitPrompt.value
-    }
-    const res = await uniCloud.callFunction({
-      name: 'ai-handler',
-      data: reqData
+    const payload = await canvas.exportForSubmit(strokes.strokes.value, strokes.currentStroke.value)
+    const taskId = await task.submit({
+      sketchDataUrl: payload.sketchDataUrl,
+      sketchUrl: payload.sketchUrl,
+      prompt: prompt.submitPrompt.value
     })
-
-    let result : UTSJSONObject | null = null
-    if (res != null) {
-      const resultRaw = (res as UTSJSONObject)["result"]
-      if (resultRaw != null) {
-        result = resultRaw as UTSJSONObject
-      }
-    }
-    console.log('submitTask result', result)
-    if (result == null) {
-      throw new Error('提交任务失败，请稍后重试。')
-    }
-    const r = result!!
-    const success = r["success"]
-    const taskIdRaw = r["taskId"]
-    if (success != true || taskIdRaw == null) {
-      const msgRaw = r["msg"]
-      throw new Error(msgRaw != null ? ("" + msgRaw) : '提交任务失败，请稍后重试。')
-    }
-    const taskId = "" + taskIdRaw
-
     uni.hideLoading()
     submitting.value = false
-
-    const encodedPrompt = encodeURIComponent(activeMode.value === 'preset' ? PRESET_TILE_PROMPT_SAFE : promptInput.value.trim())
-    const encodedStyle = encodeURIComponent(activeMode.value === 'preset' ? '' : activeStyleLabel.value)
-    const encodedMode = encodeURIComponent(activeModeLabel.value)
+    draft.clear()
+    const enc = (s: string): string => encodeURIComponent(s)
     uni.navigateTo({
-      url: `/pages/ai-canva/result?taskId=${taskId}&prompt=${encodedPrompt}&style=${encodedStyle}&mode=${encodedMode}`
+      url: `/pages/ai-canva/result?taskId=${taskId}&prompt=${enc(prompt.submitPrompt.value)}&style=${enc(prompt.styleLabel.value)}&mode=${enc(prompt.modeLabel.value)}`
     })
   } catch (error) {
-    handleSubmitError('提交任务失败：' + formatErrorMessage(error))
+    submitting.value = false
+    uni.hideLoading()
+    uni.showModal({ title: '生成失败', content: '' + error, showCancel: false })
   }
 }
 
-// #ifdef APP
-async function exportAppCanvas() {
-  submitting.value = false
-  uni.hideLoading()
-  uni.showModal({
-    title: '功能提示',
-    content: 'AI 创作在 Android 端暂需升级 HBuilderX 版本以支持画布导出，请在 Web 端体验此功能。',
-    showCancel: false
-  })
-}
-// #endif
-
-async function submitToAI() {
-  if (submitting.value) {
-    return
-  }
-  if (canvasReady.value == false) {
-    handleSubmitError('画布仍在初始化，请稍后再试。')
-    return
-  }
-  // #ifndef APP
-  if (canvasNode == null && useLegacyCanvas == false) {
-    handleSubmitError('画布仍在初始化，请稍后再试。')
-    return
-  }
-  // #endif
-  if (currentStroke != null) {
-    const cs = currentStroke!!
-    const csPoints = cs["points"]
-    if (csPoints != null && (csPoints as Array<any>).length > 0) {
-      finishCurrentStroke()
-    }
-  }
-  if (strokes.length === 0) {
-    handleSubmitError('请先画一些线稿后再生成。')
-    return
+// ─── 页面生命周期 ──────────────────────────────────
+onReady((): void => {
+  // 恢复草稿
+  const savedDraft = draft.restore()
+  if (savedDraft != null) {
+    const d = savedDraft!!
+    const p = d['prompt']
+    if (p != null) prompt.setCustomText('' + p)
+    const m = d['modeKey']
+    if (m != null) prompt.selectMode('' + m)
+    const s = d['styleKey']
+    if (s != null) prompt.selectStyle('' + s)
+    const bs = d['brushSize']
+    if (bs != null) brushSize.value = parseFloat('' + bs)
+    const bc = d['brushColor']
+    if (bc != null) brushColor.value = '' + bc
   }
 
-  submitting.value = true
-  uni.showLoading({
-    title: '正在提交任务...',
-    mask: true
-  })
-
-  try {
-    if (useLegacyCanvas) {
-      exportLegacyCanvas()
-      return
-    }
-
-    // #ifdef APP
-    await exportAppCanvas()
-    return
-    // #endif
-
-    const sketchDataUrl = buildWebSketchDataUrl()
-    if (sketchDataUrl == '' || sketchDataUrl.indexOf('data:image') !== 0) {
-      throw new Error('未能生成可用的草图数据。')
-    }
-    console.log('canvas export success', sketchDataUrl.slice(0, 48))
-    const payload : UTSJSONObject = { sketchDataUrl: sketchDataUrl }
-    await callAICloudFunction(payload)
-  } catch (error) {
-    console.error('canvas export failed', error)
-    handleSubmitError('草图导出失败：' + formatErrorMessage(error))
-  }
-}
-
-// UniTouchEvent 在 Kotlin 端不是 UTSJSONObject，无法 cast。
-// 用 typed 字段 (.touches[0].clientX 等) 直接抽出 canvas-local 坐标，
-// 绕过 startStroke/moveStroke 的 UTSJSONObject 索引访问链路。
-function pointFromUniTouchEvent(event : UniTouchEvent) : UTSJSONObject | null {
-  // canvasRect 是无类型字面量，字段在 UTS 端是 Any?，必须显式 as number 才能算术
-  const rectW : number = canvasRect.width as number
-  const rectH : number = canvasRect.height as number
-  if (rectW <= 0 || rectH <= 0) {
-    return null
-  }
-  const rectL : number = canvasRect.left as number
-  const rectT : number = canvasRect.top as number
-  const displayWidth : number = rectW
-  const displayHeight : number = rectH
-
-  let touch : UniTouch | null = null
-  if (event.touches.length > 0) {
-    touch = event.touches[0]
-  } else if (event.changedTouches.length > 0) {
-    touch = event.changedTouches[0]
-  }
-  if (touch == null) {
-    return null
-  }
-  const t = touch!!
-
-  // UniTouch.clientX/clientY 在 UTS 是 boxed Number，必须 as number 才能参与减法
-  const cx : number = t.clientX as number
-  const cy : number = t.clientY as number
-  const localX = cx - rectL
-  const localY = cy - rectT
-  if (isPointInBounds(localX, localY, displayWidth, displayHeight, 24)) {
-    return scalePoint(localX, localY, displayWidth, displayHeight)
-  }
-
-  // pageX/Y 兜底（部分容器只填这一组）
-  const px : number = t.pageX as number
-  const py : number = t.pageY as number
-  const pageLocalX = px - rectL
-  const pageLocalY = py - rectT
-  if (isPointInBounds(pageLocalX, pageLocalY, displayWidth, displayHeight, 24)) {
-    return scalePoint(pageLocalX, pageLocalY, displayWidth, displayHeight)
-  }
-
-  return null
-}
-
-// uvue 模板事件回调形参必须用平台 Uni*Event 类型（陷阱 #9）
-function touchStart(event : UniTouchEvent) {
-  // #ifdef WEB
-  if (!useLegacyCanvas && surfaceNode && surfaceNode.__aiCanvaBound) {
-    return
-  }
-  // #endif
-  if ((context2d == null && useLegacyCanvas == false) || canvasReady.value == false) {
-    return
-  }
-  measureCanvasRect()
-  const point = pointFromUniTouchEvent(event)
-  if (point == null) {
-    debugText.value = '收到开始绘制事件，但未解析出坐标。'
-    return
-  }
-  startStrokeWithPoint(point)
-}
-
-function touchMove(event : UniTouchEvent) {
-  // #ifdef WEB
-  if (!useLegacyCanvas && surfaceNode && surfaceNode.__aiCanvaBound) {
-    return
-  }
-  // #endif
-  if ((context2d == null && useLegacyCanvas == false) || currentStroke == null || isDrawing == false) {
-    return
-  }
-  const point = pointFromUniTouchEvent(event)
-  if (point == null) {
-    return
-  }
-  moveStrokeWithPoint(point)
-}
-
-function touchEnd() {
-  // #ifdef WEB
-  if (!useLegacyCanvas && surfaceNode && surfaceNode.__aiCanvaBound) {
-    return
-  }
-  // #endif
-  endStroke()
-}
-
-function probePointer(event : UniPointerEvent) {
-  // UniPointerEvent 自身有 typed clientX/clientY；同样需要 as number 摆脱 boxed Number
-  const xNum : number = event.clientX as number
-  const yNum : number = event.clientY as number
-  debugText.value = '点击坐标：(' + Math.round(xNum) + ', ' + Math.round(yNum) + ')'
-}
-
-async function initCanvas() {
-  try {
-    if (useLegacyCanvas) {
-      // #ifdef MP-WEIXIN
-      canvasContextRef = uni.createCanvasContext('sketchCanvas', pageInstance)
-      // #endif
-      canvasNode = null
-      context2d = null
-      canvasReady.value = true
-      debugText.value = '小程序画布已初始化，可以开始绘制。'
-      redrawCanvas()
-      return
-    }
-
-    let resolvedCanvas : UTSJSONObject | null = null
-    let resolvedContext : CanvasRenderingContext2D | null = null
-
-    // #ifdef WEB
-    for (let i = 0; i < 4; i += 1) {
-      const canvasElement = uni.getElementById('sketchCanvas')
-      if (canvasElement != null) {
-        resolvedCanvas = canvasElement as UTSJSONObject
-        resolvedContext = (canvasElement as UTSJSONObject).getContext('2d') as CanvasRenderingContext2D | null
-      }
-      if (resolvedContext != null) {
-        break
-      }
-      await wait(50)
-    }
-    // #endif
-
-    if (resolvedContext == null) {
-      // #ifdef WEB
-      const canvasContext = await uni.createCanvasContextAsync({
-        id: 'sketchCanvas',
-        component: pageInstance
-      })
-      if (canvasContext == null) {
-        throw new Error('无法创建 CanvasContext。')
-      }
-      canvasContextRef = canvasContext
-      const ctxAny : any = (canvasContext as any).getContext('2d')
-      resolvedContext = ctxAny != null ? (ctxAny as CanvasRenderingContext2D) : null
-      resolvedCanvas = ctxAny != null ? ((ctxAny as UTSJSONObject)["canvas"] as UTSJSONObject | null) : null
-      // #endif
-
-      // #ifdef APP
-      // uniapp x APP 端 createCanvasContextAsync 返回 void，await 取到的是 Unit，
-      // 直接 cast 会被 Kotlin 折叠成 Unit → 运行时 ClassCastException。
-      // 必须走 success 回调形式，自己包一层 Promise 以接入 async 流。
-      let appCanvas : CanvasContext | null = null
-      await new Promise<boolean>((resolve) => {
-        uni.createCanvasContextAsync({
-          id: 'sketchCanvas',
-          component: pageInstance,
-          success: (ctx : CanvasContext) => {
-            appCanvas = ctx
-            resolve(true)
-          },
-          fail: () => {
-            resolve(false)
-          }
-        })
-      })
-      if (appCanvas == null) {
-        throw new Error('无法创建 CanvasContext。')
-      }
-      const ac = appCanvas!!
-      canvasContextRef = ac
-      resolvedContext = ac.getContext('2d')
-      // #endif
-    }
-
-    canvasNode = resolvedCanvas
-    context2d = resolvedContext
-    // #ifdef WEB
-    if (canvasNode != null) {
-      canvasNode.width = CANVAS_EXPORT_SIZE
-      canvasNode.height = CANVAS_EXPORT_SIZE
-      if (canvasNode.style != null) {
-        canvasNode.style.width = canvasDisplaySize.value + 'px'
-        canvasNode.style.height = canvasDisplaySize.value + 'px'
-      }
-    }
-    surfaceNode = uni.getElementById('sketchSurface')
-    bindWebPointerEvents()
-    // #endif
-    if (context2d == null) {
-      throw new Error('Canvas 2D 上下文未初始化。')
-    }
-    canvasReady.value = true
-    debugText.value = ''
-    redrawCanvas()
-  } catch (error) {
-    canvasReady.value = false
-    debugText.value = '画布初始化失败：' + formatErrorMessage(error)
-    uni.showToast({
-      title: '画布初始化失败，请刷新后重试。',
-      icon: 'none'
-    })
-  }
-}
-
-async function initCanvasAsync() {
-  await wait(32)
-  await initCanvas()
-  measureCanvasRect()
-  setTimeout(() => {
-    measureCanvasRect()
-  }, 120)
-}
-
-onReady(() => {
-  restoreDraft()
-  setupCanvasSize()
-  initCanvasAsync()
+  canvas.setupSize()
+  setTimeout(async (): Promise<void> => {
+    await canvas.init()
+    canvas.measureRect()
+    pointer.attach() // Web 端绑定原生事件；APP/MP noop
+    canvas.redraw(strokes.strokes.value, strokes.currentStroke.value)
+  }, 32)
 })
 </script>
 
@@ -1609,7 +262,6 @@ onReady(() => {
 
 .page-inner {
   padding: 20px;
-  /* gap removed - use margin instead */
 }
 
 .hero-card,
@@ -1671,19 +323,11 @@ onReady(() => {
 }
 
 .card-head,
-.panel-head,
-.prompt-meta,
-.tool-row,
-.color-row,
-.hero-stats,
-.idea-row,
-.chips-row {
+.hero-stats {
   flex-direction: row;
 }
 
-.card-head,
-.panel-head,
-.prompt-meta {
+.card-head {
   justify-content: space-between;
   align-items: center;
 }
@@ -1717,298 +361,8 @@ onReady(() => {
   font-weight: 700;
 }
 
-.canvas-stage {
-  margin-top: 16px;
-  align-items: center;
-}
-
-.canvas-shell {
-  align-self: center;
-  position: relative;
-  border-radius: 24px;
-  padding: 10px;
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.95), rgba(243, 247, 245, 0.95));
-  box-shadow: inset 0 0 0 1px rgba(32, 51, 49, 0.08);
-}
-
-.canvas {
-  position: relative;
-  z-index: 1;
-  border-radius: 18px;
-  background:
-    linear-gradient(180deg, #ffffff 0%, #f8fbfa 100%);
-  box-shadow: inset 0 0 0 1px rgba(32, 51, 49, 0.08);
-}
-
-.canvas-surface {
-  position: absolute;
-  left: 10px;
-  top: 10px;
-  right: 10px;
-  bottom: 10px;
-  z-index: 2;
-  border-radius: 18px;
-  background: rgba(255, 255, 255, 0.001);
-  /* cursor removed - unsupported in uvue */
-}
-
-.canvas-meta {
-  margin-top: 12px;
-}
-
-.canvas-tip {
-  color: #58492f;
-  font-size: 13px;
-  line-height: 20px;
-}
-
-.canvas-debug {
-  margin-top: 6px;
-  color: #0f766e;
-  font-size: 12px;
-}
-
-.panel {
-  margin-top: 16px;
-  padding: 14px;
-  border-radius: 18px;
-  background: #fbf7ef;
-}
-
-.panel-title {
-  color: #2c2213;
-  font-size: 16px;
-  font-weight: 700;
-}
-
-.panel-desc {
-  margin-top: 4px;
-  color: #7a6848;
-  font-size: 12px;
-  line-height: 18px;
-}
-
-.panel-value {
-  color: #0f766e;
-  font-size: 18px;
-  font-weight: 700;
-}
-
-.tool-row,
-.color-row,
-.idea-row,
-.chips-row {
-  flex-wrap: wrap;
-}
-.tool-row .tool-chip + .tool-chip { margin-left: 10px; }
-.color-row .color-btn + .color-btn { margin-left: 10px; }
-.idea-row .idea-chip + .idea-chip { margin-left: 10px; }
-.chips-row .chip + .chip { margin-left: 10px; }
-
-.tool-chip,
-.idea-chip {
-  padding: 10px 14px;
-  border-radius: 999px;
-  background: #efe6d5;
-  color: #3b2f1d;
-  font-size: 13px;
-  font-weight: bold;
-}
-
-.tool-chip-active {
-  background: #203331;
-  color: #ffffff;
-}
-
-.tool-chip-disabled {
-  opacity: 0.45;
-}
-
-.slider {
-  margin-top: 12px;
-}
-
-.color-preview {
-  width: 22px;
-  height: 22px;
-  border-radius: 999px;
-  border-width: 2px;
-  border-style: solid;
-  border-color: rgba(255, 255, 255, 0.85);
-  box-shadow: 0 0 0 1px rgba(32, 51, 49, 0.15);
-}
-
-.color-chip {
-  width: 28px;
-  height: 28px;
-  border-radius: 999px;
-  box-shadow: 0 0 0 1px rgba(32, 51, 49, 0.12);
-}
-
-.color-chip-active {
-  box-shadow: 0 0 0 3px rgba(15, 118, 110, 0.2);
-}
-
 .prompt-card {
   margin-bottom: 24px;
-}
-
-.mode-switch {
-  margin-top: 14px;
-  flex-wrap: wrap;
-}
-.mode-switch .mode-chip + .mode-chip { margin-left: 10px; }
-
-.mode-chip {
-  padding: 10px 16px;
-  border-radius: 999px;
-  background: #efe6d5;
-  color: #3b2f1d;
-  font-size: 13px;
-  font-weight: 700;
-}
-
-.mode-chip-active {
-  background: #203331;
-  color: #ffffff;
-}
-
-.preset-box {
-  margin-top: 14px;
-  padding: 16px;
-  border-radius: 18px;
-  background: #f4fbf8;
-  border-width: 1px;
-  border-style: solid;
-  border-color: rgba(15, 118, 110, 0.12);
-}
-
-.preset-title {
-  display: none;
-}
-
-.preset-text {
-  display: none;
-}
-
-.preset-title-safe {
-  color: #0f766e;
-  font-size: 14px;
-  font-weight: 700;
-}
-
-.preset-text-safe {
-  margin-top: 8px;
-  color: #4f4331;
-  font-size: 13px;
-  line-height: 20px;
-}
-
-.prompt-input {
-  margin-top: 14px;
-  min-height: 110px;
-  border-radius: 18px;
-  padding: 14px;
-  background: #fffdf8;
-  color: #2c2213;
-  font-size: 14px;
-  line-height: 22px;
-  border-width: 1px;
-  border-style: solid;
-  border-color: rgba(84, 66, 38, 0.12);
-}
-
-.prompt-hint,
-.prompt-count,
-.section-label,
-.choice-desc,
-.summary-title,
-.summary-text {
-  font-size: 12px;
-}
-
-.prompt-hint,
-.choice-desc {
-  color: #7b6846;
-}
-
-.prompt-count {
-  color: #0f766e;
-  font-weight: 700;
-}
-
-.section-label {
-  margin-top: 16px;
-  margin-bottom: 10px;
-  color: #473821;
-  font-weight: 700;
-}
-
-.choice-chip {
-  width: 47%;
-  min-width: 140px;
-  padding: 14px;
-  border-radius: 18px;
-  background: #f4eddf;
-  border-width: 1px;
-  border-style: solid;
-  border-color: transparent;
-}
-
-.choice-chip-active {
-  background: #edf9f6;
-  border-color: rgba(15, 118, 110, 0.24);
-}
-
-.choice-title {
-  color: #2d2315;
-  font-size: 14px;
-  font-weight: 700;
-}
-
-.summary-box {
-  margin-top: 18px;
-  padding: 14px;
-  border-radius: 18px;
-  background: #fff8eb;
-}
-
-.summary-mode {
-  color: #0f766e;
-  font-size: 12px;
-  font-weight: 700;
-}
-
-.summary-title {
-  margin-top: 4px;
-  color: #7d6540;
-  font-weight: 700;
-}
-
-.summary-text {
-  margin-top: 6px;
-  color: #342816;
-  line-height: 20px;
-}
-
-.primary-btn {
-  margin-top: 18px;
-  height: 52px;
-  border-radius: 18px;
-  background: linear-gradient(135deg, #203331 0%, #0f766e 100%);
-  color: #ffffff;
-  font-size: 16px;
-  font-weight: 700;
-  justify-content: center;
-  align-items: center;
-}
-
-.primary-btn-disabled {
-  opacity: 0.6;
-}
-
-.canvas-surface {
 }
 
 .drawing-lock {
@@ -2027,11 +381,5 @@ onReady(() => {
   .hero-card {
     padding: 24px;
   }
-
-  .choice-chip {
-    width: 23%;
-  }
 }
 </style>
-
-
