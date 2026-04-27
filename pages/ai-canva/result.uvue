@@ -1,4 +1,4 @@
-﻿<template>
+<template>
   <view class="page">
     <view class="page-inner">
       <view class="result-card">
@@ -7,27 +7,27 @@
             <text class="page-title">生成结果</text>
             <text class="page-desc">页面会自动轮询云端任务，完成后直接展示图片。</text>
           </view>
-          <view class="badge">{{ loading ? '处理中' : errorMessage != '' ? '异常' : '完成' }}</view>
+          <view class="badge">{{ task.isLoading.value ? '处理中' : task.errorMessage.value != '' ? '异常' : '完成' }}</view>
         </view>
 
-        <view v-if="loading" class="state-panel">
+        <view v-if="task.isLoading.value" class="state-panel">
           <view class="spinner"></view>
           <text class="state-title">正在生成画面</text>
           <text class="state-desc">大多数任务会在 15 到 60 秒内完成，复杂风格可能会更久。</text>
-          <text class="state-meta">已查询 {{ pollCount }} 次</text>
+          <text class="state-meta">已查询 {{ task.pollCount.value }} 次</text>
         </view>
 
-        <view v-else-if="errorMessage" class="state-panel state-error">
+        <view v-else-if="task.errorMessage.value != ''" class="state-panel state-error">
           <text class="state-title">这次生成没有完成</text>
-          <text class="state-desc">{{ errorMessage }}</text>
+          <text class="state-desc">{{ task.errorMessage.value }}</text>
           <view class="action-row uni-row">
-            <view class="ghost-btn" @click="retryQuery">重新查询</view>
+            <view class="ghost-btn" @click="task.retry">重新查询</view>
             <view class="ghost-btn" @click="goBack">返回继续编辑</view>
           </view>
         </view>
 
         <view v-else class="result-panel">
-          <image class="result-image" :src="resultImg" mode="widthFix" @click="previewImage"></image>
+          <image class="result-image" :src="task.resultUrl.value" mode="widthFix" @click="previewImage"></image>
 
           <view class="meta-row uni-row">
             <view class="meta-card" v-if="modeText">
@@ -66,208 +66,52 @@
 
 <script setup lang="ts">
 import { ref } from 'vue'
+import { useAITask } from '@/hooks/ai-canva/useAITask'
 
-const loading = ref(true)
-const resultImg = ref('')
-const errorMessage = ref('')
-const pollCount = ref(0)
-const promptText = ref('')
-const styleText = ref('')
-const modeText = ref('')
+const task = useAITask()
+const promptText = ref<string>('')
+const styleText = ref<string>('')
+const modeText = ref<string>('')
 
-let taskId = ''
-let pollTimer = 0
-const maxPollCount = 40
-
-function readOption(options : UTSJSONObject | null, key : string) : string {
-  if (options == null) {
-    return ''
-  }
+function readOption(options: UTSJSONObject | null, key: string): string {
+  if (options == null) return ''
   const value = options[key]
   return value == null ? '' : '' + value
 }
 
-function decodeOption(value : string) : string {
-  if (value == '') {
-    return ''
-  }
-  try {
-    return decodeURIComponent(value) ?? value
-  } catch (error) {
-    return value
-  }
+function decodeOption(value: string): string {
+  if (value === '') return ''
+  try { return decodeURIComponent(value) ?? value } catch (_e) { return value }
 }
 
-function formatErrorMessage(error : any | null) : string {
-  if (error == null) {
-    return '发生了未知错误，请稍后重试。'
-  }
-  if (typeof error === 'string') {
-    return error as string
-  }
-  const errObj = error as UTSJSONObject
-  const msg = errObj["message"]
-  if (msg != null) {
-    return '' + msg
-  }
-  const errMsg = errObj["errMsg"]
-  if (errMsg != null) {
-    return '' + errMsg
-  }
-  return '发生了未知错误，请稍后重试。'
+function previewImage(): void {
+  const u = task.resultUrl.value
+  if (u === '') return
+  uni.previewImage({ urls: [u], current: u })
 }
 
-function clearPolling() {
-  if (pollTimer > 0) {
-    clearInterval(pollTimer)
-    pollTimer = 0
-  }
-}
-
-async function queryTaskStatus() {
-  pollCount.value += 1
-  try {
-    const res = await uniCloud.callFunction({
-      name: 'ai-handler',
-      data: {
-        action: 'queryTask',
-        taskId: taskId
-      }
-    })
-
-    let result : UTSJSONObject | null = null
-    if (res != null) {
-      const raw = (res as UTSJSONObject)["result"]
-      if (raw != null) {
-        result = raw as UTSJSONObject
-      }
-    }
-    console.log('queryTask result', result)
-    if (result == null) {
-      if (pollCount.value >= maxPollCount) {
-        loading.value = false
-        errorMessage.value = '长时间未拿到可用结果，请稍后再试。'
-        clearPolling()
-      }
-      return
-    }
-    const success = result["success"]
-    const dataRaw = result["data"]
-    if (success != true || dataRaw == null) {
-      if (pollCount.value >= maxPollCount) {
-        loading.value = false
-        const msgRaw = result["msg"]
-        errorMessage.value = msgRaw != null ? '' + msgRaw : '长时间未拿到可用结果，请稍后再试。'
-        clearPolling()
-      }
-      return
-    }
-    const data = dataRaw as UTSJSONObject
-    const statusRaw = data["task_status"]
-    const status = statusRaw != null ? '' + statusRaw : ''
-    const resultsRaw = data["results"]
-    if (status == 'SUCCEEDED' && resultsRaw != null) {
-      const results = resultsRaw as Array<UTSJSONObject>
-      if (results.length > 0) {
-        const urlRaw = results[0]["url"]
-        resultImg.value = urlRaw != null ? '' + urlRaw : ''
-        loading.value = false
-        clearPolling()
-        return
-      }
-    }
-    if (status == 'FAILED' || status == 'CANCELED') {
-      loading.value = false
-      const msgRaw = data["message"]
-      errorMessage.value = msgRaw != null ? '' + msgRaw : '任务已结束，但没有生成可用图片。'
-      clearPolling()
-      return
-    }
-    if (pollCount.value >= maxPollCount) {
-      loading.value = false
-      errorMessage.value = '等待结果超时，请稍后重新查询。'
-      clearPolling()
-    }
-  } catch (error) {
-    if (pollCount.value >= maxPollCount) {
-      loading.value = false
-      errorMessage.value = formatErrorMessage(error)
-      clearPolling()
-    }
-  }
-}
-
-function startPolling() {
-  clearPolling()
-  loading.value = true
-  errorMessage.value = ''
-  pollCount.value = 0
-  queryTaskStatus()
-  pollTimer = setInterval(() => {
-    queryTaskStatus()
-  }, 3000)
-}
-
-function retryQuery() {
-  if (taskId == null || taskId == "") {
-    return
-  }
-  startPolling()
-}
-
-function previewImage() {
-  if (resultImg.value == null || resultImg.value == '') {
-    return
-  }
-  uni.previewImage({
-    urls: [resultImg.value],
-    current: resultImg.value
-  })
-}
-
-function saveImage() {
-  if (resultImg.value == null || resultImg.value == '') {
-    return
-  }
+function saveImage(): void {
+  const u = task.resultUrl.value
+  if (u === '') return
   uni.saveImageToPhotosAlbum({
-    filePath: resultImg.value,
-    success: () => {
-      uni.showToast({
-        title: '图片已保存到相册。',
-        icon: 'none'
-      })
-    },
-    fail: (error) => {
-      uni.showToast({
-        title: '保存失败：' + formatErrorMessage(error),
-        icon: 'none'
-      })
-    }
+    filePath: u,
+    success: (): void => { uni.showToast({ title: '图片已保存到相册。', icon: 'none' }) },
+    fail: (error): void => { uni.showToast({ title: '保存失败：' + ('' + error), icon: 'none' }) }
   })
 }
 
-function goBack() {
-  uni.navigateBack()
-}
+function goBack(): void { uni.navigateBack() }
 
-onLoad((options) => {
-  taskId = readOption(options, 'taskId')
+onLoad((options): void => {
   promptText.value = decodeOption(readOption(options, 'prompt'))
   styleText.value = decodeOption(readOption(options, 'style'))
   modeText.value = decodeOption(readOption(options, 'mode'))
-
-  if (taskId == null || taskId == "") {
-    loading.value = false
-    errorMessage.value = '缺少任务编号，暂时无法查询生成结果。'
-    return
-  }
-
-  startPolling()
+  const taskIdOpt = readOption(options, 'taskId')
+  if (taskIdOpt === '') return
+  task.startPolling(taskIdOpt)
 })
 
-onUnload(() => {
-  clearPolling()
-})
+onUnload((): void => { task.stop() })
 </script>
 
 <style scoped>
@@ -379,7 +223,6 @@ onUnload(() => {
 .meta-row {
   margin-top: 16px;
   flex-wrap: wrap;
-  /* gap removed - uvue doesn't support gap */
 }
 
 .meta-card,
@@ -453,5 +296,3 @@ onUnload(() => {
   }
 }
 </style>
-
-
