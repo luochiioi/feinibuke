@@ -155,7 +155,7 @@ export function useCanvas(options: CanvasOptions): CanvasAPI {
       await new Promise<boolean>((resolve) => {
         uni.createCanvasContextAsync({
           id: options.canvasId,
-          component: options.pageInstance,
+          component: options.pageInstance as any,
           success: (ctx: CanvasContext) => {
             appCanvas = ctx;
             resolve(true);
@@ -439,8 +439,8 @@ export function useCanvas(options: CanvasOptions): CanvasAPI {
     rect,
     useLegacy: useLegacyCanvasFlag,
     surfaceNodeRef,
-    setupSize,
-    init,
+    setupSize: (): void => setupSize(),
+    init: async (): Promise<void> => init(),
     measureRect,
     redraw,
     exportForSubmit
