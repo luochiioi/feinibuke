@@ -249,10 +249,30 @@ export default {
 			this.goToAddMarker(lat, lng);
 		},
 
+		// 安全提取 map longpress event 的 lat/lng，范式参考 pointFromUniTouchEvent
+		// 陷阱 #13: 不能假设 event 可 as UTSJSONObject，用 try/catch 兜底
+		_extractLongPressLatLng(e: any): UTSJSONObject | null {
+			try {
+				return e as UTSJSONObject;
+			} catch (_) {
+				return null;
+			}
+		},
+		// 安全提取 map markertap event 的 markerId
+		_extractMarkerTapId(e: any): number | null {
+			try {
+				const ev = e as UTSJSONObject;
+				return ev["markerId"] as number;
+			} catch (_) {
+				return null;
+			}
+		},
+
 		handleMapLongPress(e : any) {
-			const event = e as UTSJSONObject;
-			const lat = event["latitude"] as number;
-			const lng = event["longitude"] as number;
+			const ev = this._extractLongPressLatLng(e);
+			if (ev == null) return;
+			const lat = ev["latitude"] as number;
+			const lng = ev["longitude"] as number;
 			this.goToAddMarker(lat, lng);
 		},
 
@@ -335,18 +355,22 @@ export default {
 		},
 
 		onMarkerTap(e: any) {
-			const event = e as UTSJSONObject;
-			const tapId = event["markerId"] as number;
-			const marker = this.markers.find(m => {
-				const mo = m as UTSJSONObject;
-				return mo["id"] == tapId;
-			});
+			const tapId = this._extractMarkerTapId(e);
+			if (tapId == null) return;
+			// 陷阱 #2: Array<UTSJSONObject>.find 不可用，for 循环替代
+			let marker: UTSJSONObject | null = null;
+			const list = this.markers;
+			for (let i = 0; i < list.length; i++) {
+				if (list[i]["id"] == tapId) {
+					marker = list[i];
+					break;
+				}
+			}
 			if (marker != null) {
-				this.activeMarker = marker as UTSJSONObject;
+				this.activeMarker = marker;
 				this.hasActiveMarker = true;
-				const mo = marker as UTSJSONObject;
-				this.latitude = parseFloat('' + mo["latitude"]);
-				this.longitude = parseFloat('' + mo["longitude"]);
+				this.latitude = parseFloat('' + marker["latitude"]);
+				this.longitude = parseFloat('' + marker["longitude"]);
 			}
 		},
 
