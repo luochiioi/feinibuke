@@ -429,7 +429,13 @@ export function useCanvas(options: CanvasOptions): CanvasAPI {
       throw new Error('画布上下文不可用，请重试。');
     }
     redraw(strokes, currentStroke);
-    const dataUrl: string = context2d!!.toDataURL('image/png');
+    // CanvasRenderingContext2D.toDataURL exists at runtime on App-Android (HBuilderX 4.24+)
+    // but the UTS type definition doesn't include it. Cast through unknown to bypass.
+    type _CtxWithExport = {
+      toDataURL(type: string): string;
+    };
+    const exCtx: _CtxWithExport = context2d!! as unknown as _CtxWithExport;
+    const dataUrl: string = exCtx.toDataURL('image/png');
     if (dataUrl == null || dataUrl === '') {
       throw new Error('未能生成可用的草图数据。');
     }
