@@ -66,6 +66,13 @@ export type CanvasAPI = {
   exportForSubmit(strokes: Array<UTSJSONObject>, currentStroke: UTSJSONObject | null): Promise<ExportPayload>;
 };
 
+// #ifdef APP
+// CanvasRenderingContext2D.toDataURL available at runtime (HBuilderX 4.24+), missing from UTS type defs
+interface _Ctx extends CanvasRenderingContext2D {
+  toDataURL(type: string): string;
+}
+// #endif
+
 export function useCanvas(options: CanvasOptions): CanvasAPI {
   const ready = ref<boolean>(false);
   const displaySize = ref<number>(320);
@@ -430,10 +437,7 @@ export function useCanvas(options: CanvasOptions): CanvasAPI {
     }
     redraw(strokes, currentStroke);
     // CanvasRenderingContext2D.toDataURL exists at runtime on App-Android (HBuilderX 4.24+)
-    // but the UTS type definition doesn't include it. Extend interface to add it.
-    interface _Ctx extends CanvasRenderingContext2D {
-      toDataURL(type: string): string;
-    }
+    // but the UTS type definition doesn't include it. _Ctx declared at module top.
     const exCtx: _Ctx = context2d!! as _Ctx;
     const dataUrl: string = exCtx.toDataURL('image/png');
     if (dataUrl == null || dataUrl === '') {
