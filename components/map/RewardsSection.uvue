@@ -1,0 +1,62 @@
+<template>
+	<view v-if="rewards.length > 0" class="rewards-section">
+		<view class="section-head">
+			<text class="section-title">奖励记录</text>
+		</view>
+		<view v-for="r in items" :key="r['id']" class="reward-item">
+			<text class="reward-icon">🎁</text>
+			<view class="reward-info">
+				<text class="reward-name">{{ r['taskName'] }}</text>
+				<text class="reward-val">{{ r['reward'] }}</text>
+			</view>
+			<text class="reward-date">{{ formatDate(r['earnedAt']) }}</text>
+		</view>
+	</view>
+</template>
+
+<script lang="ts">
+export default {
+	props: {
+		rewards: { type: Array as any, default: () => [] }
+	},
+	computed: {
+		items(): any[] {
+			return (this.rewards as any[]).slice(0, 5);
+		}
+	},
+	methods: {
+		formatDate(ts: any): string {
+			if (ts == null) return '';
+			const d = new Date(ts as number);
+			return `${d.getMonth() + 1}/${d.getDate()}`;
+		}
+	}
+};
+</script>
+
+<style scoped>
+.rewards-section {
+	margin-top: 10rpx;
+	padding: 24rpx;
+	border-radius: 28rpx;
+	background: rgba(255, 253, 250, 0.97);
+	border: 1px solid rgba(20, 33, 61, 0.06);
+	box-shadow: 0 10rpx 28rpx rgba(31, 41, 55, 0.07);
+	margin-bottom: 16rpx;
+}
+.section-head { margin-bottom: 16rpx; }
+.section-title { font-size: 28rpx; font-weight: 700; color: #14213d; }
+.reward-item {
+	display: flex; align-items: center; padding: 16rpx 0;
+	border-bottom: 1px solid rgba(20,33,61,0.05);
+}
+.reward-item .reward-icon { margin-right: 16rpx; }
+.reward-item .reward-info { flex: 1; }
+.reward-item .reward-date { margin-left: 16rpx; }
+.reward-item:last-child { border-bottom: none; }
+.reward-icon { font-size: 36rpx; flex-shrink: 0; }
+.reward-info { flex: 1; }
+.reward-name { font-size: 26rpx; font-weight: bold; color: #14213d; }
+.reward-val { font-size: 22rpx; color: #3949ab; margin-top: 4rpx; }
+.reward-date { font-size: 20rpx; color: #aab3c0; }
+</style>

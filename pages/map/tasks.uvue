@@ -1,97 +1,40 @@
 <template>
 	<view class="tasks-page">
-		<!-- 顶部统计面板 -->
-		<view class="hero-panel">
-			<text class="hero-tag">MISSIONS &amp; SPOTS</text>
-			<text class="hero-title">{{ mainTab === 'tasks' ? '我的任务' : '我的足迹' }}</text>
-			<view class="hero-stats">
-				<view class="hstat">
-					<text class="hstat-val">{{ completedCount }}</text>
-					<text class="hstat-label">已完成</text>
-				</view>
-				<view class="hstat-divider"></view>
-				<view class="hstat">
-					<text class="hstat-val">{{ pendingCount }}</text>
-					<text class="hstat-label">进行中</text>
-				</view>
-				<view class="hstat-divider"></view>
-				<view class="hstat">
-					<text class="hstat-val">{{ totalPoints }}</text>
-					<text class="hstat-label">累计积分</text>
-				</view>
-			</view>
-		</view>
+		<HeroStats :main-tab="mainTab" :completed-count="completedCount" :pending-count="pendingCount" :total-points="totalPoints" />
 
 		<!-- 主 Tab 切换 -->
 		<view class="main-tabs">
-			<view
-				:class="['main-tab', mainTab === 'tasks' ? 'main-tab--active' : '']"
-				@click="mainTab = 'tasks'"
-			>任务</view>
-			<view
-				:class="['main-tab', mainTab === 'spots' ? 'main-tab--active' : '']"
-				@click="mainTab = 'spots'"
-			>足迹 · {{ markers.length }}</view>
+			<view :class="['main-tab', mainTab === 'tasks' ? 'main-tab--active' : '']" @click="mainTab = 'tasks'">
+				<text :class="['main-tab-text', mainTab === 'tasks' ? 'main-tab-text--active' : '']">任务</text>
+			</view>
+			<view :class="['main-tab', mainTab === 'spots' ? 'main-tab--active' : '']" @click="mainTab = 'spots'">
+				<text :class="['main-tab-text', mainTab === 'spots' ? 'main-tab-text--active' : '']">足迹 · {{ markers.length }}</text>
+			</view>
 		</view>
 
 		<!-- ===== 任务面板 ===== -->
 		<view v-if="mainTab === 'tasks'" class="panel">
-			<!-- 筛选标签 -->
 			<view class="filter-row">
-				<view
-					:class="['filter-chip', activeTab === 'all' ? 'filter-chip--active' : '']"
-					@click="activeTab = 'all'"
-				>全部</view>
-				<view
-					:class="['filter-chip', activeTab === 'pending' ? 'filter-chip--active' : '']"
-					@click="activeTab = 'pending'"
-				>进行中</view>
-				<view
-					:class="['filter-chip', activeTab === 'completed' ? 'filter-chip--active' : '']"
-					@click="activeTab = 'completed'"
-				>已完成</view>
+				<view :class="['filter-chip', activeTab === 'all' ? 'filter-chip--active' : '']" @click="activeTab = 'all'">
+					<text :class="['filter-chip-text', activeTab === 'all' ? 'filter-chip-text--active' : '']">全部</text>
+				</view>
+				<view :class="['filter-chip', activeTab === 'pending' ? 'filter-chip--active' : '']" @click="activeTab = 'pending'">
+					<text :class="['filter-chip-text', activeTab === 'pending' ? 'filter-chip-text--active' : '']">进行中</text>
+				</view>
+				<view :class="['filter-chip', activeTab === 'completed' ? 'filter-chip--active' : '']" @click="activeTab = 'completed'">
+					<text :class="['filter-chip-text', activeTab === 'completed' ? 'filter-chip-text--active' : '']">已完成</text>
+				</view>
 			</view>
 
 			<scroll-view scroll-y class="scroll-area">
-				<view
-					v-for="task in filteredTasks"
-					:key="task['id']"
-					class="task-card"
-					@click="goDetail(task)"
-				>
-					<view class="task-card__header">
-						<view :class="['task-status-dot', task['status'] === 'completed' ? 'dot-done' : 'dot-pending']"></view>
-						<text class="task-name">{{ task['name'] }}</text>
-						<text :class="['task-badge', task['status'] === 'completed' ? 'badge-done' : 'badge-pending']">
-							{{ task['status'] === 'completed' ? '已完成' : '进行中' }}
-						</text>
-					</view>
-					<text class="task-target">目标：{{ task['targetTitle'] }}</text>
-					<view class="task-card__footer">
-						<text class="task-reward">🎖 {{ task['reward'] }}</text>
-						<text v-if="task['status'] === 'completed'" class="task-date">{{ formatDate(task['completedAt']) }}</text>
-					</view>
-				</view>
+				<TaskCard v-for="task in filteredTasks" :key="task['id']" :task="task" @tap="goDetail(task)" />
 
 				<view v-if="filteredTasks.length === 0" class="empty">
 					<text class="empty-icon">🗺</text>
 					<text class="empty-text">{{ activeTab === 'all' ? '还没有任务' : '该分类暂无任务' }}</text>
 				</view>
 
-				<!-- 奖励记录 -->
-				<view v-if="rewards.length > 0 && activeTab === 'all'" class="rewards-section">
-					<view class="section-head">
-						<text class="section-title">奖励记录</text>
-					</view>
-					<view v-for="r in rewards.slice(0, 5)" :key="r['id']" class="reward-item">
-						<text class="reward-icon">🎁</text>
-						<view class="reward-info">
-							<text class="reward-name">{{ r['taskName'] }}</text>
-							<text class="reward-val">{{ r['reward'] }}</text>
-						</view>
-						<text class="reward-date">{{ formatDate(r['earnedAt']) }}</text>
-					</view>
-				</view>
+				<RewardsSection :rewards="rewards" />
 
 				<view class="list-bottom-pad"></view>
 			</scroll-view>
@@ -99,42 +42,10 @@
 
 		<!-- ===== 足迹面板 ===== -->
 		<view v-if="mainTab === 'spots'" class="panel">
-			<!-- 操作栏 -->
-			<view class="add-spot-bar">
-				<view class="add-spot-btn" @click="goAddSpot">
-					<text class="add-spot-icon">＋</text>
-					<text class="add-spot-text">新增打卡点</text>
-				</view>
-				<view class="sync-btn" :class="{ 'sync-btn--loading': syncing }" @click="showSyncMenu">
-					<text class="sync-btn-text">{{ syncing ? '同步中…' : '☁ 同步' }}</text>
-				</view>
-			</view>
-			<!-- 同步状态提示 -->
-			<view v-if="syncMsg" class="sync-msg" :class="syncMsgClass">
-				<text>{{ syncMsgText }}</text>
-			</view>
+			<DebugPanel :syncing="syncing" :sync-msg="syncMsg" @add-spot="goAddSpot" @sync="showSyncMenu" />
 
 			<scroll-view scroll-y class="scroll-area">
-				<view v-for="item in markers" :key="item['id']" class="spot-card">
-					<view class="spot-card__left">
-						<text class="spot-name">{{ item['title'] }}</text>
-						<text class="spot-coord">{{ formatCoord(item['latitude']) }}, {{ formatCoord(item['longitude']) }}</text>
-						<text v-if="item['checkedAt']" class="spot-checked-time">打卡于 {{ formatDate(item['checkedAt']) }}</text>
-					</view>
-					<view class="spot-card__right">
-						<view class="spot-btn-row">
-							<view class="spot-action-btn locate-btn" @click="focusOnMap(item)">
-								<text class="spot-btn-icon">🗺</text>
-							</view>
-							<view class="spot-action-btn del-btn" @click="confirmDelete(item['id'])">
-								<text class="spot-btn-icon">🗑</text>
-							</view>
-						</view>
-						<text :class="['spot-status', getSpotStatusClass(item)]">
-							{{ getSpotStatusText(item) }}
-						</text>
-					</view>
-				</view>
+				<SpotCard v-for="item in markers" :key="item['id']" :item="item" @focus="focusOnMap(item)" @delete="confirmDelete(item['id'])" />
 
 				<view v-if="markers.length === 0" class="empty">
 					<text class="empty-icon">📍</text>
@@ -168,15 +79,6 @@ export default {
 		};
 	},
 	computed: {
-		syncMsgClass(): string {
-			if (this.syncMsg == null) return '';
-			return ((this.syncMsg as UTSJSONObject)["ok"] === true) ? 'sync-msg--ok' : 'sync-msg--err';
-		},
-		syncMsgText(): string {
-			if (this.syncMsg == null) return '';
-			const t = (this.syncMsg as UTSJSONObject)["text"];
-			return (t != null) ? ('' + t) : '';
-		},
 		filteredTasks() {
 			if (this.activeTab === 'all') return this.tasks;
 			return this.tasks.filter(t => (t as UTSJSONObject)["status"] === this.activeTab);
@@ -204,19 +106,10 @@ export default {
 		this.refresh();
 	},
 	methods: {
-		getSpotStatusClass(item: UTSJSONObject): string {
-			return (item["checked"] === true) ? 'status-done' : 'status-pending';
-		},
-		getSpotStatusText(item: UTSJSONObject): string {
-			return (item["checked"] === true) ? '已打卡' : '待探索';
-		},
 		async refresh() {
-			// P0-#7：task_list + user_tasks 合并逻辑统一收敛到 taskStore，不再各页面重复实现
 			await taskStore.refresh();
 			this.tasks = taskStore.merged();
 			this.rewards = taskStore.rewards();
-
-			// markers 仍由本页面承担（markerStore 接入是 map/index.uvue 的范围，本会话不扩张）
 			this.markers = getMarkers() as Array<UTSJSONObject>;
 			try {
 				const cloudMarkers: Array<UTSJSONObject> = await getMarkersCloud() as Array<UTSJSONObject>;
@@ -224,7 +117,6 @@ export default {
 			} catch (_) {}
 		},
 
-		// 点击同步按钮，弹出菜单
 		showSyncMenu() {
 			if (this.syncing) return;
 			const localCount = this.markers.length;
@@ -246,7 +138,6 @@ export default {
 			});
 		},
 
-		// 诊断测试
 		async runDiagnostic() {
 			this.syncing = true;
 			this.syncMsg = null;
@@ -277,7 +168,6 @@ export default {
 			}
 		},
 
-		// 查看本地存储数据
 		showLocalData() {
 			const markersRaw = uni.getStorageSync('tourism_markers');
 			const tasksRaw = uni.getStorageSync('task_list');
@@ -305,6 +195,7 @@ export default {
 			this.syncMsg = { ok: markers.length > 0, text: msg };
 			setTimeout(() => { this.syncMsg = null; }, 10000);
 		},
+
 		confirmForceResync() {
 			uni.showModal({
 				title: '强制重新同步',
@@ -338,7 +229,6 @@ export default {
 			}
 		},
 
-		// 查看云端实际数量
 		async checkCloudCount() {
 			this.syncing = true;
 			try {
@@ -361,7 +251,6 @@ export default {
 			}
 		},
 
-		// 智能同步（本地 > 云端 才迁移）
 		async syncToCloud() {
 			if (this.syncing) return;
 			this.syncing = true;
@@ -398,7 +287,6 @@ export default {
 			uni.navigateTo({ url: `/pages/map/task-detail?id=${task["id"]}` });
 		},
 
-		// 足迹相关
 		goAddSpot() {
 			uni.navigateTo({ url: '/pages/map/add-marker' });
 		},
@@ -408,33 +296,22 @@ export default {
 			uni.navigateBack();
 		},
 
-		confirmDelete(id: any | null) { //  改为普通函数，参数类型改为 any
-		  uni.showModal({
-		    title: '删除提示',
-		    content: '确定要删除这个打卡点吗？',
-		    success: (res) => {
-		      if (res.confirm) {
-		        // 这里的 this 必须指向实例，所以 confirmDelete 不能是箭头函数
-		        const marker: UTSJSONObject | null = this.markers.find(m => m["id"] === id) as UTSJSONObject | null;
-		        this.markers = this.markers.filter(m => m["id"] !== id);
-		        if (marker != null) {
-		          const m = marker as UTSJSONObject;
-		          const cloudId = (m["_id"] != null) ? ('' + m["_id"]) : '' + m["id"];
-		          deleteMarkerCloud(cloudId);
-		        }
-		      }
-		    }
-		  });
-		},
-
-		formatCoord(val: any | null): string{
-			return (val as number).toFixed(4);
-		},
-
-		formatDate(ts: any | null): string{
-			if (ts == null) return '';
-			const d = new Date(ts as number);
-			return `${d.getMonth() + 1}/${d.getDate()}`;
+		confirmDelete(id: any) {
+			uni.showModal({
+				title: '删除提示',
+				content: '确定要删除这个打卡点吗？',
+				success: (res) => {
+					if (res.confirm) {
+						const marker: UTSJSONObject | null = this.markers.find(m => m["id"] === id) as UTSJSONObject | null;
+						this.markers = this.markers.filter(m => m["id"] !== id);
+						if (marker != null) {
+							const m = marker as UTSJSONObject;
+							const cloudId = (m["_id"] != null) ? ('' + m["_id"]) : '' + m["id"];
+							deleteMarkerCloud(cloudId);
+						}
+					}
+				}
+			});
 		}
 	}
 };
@@ -448,47 +325,6 @@ export default {
 	background: linear-gradient(180deg, #f4f7ff 0%, #f8faff 100%);
 }
 
-/* 顶部统计面板 */
-.hero-panel {
-	padding: 28rpx 24rpx 30rpx;
-	background: linear-gradient(135deg, #1a237e 0%, #283593 55%, #3949ab 100%);
-	border-bottom-left-radius: 40rpx;
-	border-bottom-right-radius: 40rpx;
-	box-shadow: 0 24rpx 56rpx rgba(26, 35, 126, 0.2);
-}
-
-.hero-tag {
-	display: flex;
-	padding: 10rpx 18rpx;
-	border-radius: 999rpx;
-	background: rgba(255, 255, 255, 0.14);
-	font-size: 20rpx;
-	letter-spacing: 3rpx;
-	color: rgba(255, 255, 255, 0.85);
-}
-
-.hero-title {
-	margin-top: 16rpx;
-	font-size: 52rpx;
-	font-weight: 700;
-	color: #fff;
-}
-
-.hero-stats {
-	display: flex;
-	align-items: center;
-	margin-top: 24rpx;
-	padding: 24rpx;
-	border-radius: 28rpx;
-	background: rgba(255, 255, 255, 0.12);
-	border: 1px solid rgba(255, 255, 255, 0.16);
-}
-
-.hstat { flex: 1; text-align: center; }
-.hstat-val { font-size: 48rpx; font-weight: 700; color: #fff; }
-.hstat-label { margin-top: 6rpx; font-size: 21rpx; color: rgba(255,255,255,0.75); }
-.hstat-divider { width: 1px; height: 60rpx; background: rgba(255,255,255,0.22); }
-
 /* 主 Tab */
 .main-tabs {
 	display: flex;
@@ -497,26 +333,27 @@ export default {
 	border-radius: 22rpx;
 	padding: 6rpx;
 }
+.main-tab + .main-tab { margin-left: 6rpx; }
 
 .main-tab {
 	flex: 1;
 	text-align: center;
 	padding: 16rpx 0;
 	border-radius: 16rpx;
+	transition: all 0.2s;
+}
+.main-tab--active {
+	background: #fff;
+	box-shadow: 0 6rpx 20rpx rgba(57, 73, 171, 0.14);
+}
+
+.main-tab-text {
 	font-size: 27rpx;
 	font-weight: bold;
 	color: #7b8496;
-	transition: all 0.2s;
 }
-
-.main-tab + .main-tab {
-	margin-left: 6rpx;
-}
-
-.main-tab--active {
-	background: #fff;
+.main-tab-text--active {
 	color: #3949ab;
-	box-shadow: 0 6rpx 20rpx rgba(57, 73, 171, 0.14);
 }
 
 /* 面板容器 */
@@ -538,18 +375,22 @@ export default {
 .filter-chip {
 	padding: 12rpx 22rpx;
 	border-radius: 999rpx;
-	font-size: 24rpx;
-	font-weight: bold;
 	background: rgba(20, 33, 61, 0.05);
-	color: #5b6475;
 	border: 1px solid rgba(20, 33, 61, 0.08);
 }
-
 .filter-chip--active {
 	background: #3949ab;
-	color: #fff;
 	border-color: transparent;
 	box-shadow: 0 10rpx 24rpx rgba(57, 73, 171, 0.25);
+}
+
+.filter-chip-text {
+	font-size: 24rpx;
+	font-weight: bold;
+	color: #5b6475;
+}
+.filter-chip-text--active {
+	color: #fff;
 }
 
 /* 滚动区域 */
@@ -557,214 +398,7 @@ export default {
 	flex: 1;
 	padding: 8rpx 24rpx 0;
 }
-
 .list-bottom-pad { height: 40rpx; }
-
-/* 任务卡片 */
-.task-card {
-	background: rgba(255, 253, 250, 0.97);
-	border-radius: 26rpx;
-	padding: 28rpx 24rpx;
-	margin-bottom: 16rpx;
-	border: 1px solid rgba(20, 33, 61, 0.06);
-	box-shadow: 0 10rpx 28rpx rgba(31, 41, 55, 0.07);
-}
-
-.task-card:active { transform: scale(0.99); }
-
-.task-card__header {
-	display: flex;
-	align-items: center;
-}
-.task-card__header .task-status-dot { margin-right: 14rpx; }
-.task-card__header .task-badge { margin-left: 14rpx; }
-
-.task-status-dot {
-	width: 18rpx; height: 18rpx;
-	border-radius: 9rpx;
-	flex-shrink: 0;
-}
-
-.dot-done { background: #34c759; box-shadow: 0 0 0 8rpx rgba(52,199,89,0.12); }
-.dot-pending { background: #ff9500; box-shadow: 0 0 0 8rpx rgba(255,149,0,0.12); }
-
-.task-name { flex: 1; font-size: 30rpx; font-weight: 700; color: #14213d; }
-
-.task-badge {
-	font-size: 20rpx;
-	padding: 6rpx 14rpx;
-	border-radius: 999rpx;
-}
-
-.badge-done { background: rgba(52,199,89,0.1); color: #34c759; }
-.badge-pending { background: rgba(255,149,0,0.1); color: #ff9500; }
-
-.task-target { margin-top: 12rpx; font-size: 24rpx; color: #6b7280; }
-
-.task-card__footer {
-	display: flex;
-	align-items: center;
-	justify-content: space-between;
-	margin-top: 16rpx;
-}
-
-.task-reward { font-size: 24rpx; color: #3949ab; font-weight: bold; }
-.task-date { font-size: 22rpx; color: #aab3c0; }
-
-/* 奖励记录 */
-.rewards-section {
-	margin-top: 10rpx;
-	padding: 24rpx;
-	border-radius: 28rpx;
-	background: rgba(255, 253, 250, 0.97);
-	border: 1px solid rgba(20, 33, 61, 0.06);
-	box-shadow: 0 10rpx 28rpx rgba(31, 41, 55, 0.07);
-	margin-bottom: 16rpx;
-}
-
-.section-head { margin-bottom: 16rpx; }
-.section-title { font-size: 28rpx; font-weight: 700; color: #14213d; }
-
-.reward-item {
-	display: flex; align-items: center;
-	padding: 16rpx 0;
-	border-bottom: 1px solid rgba(20,33,61,0.05);
-}
-.reward-item .reward-icon { margin-right: 16rpx; }
-.reward-item .reward-info { flex: 1; }
-.reward-item .reward-date { margin-left: 16rpx; }
-.reward-item:last-child { border-bottom: none; }
-.reward-icon { font-size: 36rpx; flex-shrink: 0; }
-.reward-info { flex: 1; }
-.reward-name { font-size: 26rpx; font-weight: bold; color: #14213d; }
-.reward-val { font-size: 22rpx; color: #3949ab; margin-top: 4rpx; }
-.reward-date { font-size: 20rpx; color: #aab3c0; }
-
-/* 足迹 - 操作栏 */
-.add-spot-bar {
-	display: flex;
-	align-items: center;
-	padding: 16rpx 24rpx;
-	flex-shrink: 0;
-}
-.add-spot-bar .add-spot-btn { margin-right: 14rpx; }
-
-.add-spot-btn {
-	display: flex;
-	align-items: center;
-	padding: 16rpx 24rpx;
-	border-radius: 999rpx;
-	background: linear-gradient(135deg, #3949ab 0%, #5c6bc0 100%);
-	box-shadow: 0 10rpx 24rpx rgba(57,73,171,0.25);
-}
-.add-spot-btn .add-spot-icon { margin-right: 10rpx; }
-
-.add-spot-btn:active { transform: scale(0.97); }
-
-.add-spot-icon { font-size: 30rpx; color: #fff; font-weight: 700; }
-.add-spot-text { font-size: 26rpx; font-weight: 700; color: #fff; }
-
-.sync-btn {
-	padding: 16rpx 22rpx;
-	border-radius: 999rpx;
-	background: rgba(57, 73, 171, 0.08);
-	border: 1px solid rgba(57, 73, 171, 0.2);
-}
-
-.sync-btn:active { transform: scale(0.97); }
-.sync-btn--loading { opacity: 0.6; }
-.sync-btn-text { font-size: 24rpx; color: #3949ab; font-weight: bold; }
-
-.sync-msg {
-	margin: 0 24rpx 12rpx;
-	padding: 16rpx 20rpx;
-	border-radius: 18rpx;
-	font-size: 24rpx;
-}
-
-.sync-msg--ok {
-	background: rgba(52, 199, 89, 0.1);
-	color: #1a8a3a;
-	border: 1px solid rgba(52, 199, 89, 0.25);
-}
-
-.sync-msg--err {
-	background: rgba(255, 59, 48, 0.08);
-	color: #c0392b;
-	border: 1px solid rgba(255, 59, 48, 0.2);
-}
-
-/* 足迹卡片 */
-.spot-card {
-	background: rgba(255, 253, 250, 0.97);
-	border-radius: 24rpx;
-	padding: 26rpx 22rpx;
-	margin-bottom: 16rpx;
-	display: flex;
-	justify-content: space-between;
-	align-items: center;
-	border: 1px solid rgba(20, 33, 61, 0.06);
-	box-shadow: 0 10rpx 26rpx rgba(31, 41, 55, 0.07);
-}
-
-.spot-card:active { transform: scale(0.99); }
-
-.spot-card__left { flex: 1; min-width: 0; }
-
-.spot-name {
-	font-size: 30rpx;
-	font-weight: 700;
-	color: #1f2d3d;
-	overflow: hidden;
-	text-overflow: ellipsis;
-	white-space: nowrap;
-}
-
-.spot-coord {
-	margin-top: 8rpx;
-	font-size: 22rpx;
-	color: #8f9db0;
-}
-
-.spot-checked-time {
-	margin-top: 6rpx;
-	font-size: 20rpx;
-	color: #34c759;
-}
-
-.spot-card__right {
-	display: flex;
-	flex-direction: column;
-	align-items: flex-end;
-	margin-left: 16rpx;
-}
-.spot-card__right .spot-btn-row { margin-bottom: 14rpx; }
-
-.spot-btn-row { display: flex; }
-.spot-btn-row .locate-btn { margin-right: 14rpx; }
-
-.spot-action-btn {
-	width: 66rpx; height: 66rpx;
-	border-radius: 33rpx;
-	display: flex;
-	justify-content: center;
-	align-items: center;
-}
-
-.spot-action-btn:active { transform: scale(0.94); }
-
-.locate-btn { background: #eef6ff; border: 1px solid #cfe4ff; }
-.del-btn { background: #fff1f1; border: 1px solid #ffd1d1; }
-.spot-btn-icon { font-size: 30rpx; }
-
-.spot-status {
-	font-size: 20rpx;
-	padding: 6rpx 14rpx;
-	border-radius: 999rpx;
-}
-
-.status-done { background: #e7f6ff; color: #0a6bd7; }
-.status-pending { background: #f2f4f7; color: #7a8899; }
 
 /* 空状态 */
 .empty {

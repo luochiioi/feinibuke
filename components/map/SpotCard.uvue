@@ -1,0 +1,119 @@
+<template>
+	<view class="spot-card">
+		<view class="spot-card__left">
+			<text class="spot-name">{{ item['title'] }}</text>
+			<text class="spot-coord">{{ formatCoord(item['latitude']) }}, {{ formatCoord(item['longitude']) }}</text>
+			<text v-if="item['checkedAt']" class="spot-checked-time">打卡于 {{ checkedDate }}</text>
+		</view>
+		<view class="spot-card__right">
+			<view class="spot-btn-row">
+				<view class="spot-action-btn locate-btn" @click="$emit('focus')">
+					<text class="spot-btn-icon">🗺</text>
+				</view>
+				<view class="spot-action-btn del-btn" @click="$emit('delete')">
+					<text class="spot-btn-icon">🗑</text>
+				</view>
+			</view>
+			<text :class="['spot-status', statusClass]">{{ statusText }}</text>
+		</view>
+	</view>
+</template>
+
+<script lang="ts">
+export default {
+	props: {
+		item: { type: UTSJSONObject, required: true }
+	},
+	emits: ['focus', 'delete'],
+	computed: {
+		statusClass(): string {
+			return this.item['checked'] === true ? 'status-done' : 'status-pending';
+		},
+		statusText(): string {
+			return this.item['checked'] === true ? '已打卡' : '待探索';
+		},
+		checkedDate(): string {
+			const ts = this.item['checkedAt'];
+			if (ts == null) return '';
+			const d = new Date(ts as number);
+			return `${d.getMonth() + 1}/${d.getDate()}`;
+		}
+	},
+	methods: {
+		formatCoord(val: any): string {
+			return (val as number).toFixed(4);
+		}
+	}
+};
+</script>
+
+<style scoped>
+.spot-card {
+	background: rgba(255, 253, 250, 0.97);
+	border-radius: 24rpx;
+	padding: 26rpx 22rpx;
+	margin-bottom: 16rpx;
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+	border: 1px solid rgba(20, 33, 61, 0.06);
+	box-shadow: 0 10rpx 26rpx rgba(31, 41, 55, 0.07);
+}
+.spot-card:active { transform: scale(0.99); }
+
+.spot-card__left { flex: 1; min-width: 0; }
+
+.spot-name {
+	font-size: 30rpx;
+	font-weight: 700;
+	color: #1f2d3d;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.spot-coord {
+	margin-top: 8rpx;
+	font-size: 22rpx;
+	color: #8f9db0;
+}
+
+.spot-checked-time {
+	margin-top: 6rpx;
+	font-size: 20rpx;
+	color: #34c759;
+}
+
+.spot-card__right {
+	display: flex;
+	flex-direction: column;
+	align-items: flex-end;
+	margin-left: 16rpx;
+}
+.spot-card__right .spot-btn-row { margin-bottom: 14rpx; }
+
+.spot-btn-row { display: flex; }
+.spot-btn-row .locate-btn { margin-right: 14rpx; }
+
+.spot-action-btn {
+	width: 66rpx; height: 66rpx;
+	border-radius: 33rpx;
+	display: flex;
+	justify-content: center;
+	align-items: center;
+}
+.spot-action-btn:active { transform: scale(0.94); }
+
+.locate-btn { background: #eef6ff; border: 1px solid #cfe4ff; }
+.del-btn { background: #fff1f1; border: 1px solid #ffd1d1; }
+.spot-btn-icon { font-size: 30rpx; }
+
+.spot-status {
+	font-size: 20rpx;
+	padding: 6rpx 14rpx;
+	border-radius: 999rpx;
+}
+
+.status-done { background: #e7f6ff; color: #0a6bd7; }
+.status-pending { background: #f2f4f7; color: #7a8899; }
+</style>

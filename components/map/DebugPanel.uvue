@@ -1,0 +1,89 @@
+<template>
+	<view>
+		<view class="add-spot-bar">
+			<view class="add-spot-btn" @click="$emit('addSpot')">
+				<text class="add-spot-icon">＋</text>
+				<text class="add-spot-text">新增打卡点</text>
+			</view>
+			<view class="sync-btn" :class="{ 'sync-btn--loading': syncing }" @click="$emit('sync')">
+				<text class="sync-btn-text">{{ syncing ? '同步中…' : '☁ 同步' }}</text>
+			</view>
+		</view>
+		<view v-if="syncMsg != null" class="sync-msg" :class="syncMsgOk ? 'sync-msg--ok' : 'sync-msg--err'">
+			<text>{{ syncMsgText }}</text>
+		</view>
+	</view>
+</template>
+
+<script lang="ts">
+export default {
+	props: {
+		syncing: { type: Boolean, default: false },
+		syncMsg: { type: UTSJSONObject as any, default: null }
+	},
+	emits: ['addSpot', 'sync'],
+	computed: {
+		syncMsgOk(): boolean {
+			if (this.syncMsg == null) return false;
+			return (this.syncMsg as UTSJSONObject)["ok"] === true;
+		},
+		syncMsgText(): string {
+			if (this.syncMsg == null) return '';
+			const t = (this.syncMsg as UTSJSONObject)["text"];
+			return t != null ? ('' + t) : '';
+		}
+	}
+};
+</script>
+
+<style scoped>
+.add-spot-bar {
+	display: flex;
+	align-items: center;
+	padding: 16rpx 24rpx;
+	flex-shrink: 0;
+}
+.add-spot-bar .add-spot-btn { margin-right: 14rpx; }
+
+.add-spot-btn {
+	display: flex;
+	align-items: center;
+	padding: 16rpx 24rpx;
+	border-radius: 999rpx;
+	background: linear-gradient(135deg, #3949ab 0%, #5c6bc0 100%);
+	box-shadow: 0 10rpx 24rpx rgba(57,73,171,0.25);
+}
+.add-spot-btn .add-spot-icon { margin-right: 10rpx; }
+
+.add-spot-btn:active { transform: scale(0.97); }
+
+.add-spot-icon { font-size: 30rpx; color: #fff; font-weight: 700; }
+.add-spot-text { font-size: 26rpx; font-weight: 700; color: #fff; }
+
+.sync-btn {
+	padding: 16rpx 22rpx;
+	border-radius: 999rpx;
+	background: rgba(57, 73, 171, 0.08);
+	border: 1px solid rgba(57, 73, 171, 0.2);
+}
+.sync-btn:active { transform: scale(0.97); }
+.sync-btn--loading { opacity: 0.6; }
+.sync-btn-text { font-size: 24rpx; color: #3949ab; font-weight: bold; }
+
+.sync-msg {
+	margin: 0 24rpx 12rpx;
+	padding: 16rpx 20rpx;
+	border-radius: 18rpx;
+	font-size: 24rpx;
+}
+.sync-msg--ok {
+	background: rgba(52, 199, 89, 0.1);
+	color: #1a8a3a;
+	border: 1px solid rgba(52, 199, 89, 0.25);
+}
+.sync-msg--err {
+	background: rgba(255, 59, 48, 0.08);
+	color: #c0392b;
+	border: 1px solid rgba(255, 59, 48, 0.2);
+}
+</style>

@@ -1,0 +1,58 @@
+<template>
+	<view class="hero-panel">
+		<text class="hero-tag">MISSIONS &amp; SPOTS</text>
+		<text class="hero-title">{{ mainTab === 'tasks' ? '我的任务' : '我的足迹' }}</text>
+		<view class="hero-stats">
+			<view class="hstat">
+				<text class="hstat-val">{{ completedCount }}</text>
+				<text class="hstat-label">已完成</text>
+			</view>
+			<view class="hstat-divider"></view>
+			<view class="hstat">
+				<text class="hstat-val">{{ pendingCount }}</text>
+				<text class="hstat-label">进行中</text>
+			</view>
+			<view class="hstat-divider"></view>
+			<view class="hstat">
+				<text class="hstat-val">{{ totalPoints }}</text>
+				<text class="hstat-label">累计积分</text>
+			</view>
+		</view>
+	</view>
+</template>
+
+<script lang="ts">
+export default {
+	props: {
+		mainTab: { type: String, default: 'tasks' },
+		completedCount: { type: Number, default: 0 },
+		pendingCount: { type: Number, default: 0 },
+		totalPoints: { type: Number, default: 0 }
+	}
+};
+</script>
+
+<style scoped>
+.hero-panel {
+	padding: 28rpx 24rpx 30rpx;
+	background: linear-gradient(135deg, #1a237e 0%, #283593 55%, #3949ab 100%);
+	border-bottom-left-radius: 40rpx;
+	border-bottom-right-radius: 40rpx;
+	box-shadow: 0 24rpx 56rpx rgba(26, 35, 126, 0.2);
+}
+.hero-tag {
+	display: flex; padding: 10rpx 18rpx; border-radius: 999rpx;
+	background: rgba(255, 255, 255, 0.14); font-size: 20rpx;
+	letter-spacing: 3rpx; color: rgba(255, 255, 255, 0.85);
+}
+.hero-title { margin-top: 16rpx; font-size: 52rpx; font-weight: 700; color: #fff; }
+.hero-stats {
+	display: flex; align-items: center; margin-top: 24rpx; padding: 24rpx;
+	border-radius: 28rpx; background: rgba(255, 255, 255, 0.12);
+	border: 1px solid rgba(255, 255, 255, 0.16);
+}
+.hstat { flex: 1; text-align: center; }
+.hstat-val { font-size: 48rpx; font-weight: 700; color: #fff; }
+.hstat-label { margin-top: 6rpx; font-size: 21rpx; color: rgba(255,255,255,0.75); }
+.hstat-divider { width: 1px; height: 60rpx; background: rgba(255,255,255,0.22); }
+</style>

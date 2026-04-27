@@ -1,0 +1,90 @@
+<template>
+	<view class="task-card" @click="$emit('tap')">
+		<view class="task-card__header">
+			<view :class="['task-status-dot', statusClass]"></view>
+			<text class="task-name">{{ task['name'] }}</text>
+			<text :class="['task-badge', statusClass === 'dot-done' ? 'badge-done' : 'badge-pending']">
+				{{ statusText }}
+			</text>
+		</view>
+		<text class="task-target">目标：{{ task['targetTitle'] }}</text>
+		<view class="task-card__footer">
+			<text class="task-reward">🎖 {{ task['reward'] }}</text>
+			<text v-if="task['status'] === 'completed'" class="task-date">{{ completedDate }}</text>
+		</view>
+	</view>
+</template>
+
+<script lang="ts">
+export default {
+	props: {
+		task: { type: UTSJSONObject, required: true }
+	},
+	emits: ['tap'],
+	computed: {
+		statusClass(): string {
+			return this.task['status'] === 'completed' ? 'dot-done' : 'dot-pending';
+		},
+		statusText(): string {
+			return this.task['status'] === 'completed' ? '已完成' : '进行中';
+		},
+		completedDate(): string {
+			const ts = this.task['completedAt'];
+			if (ts == null) return '';
+			const d = new Date(ts as number);
+			return `${d.getMonth() + 1}/${d.getDate()}`;
+		}
+	}
+};
+</script>
+
+<style scoped>
+.task-card {
+	background: rgba(255, 253, 250, 0.97);
+	border-radius: 26rpx;
+	padding: 28rpx 24rpx;
+	margin-bottom: 16rpx;
+	border: 1px solid rgba(20, 33, 61, 0.06);
+	box-shadow: 0 10rpx 28rpx rgba(31, 41, 55, 0.07);
+}
+.task-card:active { transform: scale(0.99); }
+
+.task-card__header {
+	display: flex;
+	align-items: center;
+}
+.task-card__header .task-status-dot { margin-right: 14rpx; }
+.task-card__header .task-badge { margin-left: 14rpx; }
+
+.task-status-dot {
+	width: 18rpx; height: 18rpx;
+	border-radius: 9rpx;
+	flex-shrink: 0;
+}
+
+.dot-done { background: #34c759; box-shadow: 0 0 0 8rpx rgba(52,199,89,0.12); }
+.dot-pending { background: #ff9500; box-shadow: 0 0 0 8rpx rgba(255,149,0,0.12); }
+
+.task-name { flex: 1; font-size: 30rpx; font-weight: 700; color: #14213d; }
+
+.task-badge {
+	font-size: 20rpx;
+	padding: 6rpx 14rpx;
+	border-radius: 999rpx;
+}
+
+.badge-done { background: rgba(52,199,89,0.1); color: #34c759; }
+.badge-pending { background: rgba(255,149,0,0.1); color: #ff9500; }
+
+.task-target { margin-top: 12rpx; font-size: 24rpx; color: #6b7280; }
+
+.task-card__footer {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	margin-top: 16rpx;
+}
+
+.task-reward { font-size: 24rpx; color: #3949ab; font-weight: bold; }
+.task-date { font-size: 22rpx; color: #aab3c0; }
+</style>
