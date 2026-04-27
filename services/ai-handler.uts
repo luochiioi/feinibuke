@@ -15,7 +15,7 @@
  * - 跨方法调用使用 service 实例引用，不依赖 this 链。
  */
 
-type SubmitTaskPayload = {
+export type SubmitTaskPayload = {
   /** Web 端：base64 dataUrl；MP-WEIXIN：留空，使用 sketchUrl */
   sketchDataUrl: string;
   /** MP-WEIXIN：上传到 unicloud 后拿到的 fileID；Web 端留空 */
