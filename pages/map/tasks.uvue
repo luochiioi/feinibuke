@@ -296,7 +296,7 @@ export default {
 			uni.navigateBack();
 		},
 
-		confirmDelete(id: any) {
+		confirmDelete(id: any | null) {
 			uni.showModal({
 				title: '删除提示',
 				content: '确定要删除这个打卡点吗？',
