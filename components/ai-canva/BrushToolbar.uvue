@@ -1,0 +1,215 @@
+<template>
+  <view>
+    <view class="panel">
+      <text class="panel-title">工具</text>
+      <view class="tool-row uni-row">
+        <view :class="['tool-chip', activeTool === 'brush' ? 'tool-chip-active' : '']" @click="onSetTool('brush')">
+          <text class="tool-chip-text">画笔</text>
+        </view>
+        <view :class="['tool-chip', activeTool === 'eraser' ? 'tool-chip-active' : '']" @click="onSetTool('eraser')">
+          <text class="tool-chip-text">橡皮</text>
+        </view>
+        <view :class="['tool-chip', !canUndo ? 'tool-chip-disabled' : '']" @click="onUndo">
+          <text class="tool-chip-text">撤销</text>
+        </view>
+        <view :class="['tool-chip', !canRedo ? 'tool-chip-disabled' : '']" @click="onRedo">
+          <text class="tool-chip-text">重做</text>
+        </view>
+        <view :class="['tool-chip', strokeCount === 0 ? 'tool-chip-disabled' : '']" @click="onClear">
+          <text class="tool-chip-text">清空</text>
+        </view>
+      </view>
+    </view>
+
+    <view class="panel">
+      <view class="panel-head uni-row">
+        <view>
+          <text class="panel-title">笔刷粗细</text>
+          <text class="panel-desc">浏览器端会按画布尺寸自动缩放笔刷，线条显示更稳定。</text>
+        </view>
+        <text class="panel-value">{{ brushSize }}</text>
+      </view>
+      <slider
+        class="slider"
+        :value="brushSize"
+        :min="2"
+        :max="24"
+        :step="1"
+        activeColor="#0f766e"
+        backgroundColor="#d7e6e2"
+        block-color="#0f766e"
+        @change="onSliderChange"
+      />
+    </view>
+
+    <view class="panel">
+      <view class="panel-head uni-row">
+        <view>
+          <text class="panel-title">笔刷颜色</text>
+          <text class="panel-desc">默认深色，避免与白色背景混在一起看不清。</text>
+        </view>
+        <view class="color-preview" :style="'background:' + brushColor + ';'"></view>
+      </view>
+      <view class="color-row uni-row">
+        <view
+          v-for="color in colorOptions"
+          :key="color"
+          :class="['color-chip', brushColor === color ? 'color-chip-active' : '']"
+          :style="'background:' + color + ';'"
+          @click="onSelectColor(color)"
+        ></view>
+      </view>
+    </view>
+  </view>
+</template>
+
+<script setup lang="ts">
+const props = defineProps({
+  activeTool: { type: String, required: true },
+  canUndo: { type: Boolean, default: false },
+  canRedo: { type: Boolean, default: false },
+  strokeCount: { type: Number, default: 0 },
+  brushSize: { type: Number, required: true },
+  brushColor: { type: String, required: true },
+  colorOptions: { type: Array as PropType<Array<string>>, required: true }
+})
+
+const emits = defineEmits<{
+  (e: 'setTool', tool: string): void
+  (e: 'undo'): void
+  (e: 'redo'): void
+  (e: 'clear'): void
+  (e: 'brushSizeChange', size: number): void
+  (e: 'selectColor', color: string): void
+}>()
+
+function onSetTool(tool: string) {
+  emits('setTool', tool)
+}
+
+function onUndo() {
+  if (!props.canUndo) return
+  emits('undo')
+}
+
+function onRedo() {
+  if (!props.canRedo) return
+  emits('redo')
+}
+
+function onClear() {
+  if (props.strokeCount === 0) return
+  emits('clear')
+}
+
+// slider 的 @change event 形如 { detail: { value: number } } 或顶层 .value，
+// 把解析逻辑封在组件内部，对外只 emit clean number——上层不需要再认 UTSJSONObject。
+function onSliderChange(event: UTSJSONObject) {
+  const detail = event['detail']
+  const dv = detail != null ? (detail as UTSJSONObject)['value'] : null
+  const ev = event['value']
+  const raw = dv != null ? dv : ev
+  if (raw == null) return
+  const parsed = parseFloat('' + raw)
+  if (!isNaN(parsed)) emits('brushSizeChange', Math.round(parsed))
+}
+
+function onSelectColor(color: string) {
+  emits('selectColor', color)
+}
+</script>
+
+<style scoped>
+.panel {
+  margin-top: 16px;
+  padding: 14px;
+  border-radius: 18px;
+  background: #fbf7ef;
+}
+
+.panel-head,
+.tool-row,
+.color-row {
+  flex-direction: row;
+}
+
+.panel-head {
+  justify-content: space-between;
+  align-items: center;
+}
+
+.panel-title {
+  color: #2c2213;
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.panel-desc {
+  margin-top: 4px;
+  color: #7a6848;
+  font-size: 12px;
+  line-height: 18px;
+}
+
+.panel-value {
+  color: #0f766e;
+  font-size: 18px;
+  font-weight: 700;
+}
+
+.tool-row,
+.color-row {
+  flex-wrap: wrap;
+}
+.tool-row .tool-chip + .tool-chip { margin-left: 10px; }
+.color-row .color-chip + .color-chip { margin-left: 10px; }
+
+.tool-chip {
+  padding: 10px 14px;
+  border-radius: 999px;
+  background: #efe6d5;
+}
+
+.tool-chip-text {
+  color: #3b2f1d;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.tool-chip-active {
+  background: #203331;
+}
+
+.tool-chip-active .tool-chip-text {
+  color: #ffffff;
+}
+
+.tool-chip-disabled {
+  opacity: 0.45;
+}
+
+.slider {
+  margin-top: 12px;
+}
+
+.color-preview {
+  width: 22px;
+  height: 22px;
+  border-radius: 999px;
+  border-width: 2px;
+  border-style: solid;
+  border-color: rgba(255, 255, 255, 0.85);
+  box-shadow: 0 0 0 1px rgba(32, 51, 49, 0.15);
+}
+
+.color-chip {
+  width: 28px;
+  height: 28px;
+  border-radius: 999px;
+  box-shadow: 0 0 0 1px rgba(32, 51, 49, 0.12);
+}
+
+.color-chip-active {
+  box-shadow: 0 0 0 3px rgba(15, 118, 110, 0.2);
+}
+</style>
