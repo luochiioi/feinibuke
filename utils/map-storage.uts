@@ -14,12 +14,10 @@ async function _call(action: string, data: any = {}) {
         data: { action, data }
     });
     const result = res.result;
-    
-    if (result instanceof UTSJSONObject) {
-        if (result["code"] != null && result["code"] !== 0) {
+    // 陷阱 #8: 差量编译可能误报；instanceof UTSJSONObject 在 UTS 5.07 Kotlin 目标永真，删之
+    if (result != null && result["code"] != null && result["code"] != 0) {
             const msg = result["msg"] != null ? ("" + result["msg"]) : '云函数返回错误';
             throw new Error(msg);
-        }
     }
     return result;
 }
@@ -30,7 +28,7 @@ function _fmt(m: any) {
     return {
         id:       mObj["id"] != null ? mObj["id"] : null,
         _id:      mObj["_id"] != null ? ("" + mObj["_id"]) : (mObj["id"] != null ? ("" + mObj["id"]) : ''),
-        iconPath: mObj["checked"] === true ? ICON_OK : ICON_DEFAULT,
+        iconPath: mObj["checked"] == true ? ICON_OK : ICON_DEFAULT,
         width:    mObj["width"] != null ? mObj["width"] : 36,
         height:   mObj["height"] != null ? mObj["height"] : 36,
         title:    mObj["title"] != null ? mObj["title"] : '',
@@ -106,7 +104,7 @@ export async function addMarkerCloud(payload: UTSJSONObject) {
         const cache2 = uni.getStorageSync(LOCAL_KEY);
         const cached = (cache2 != null && cache2 !== "") ? cache2 as UTSJSONObject[] : [];
         const idx = cached.findIndex((m: UTSJSONObject): boolean => m["_id"] === ("" + numId));
-        if (idx !== -1) {
+        if (idx != -1) {
             cached[idx]["_id"] = res["id"];
             uni.setStorageSync(LOCAL_KEY, cached);
         }
@@ -130,9 +128,9 @@ export async function updateMarkerCloud(cloudId: string, updates: UTSJSONObject)
         (m: UTSJSONObject): boolean => m["_id"] === cloudId || ("" + m["id"]) === cloudId
     );
     
-    if (idx !== -1) {
+    if (idx != -1) {
         local[idx] = { ...local[idx], ...updates } as UTSJSONObject;
-        if (updates["checked"] === true) local[idx]["iconPath"] = ICON_OK;
+        if (updates["checked"] == true) local[idx]["iconPath"] = ICON_OK;
         uni.setStorageSync(LOCAL_KEY, local);
     }
 
@@ -147,12 +145,12 @@ export async function updateMarkerCloud(cloudId: string, updates: UTSJSONObject)
         }
         
         // 🌟 修复1：抛弃 Number()，使用安全的 parseInt() 转换
-        const numId = idx !== -1 && local[idx]["id"] != null ? (local[idx]["id"] as number) : parseInt(cloudId);
+        const numId = idx != -1 && local[idx]["id"] != null ? (local[idx]["id"] as number) : parseInt(cloudId);
         if (!isNaN(numId)) {
             const reqData = { id: numId } as UTSJSONObject;
             Object.assign(reqData, updates);
             const res = await _call('upsertById', reqData) as UTSJSONObject;
-            if (res["inserted"] === true && res["newId"] != null && idx !== -1) {
+            if (res["inserted"] == true && res["newId"] != null && idx != -1) {
                 local[idx]["_id"] = res["newId"];
                 uni.setStorageSync(LOCAL_KEY, local);
             }
@@ -246,7 +244,7 @@ export async function completeTaskCloud(taskId: string, completedAt: number) {
     const cacheT = uni.getStorageSync('task_list');
     const tasks = (cacheT != null && cacheT !== "") ? cacheT as UTSJSONObject[] : [];
     const idx = tasks.findIndex((t: UTSJSONObject): boolean => t["id"] === taskId);
-    if (idx !== -1) {
+    if (idx != -1) {
         tasks[idx]["status"] = 'completed';
         tasks[idx]["completedAt"] = completedAt;
         uni.setStorageSync('task_list', tasks);
