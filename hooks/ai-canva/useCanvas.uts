@@ -425,7 +425,38 @@ export function useCanvas(options: CanvasOptions): CanvasAPI {
     // #endif
 
     // #ifdef APP
-    throw new Error('AI 创作在 Android 端暂需升级 HBuilderX 版本以支持画布导出，请在 Web 端体验此功能。');
+    if (context2d == null) {
+      throw new Error('画布上下文不可用，请重试。');
+    }
+    redraw(strokes, currentStroke);
+    const tempFilePath = await new Promise<string>((resolve, reject) => {
+      setTimeout((): void => {
+        uni.canvasToTempFilePath({
+          canvasId: options.canvasId,
+          destWidth: CANVAS_EXPORT_SIZE,
+          destHeight: CANVAS_EXPORT_SIZE,
+          fileType: 'png',
+          success: (res) => {
+            if (res == null || res.tempFilePath == null || res.tempFilePath === '') {
+              reject(new Error('未获取到临时草图文件。'));
+              return;
+            }
+            resolve('' + res.tempFilePath);
+          },
+          fail: (error) => {
+            reject(new Error('画布导出失败：' + ('' + error)));
+          }
+        });
+      }, 180);
+    });
+    const uploadRes = await uniCloud.uploadFile({
+      filePath: tempFilePath,
+      cloudPath: 'sketch-' + Date.now() + '.png'
+    });
+    if (uploadRes == null || uploadRes.fileID == null || uploadRes.fileID === '') {
+      throw new Error('云存储上传成功，但没有返回 fileID。');
+    }
+    return { sketchDataUrl: '', sketchUrl: '' + uploadRes.fileID } as ExportPayload;
     // #endif
 
     // 兜底: 理论不可达, 所有平台都已在上方 ifdef 内 return / throw
