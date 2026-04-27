@@ -40,25 +40,25 @@ function _emptyDraft(): CanvasDraft {
     } as CanvasDraft;
 }
 
-export const canvasDraftStore = {
+class CanvasDraftStoreService {
     // ─── 只读视图（方法形式 · UTS 严格模式禁用 get accessor，参见 project_uts_compile_pitfalls #1） ─
     draft(): CanvasDraft | null {
         return _state.draft;
-    },
+    }
     hydrated(): boolean {
         return _state.hydrated;
-    },
+    }
     hasDraft(): boolean {
         if (_state.draft == null) return false;
         const d = _state.draft as CanvasDraft;
         return d.strokes.length > 0 || d.customText.length > 0;
-    },
+    }
 
     // ─── actions ────────────────────────────────────────────────────────────
     /**
      * 从 storage 读出草稿（应用启动 / 进入页面时调用）。
      */
-    restore() {
+    restore(): void {
         try {
             const cache = uni.getStorageSync(STORAGE_KEY);
             if (cache != null && cache !== "") {
@@ -71,12 +71,12 @@ export const canvasDraftStore = {
             _state.draft = null;
         }
         _state.hydrated = true;
-    },
+    }
 
     /**
      * 增量更新草稿字段（合并语义）。
      */
-    save(partial: UTSJSONObject) {
+    save(partial: UTSJSONObject): void {
         const base = _state.draft != null ? _state.draft as CanvasDraft : _emptyDraft();
         const next = { ...base, ...partial, savedAt: Date.now() } as CanvasDraft;
         _state.draft = next;
@@ -85,12 +85,12 @@ export const canvasDraftStore = {
         } catch (e) {
             console.warn('[canvasDraftStore] save 失败', e);
         }
-    },
+    }
 
     /**
      * 清空草稿（提交成功后调用）。
      */
-    clear() {
+    clear(): void {
         _state.draft = null;
         try {
             uni.removeStorageSync(STORAGE_KEY);
@@ -98,4 +98,6 @@ export const canvasDraftStore = {
             console.warn('[canvasDraftStore] clear 失败', e);
         }
     }
-};
+}
+
+export const canvasDraftStore = new CanvasDraftStoreService();
