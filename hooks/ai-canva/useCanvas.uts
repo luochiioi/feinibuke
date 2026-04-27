@@ -67,9 +67,48 @@ export type CanvasAPI = {
 };
 
 // #ifdef APP
-// CanvasRenderingContext2D.toDataURL available at runtime (HBuilderX 4.24+), missing from UTS type defs
-interface _Ctx extends CanvasRenderingContext2D {
-  toDataURL(type: string): string;
+// CanvasRenderingContext2D.getImageData is available on APP-Android.
+// toDataURL is NOT in the UTS type defs and cannot be cast at runtime (trap #15).
+// Instead, export via getImageData + manual BMP encoding (typesafe, pure UTS).
+function _le32(v: number): string {
+  return String.fromCharCode(v & 0xFF, (v >> 8) & 0xFF, (v >> 16) & 0xFF, (v >> 24) & 0xFF);
+}
+
+function _appCanvasToDataUrl(imgData: any): string {
+  const w: number = imgData.width as number;
+  const h: number = imgData.height as number;
+  const d: any = imgData.data;
+  const rowBytes: number = (w * 3 + 3) & ~3;
+  const pixelDataSize: number = rowBytes * h;
+  const fileSize: number = 54 + pixelDataSize;
+  const parts: string[] = [];
+
+  // BITMAPFILEHEADER + BITMAPINFOHEADER = 54 bytes
+  parts.push('BM');
+  parts.push(_le32(fileSize));
+  parts.push('\x00\x00\x00\x00');
+  parts.push('\x36\x00\x00\x00');
+  parts.push('\x28\x00\x00\x00');
+  parts.push(_le32(w));
+  parts.push(_le32(h));
+  parts.push('\x01\x00\x18\x00\x00\x00\x00\x00');
+  parts.push(_le32(pixelDataSize));
+  parts.push('\x13\x0b\x00\x00\x13\x0b\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00');
+
+  // Pixel data: RGBA input → BGR output, bottom-up rows
+  for (let y: number = h - 1; y >= 0; y--) {
+    const rowBase: number = y * w * 4;
+    for (let x: number = 0; x < w; x++) {
+      const idx: number = rowBase + x * 4;
+      parts.push(String.fromCharCode(d[idx + 2], d[idx + 1], d[idx]));
+    }
+    for (let p: number = w * 3; p < rowBytes; p++) {
+      parts.push('\x00');
+    }
+  }
+
+  const b64: string = btoa(parts.join(''));
+  return 'data:image/bmp;base64,' + b64;
 }
 // #endif
 
@@ -432,15 +471,18 @@ export function useCanvas(options: CanvasOptions): CanvasAPI {
     // #endif
 
     // #ifdef APP
+    // toDataURL NOT available in UTS type defs on APP, and interface cast causes
+    // ClassCastException at runtime (trap #15). Use getImageData + BMP encoding instead.
     if (context2d == null) {
       throw new Error('画布上下文不可用，请重试。');
     }
     redraw(strokes, currentStroke);
-    // CanvasRenderingContext2D.toDataURL exists at runtime on App-Android (HBuilderX 4.24+)
-    // but the UTS type definition doesn't include it. _Ctx declared at module top.
-    const exCtx: _Ctx = context2d!! as _Ctx;
-    const dataUrl: string = exCtx.toDataURL('image/png');
-    if (dataUrl == null || dataUrl === '') {
+    const imgData: any = context2d!!.getImageData(0, 0, CANVAS_EXPORT_SIZE, CANVAS_EXPORT_SIZE);
+    if (imgData == null || imgData.data == null) {
+      throw new Error('未能获取画布像素数据。');
+    }
+    const dataUrl: string = _appCanvasToDataUrl(imgData);
+    if (dataUrl == null || dataUrl === '' || dataUrl.indexOf('data:image') !== 0) {
       throw new Error('未能生成可用的草图数据。');
     }
     return { sketchDataUrl: dataUrl, sketchUrl: '' } as ExportPayload;
