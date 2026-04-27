@@ -1,0 +1,206 @@
+<template>
+  <view>
+    <view v-if="activeMode === 'preset'" class="preset-box">
+      <text class="preset-title-safe">葡萄牙瓷砖预设</text>
+      <text class="preset-text-safe">系统会根据你的线稿和图案自动生成葡萄牙瓷砖风格画面，保留主体结构，采用蓝白配色和平面装饰感。</text>
+    </view>
+
+    <view v-if="activeMode === 'custom'">
+      <textarea
+        class="prompt-input"
+        maxlength="120"
+        auto-height
+        placeholder="例如：把这张线稿变成柔和的儿童绘本插画，主体清晰，背景干净，有暖色灯光。"
+        :value="promptInput"
+        @input="onInput"
+      />
+
+      <view class="prompt-meta uni-row">
+        <text class="prompt-hint">建议控制在 20 到 60 字，突出主体、风格和光影。</text>
+        <text class="prompt-count">{{ promptLength }}/120</text>
+      </view>
+
+      <text class="section-label">风格</text>
+      <view class="chips-row uni-row">
+        <view
+          v-for="item in styleOptions"
+          :key="'' + item['key']"
+          :class="['choice-chip', ('' + item['key']) === activeStyleKey ? 'choice-chip-active' : '']"
+          @click="onSelectStyle('' + item['key'])"
+        >
+          <text class="choice-title">{{ '' + item['label'] }}</text>
+          <text class="choice-desc">{{ '' + item['desc'] }}</text>
+        </view>
+      </view>
+
+      <text class="section-label">快捷灵感</text>
+      <view class="idea-row uni-row">
+        <view
+          v-for="idea in ideaOptions"
+          :key="idea"
+          class="idea-chip"
+          @click="onAppendIdea(idea)"
+        >
+          <text class="idea-chip-text">{{ idea }}</text>
+        </view>
+      </view>
+    </view>
+  </view>
+</template>
+
+<script setup lang="ts">
+const props = defineProps({
+  activeMode: { type: String, required: true },
+  promptInput: { type: String, default: '' },
+  promptLength: { type: Number, default: 0 },
+  activeStyleKey: { type: String, required: true },
+  styleOptions: { type: Array as PropType<Array<UTSJSONObject>>, required: true },
+  ideaOptions: { type: Array as PropType<Array<string>>, required: true }
+})
+
+const emits = defineEmits<{
+  (e: 'input', value: string): void
+  (e: 'selectStyle', styleKey: string): void
+  (e: 'appendIdea', idea: string): void
+}>()
+
+// textarea @input event 形如 { detail: { value: string } } 或顶层 .value，
+// 解析封在组件内部，对外只 emit clean string。
+function onInput(event: UTSJSONObject) {
+  const detail = event['detail']
+  const dv = detail != null ? (detail as UTSJSONObject)['value'] : null
+  const ev = event['value']
+  const raw = dv != null ? dv : ev
+  emits('input', raw != null ? ('' + raw) : '')
+}
+
+function onSelectStyle(styleKey: string) {
+  if (styleKey === props.activeStyleKey) return
+  emits('selectStyle', styleKey)
+}
+
+function onAppendIdea(idea: string) {
+  emits('appendIdea', idea)
+}
+</script>
+
+<style scoped>
+.preset-box {
+  margin-top: 14px;
+  padding: 16px;
+  border-radius: 18px;
+  background: #f4fbf8;
+  border-width: 1px;
+  border-style: solid;
+  border-color: rgba(15, 118, 110, 0.12);
+}
+
+.preset-title-safe {
+  color: #0f766e;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.preset-text-safe {
+  margin-top: 8px;
+  color: #4f4331;
+  font-size: 13px;
+  line-height: 20px;
+}
+
+.prompt-input {
+  margin-top: 14px;
+  min-height: 110px;
+  border-radius: 18px;
+  padding: 14px;
+  background: #fffdf8;
+  color: #2c2213;
+  font-size: 14px;
+  line-height: 22px;
+  border-width: 1px;
+  border-style: solid;
+  border-color: rgba(84, 66, 38, 0.12);
+}
+
+.prompt-meta,
+.chips-row,
+.idea-row {
+  flex-direction: row;
+}
+
+.prompt-meta {
+  justify-content: space-between;
+  align-items: center;
+}
+
+.prompt-hint {
+  color: #7b6846;
+  font-size: 12px;
+}
+
+.prompt-count {
+  color: #0f766e;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.section-label {
+  margin-top: 16px;
+  margin-bottom: 10px;
+  color: #473821;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.chips-row,
+.idea-row {
+  flex-wrap: wrap;
+}
+.idea-row .idea-chip + .idea-chip { margin-left: 10px; }
+
+.choice-chip {
+  width: 47%;
+  min-width: 140px;
+  padding: 14px;
+  border-radius: 18px;
+  background: #f4eddf;
+  border-width: 1px;
+  border-style: solid;
+  border-color: transparent;
+}
+
+.choice-chip-active {
+  background: #edf9f6;
+  border-color: rgba(15, 118, 110, 0.24);
+}
+
+.choice-title {
+  color: #2d2315;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.choice-desc {
+  margin-top: 4px;
+  color: #7b6846;
+  font-size: 12px;
+}
+
+.idea-chip {
+  padding: 10px 14px;
+  border-radius: 999px;
+  background: #efe6d5;
+}
+
+.idea-chip-text {
+  color: #3b2f1d;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+@media screen and (min-width: 768px) {
+  .choice-chip {
+    width: 23%;
+  }
+}
+</style>
