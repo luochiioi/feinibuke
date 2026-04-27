@@ -153,9 +153,9 @@ export function useCanvas(options: CanvasOptions): CanvasAPI {
       // 必须走 success 回调, 自己包一层 Promise 接入 async 流。
       let appCanvas: CanvasContext | null = null;
       await new Promise<boolean>((resolve) => {
-        uni.createCanvasContextAsync({
+        (uni as any).createCanvasContextAsync({
           id: options.canvasId,
-          component: options.pageInstance as any,
+          component: options.pageInstance,
           success: (ctx: CanvasContext) => {
             appCanvas = ctx;
             resolve(true);
@@ -441,8 +441,8 @@ export function useCanvas(options: CanvasOptions): CanvasAPI {
     surfaceNodeRef,
     setupSize: (): void => setupSize(),
     init: async (): Promise<void> => init(),
-    measureRect,
-    redraw,
-    exportForSubmit
+    measureRect: (): void => measureRect(),
+    redraw: (strokes: Array<UTSJSONObject>, currentStroke: UTSJSONObject | null): void => redraw(strokes, currentStroke),
+    exportForSubmit: async (strokes: Array<UTSJSONObject>, currentStroke: UTSJSONObject | null): Promise<ExportPayload> => exportForSubmit(strokes, currentStroke)
   } as CanvasAPI;
 }
