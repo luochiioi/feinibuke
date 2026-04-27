@@ -101,7 +101,7 @@
 
 <script setup lang="ts">
 import { computed, ref, getCurrentInstance, watch, onReady } from 'vue'
-import { useStrokes } from '@/hooks/ai-canva/useStrokes'
+import { useStrokes, type StrokeMeta } from '@/hooks/ai-canva/useStrokes'
 import { useAITask } from '@/hooks/ai-canva/useAITask'
 import { useCanvas } from '@/hooks/ai-canva/useCanvas'
 import { usePointer } from '@/hooks/ai-canva/usePointer'
@@ -125,7 +125,7 @@ const activeTool = ref<string>('brush')
 const strokes = useStrokes()
 const canvas = useCanvas({ canvasId: 'sketchCanvas', surfaceId: 'sketchSurface', pageInstance })
 
-function getMeta() {
+function getMeta(): StrokeMeta {
   return {
     color: activeTool.value === 'eraser' ? '#ffffff' : brushColor.value,
     width: activeTool.value === 'eraser' ? brushSize.value * 1.8 : brushSize.value
@@ -143,12 +143,6 @@ const draft = useDraft()
 
 const submitting = ref<boolean>(false)
 
-function getMeta() {
-  return {
-    color: activeTool.value === 'eraser' ? '#ffffff' : brushColor.value,
-    width: activeTool.value === 'eraser' ? brushSize.value * 1.8 : brushSize.value
-  }
-}
 
 // 数据驱动重绘：strokes / currentStroke 任一变化触发画布重绘
 watch([strokes.strokes, strokes.currentStroke], (): void => {
