@@ -170,10 +170,10 @@ export function useStrokes(): StrokesAPI {
     canUndo,
     canRedo,
     hasContent,
-    addPoint,
-    endStroke,
-    undo,
-    redo,
-    clear
+    addPoint: (point: UTSJSONObject, meta: StrokeMeta): void => addPoint(point, meta),
+    endStroke: (): void => endStroke(),
+    undo: (): void => undo(),
+    redo: (): void => redo(),
+    clear: (): void => clear()
   } as StrokesAPI;
 }

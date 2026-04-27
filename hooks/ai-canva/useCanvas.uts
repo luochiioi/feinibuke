@@ -153,9 +153,9 @@ export function useCanvas(options: CanvasOptions): CanvasAPI {
       // 必须走 success 回调, 自己包一层 Promise 接入 async 流。
       let appCanvas: CanvasContext | null = null;
       await new Promise<boolean>((resolve) => {
-        (uni as any).createCanvasContextAsync({
+        uni.createCanvasContextAsync({
           id: options.canvasId,
-          component: options.pageInstance,
+          component: null,
           success: (ctx: CanvasContext) => {
             appCanvas = ctx;
             resolve(true);

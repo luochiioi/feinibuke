@@ -309,10 +309,10 @@ export function useAITask(): AITaskAPI {
     isLoading,
     isTerminal,
     hasError,
-    submit,
-    startPolling,
-    retry,
-    cancel,
-    stop
+    submit: async (input: SubmitInput): Promise<string> => submit(input),
+    startPolling: (taskIdToPoll: string): void => startPolling(taskIdToPoll),
+    retry: (): void => retry(),
+    cancel: async (): Promise<void> => cancel(),
+    stop: (): void => stop()
   } as AITaskAPI;
 }

@@ -103,11 +103,11 @@ export function useDraft(): DraftAPI {
   });
 
   return {
-    restore,
-    saveThrottled,
-    saveNow,
-    flush,
-    clear,
-    hasDraft
+    restore: (): UTSJSONObject | null => restore(),
+    saveThrottled: (partial: UTSJSONObject): void => saveThrottled(partial),
+    saveNow: (partial: UTSJSONObject): void => saveNow(partial),
+    flush: (): void => flush(),
+    clear: (): void => clear(),
+    hasDraft: (): boolean => hasDraft()
   } as DraftAPI;
 }

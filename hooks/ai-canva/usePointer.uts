@@ -307,10 +307,10 @@ export function usePointer(canvas: CanvasAPI, callbacks: PointerCallbacks): Poin
 
   return {
     debugMessage,
-    attach,
-    handleTouchStart,
-    handleTouchMove,
-    handleTouchEnd,
-    handleProbe
+    attach: (): void => attach(),
+    handleTouchStart: (event: UniTouchEvent): void => handleTouchStart(event),
+    handleTouchMove: (event: UniTouchEvent): void => handleTouchMove(event),
+    handleTouchEnd: (): void => handleTouchEnd(),
+    handleProbe: (event: UniPointerEvent): void => handleProbe(event)
   } as PointerAPI;
 }

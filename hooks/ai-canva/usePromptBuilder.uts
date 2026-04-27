@@ -167,9 +167,9 @@ export function usePromptBuilder(): PromptBuilder {
     promptLength,
     previewPromptText,
     submitPrompt,
-    selectMode,
-    selectStyle,
-    setCustomText,
-    appendIdea
+    selectMode: (modeKey: string): void => selectMode(modeKey),
+    selectStyle: (nextKey: string): void => selectStyle(nextKey),
+    setCustomText: (text: string): void => setCustomText(text),
+    appendIdea: (idea: string): void => appendIdea(idea)
   } as PromptBuilder;
 }
