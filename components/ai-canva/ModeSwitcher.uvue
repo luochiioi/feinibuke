@@ -1,0 +1,60 @@
+<template>
+  <view class="mode-switch uni-row">
+    <view
+      :class="['mode-chip', activeMode === 'preset' ? 'mode-chip-active' : '']"
+      @click="onSelect('preset')"
+    >
+      <text class="mode-chip-text">预设模式</text>
+    </view>
+    <view
+      :class="['mode-chip', activeMode === 'custom' ? 'mode-chip-active' : '']"
+      @click="onSelect('custom')"
+    >
+      <text class="mode-chip-text">自定义模式</text>
+    </view>
+  </view>
+</template>
+
+<script setup lang="ts">
+const props = defineProps({
+  activeMode: { type: String, required: true }
+})
+
+const emits = defineEmits<{
+  (e: 'selectMode', modeKey: string): void
+}>()
+
+function onSelect(modeKey: string) {
+  if (modeKey === props.activeMode) return
+  emits('selectMode', modeKey)
+}
+</script>
+
+<style scoped>
+.mode-switch {
+  margin-top: 14px;
+  flex-direction: row;
+  flex-wrap: wrap;
+}
+.mode-switch .mode-chip + .mode-chip { margin-left: 10px; }
+
+.mode-chip {
+  padding: 10px 16px;
+  border-radius: 999px;
+  background: #efe6d5;
+}
+
+.mode-chip-text {
+  color: #3b2f1d;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.mode-chip-active {
+  background: #203331;
+}
+
+.mode-chip-active .mode-chip-text {
+  color: #ffffff;
+}
+</style>
