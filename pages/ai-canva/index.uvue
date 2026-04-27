@@ -1,5 +1,5 @@
 <template>
-  <view class="page">
+  <scroll-view class="page" scroll-y="true" :show-scrollbar="false">
     <view class="page-inner">
       <view class="hero-card">
         <text class="hero-kicker">AI 灵感画板</text>
@@ -205,7 +205,7 @@
         </view>
       </view>
     </view>
-  </view>
+  </scroll-view>
 </template>
 
 <script setup lang="ts">
@@ -1603,6 +1603,7 @@ onReady(() => {
 <style scoped>
 .page {
   flex: 1;
+  height: 100vh;
   background: linear-gradient(180deg, #f7f1e6 0%, #efe5d0 100%);
 }
 
