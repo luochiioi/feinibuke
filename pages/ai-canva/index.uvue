@@ -124,6 +124,14 @@ const activeTool = ref<string>('brush')
 // hooks 装配
 const strokes = useStrokes()
 const canvas = useCanvas({ canvasId: 'sketchCanvas', surfaceId: 'sketchSurface', pageInstance })
+
+function getMeta() {
+  return {
+    color: activeTool.value === 'eraser' ? '#ffffff' : brushColor.value,
+    width: activeTool.value === 'eraser' ? brushSize.value * 1.8 : brushSize.value
+  }
+}
+
 const pointer = usePointer(canvas, {
   onStart: (p: UTSJSONObject): void => strokes.addPoint(p, getMeta()),
   onMove: (p: UTSJSONObject): void => strokes.addPoint(p, getMeta()),
@@ -214,7 +222,7 @@ async function onSubmit(): Promise<void> {
     uni.hideLoading()
     submitting.value = false
     draft.clear()
-    const enc = (s: string): string => encodeURIComponent(s)
+    const enc = (s: string): string => encodeURIComponent(s) ?? ''
     uni.navigateTo({
       url: `/pages/ai-canva/result?taskId=${taskId}&prompt=${enc(prompt.submitPrompt.value)}&style=${enc(prompt.styleLabel.value)}&mode=${enc(prompt.modeLabel.value)}`
     })
@@ -244,11 +252,12 @@ onReady((): void => {
   }
 
   canvas.setupSize()
-  setTimeout(async (): Promise<void> => {
-    await canvas.init()
-    canvas.measureRect()
-    pointer.attach() // Web 端绑定原生事件；APP/MP noop
-    canvas.redraw(strokes.strokes.value, strokes.currentStroke.value)
+  setTimeout((): void => {
+    canvas.init().then((): void => {
+      canvas.measureRect()
+      pointer.attach() // Web 端绑定原生事件；APP/MP noop
+      canvas.redraw(strokes.strokes.value, strokes.currentStroke.value)
+    })
   }, 32)
 })
 </script>
