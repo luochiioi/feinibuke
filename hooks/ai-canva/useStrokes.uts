@@ -1,0 +1,179 @@
+/**
+ * hooks/ai-canva/useStrokes · 笔画历史与撤销重做
+ *
+ * 职责：
+ * - 维护 strokes / redoStack / currentStroke 三段状态。
+ * - 暴露 addPoint / endStroke / undo / redo / clear 五个动作。
+ * - 不可变更新：每次写入用 `strokes.value = [...strokes.value, x]`，
+ *   refs 作为唯一真相源；canUndo / canRedo / strokeCount 由 computed 派生，
+ *   外部不再需要 syncHistoryState() 手动同步。
+ * - 不触碰 DOM、Canvas、Storage——纯逻辑 hook。
+ *
+ * 重构来源：pages/ai-canva/index.uvue 中
+ *   strokes / redoStack / currentStroke + startStrokeWithPoint /
+ *   moveStrokeWithPoint / finishCurrentStroke / undoLast / redoLast / clearCanvas。
+ * 调用方将在会话 4c Step C 中接入；本会话仅落地 hook 本体（与 4a-bis 之前
+ * usePromptBuilder / useDraft 的落地节奏一致：先建后接）。
+ *
+ * UTS 严格模式约束（参见 project_uts_compile_pitfalls）：
+ * - 笔画形状沿用既有 UTSJSONObject（draw* 一族函数仍按 ["points"] 字段访问，
+ *   一次性改成 typed Stroke 会牵动整个绘制管线，不在本会话范围内）。
+ * - 所有方法显式类型注解。
+ * - 不暴露 get accessor；外部消费方调用方法或读取 ref.value。
+ * - 不可变 push 用扩展运算符 `[...arr, x]`；pop 用 slice(0, -1)。
+ * - 数值字段从 UTSJSONObject 取出后必须 `as number` 才能算术（陷阱 #14）。
+ */
+import { computed, ref, type ComputedRef, type Ref } from 'vue';
+
+// 同色不同点之间的最小像素距离，低于此阈值的 move 事件直接丢弃，避免
+// 在静止时累积零位移点（Web 端 pointermove 高频触发会显著拖慢 redraw）。
+const MIN_POINT_DELTA_PX: number = 1;
+
+export type StrokeMeta = {
+  /** Stroke 颜色，写入 UTSJSONObject["color"] */
+  color: string;
+  /** Stroke 线宽，写入 UTSJSONObject["width"] */
+  width: number;
+};
+
+export type StrokesAPI = {
+  // 派生状态（reactive，模板可直接绑定）
+  strokes: Ref<Array<UTSJSONObject>>;
+  redoStack: Ref<Array<UTSJSONObject>>;
+  currentStroke: Ref<UTSJSONObject | null>;
+  strokeCount: ComputedRef<number>;
+  canUndo: ComputedRef<boolean>;
+  canRedo: ComputedRef<boolean>;
+  /** 是否有任何已提交或正在绘制的笔画（提交按钮禁用判断用） */
+  hasContent: ComputedRef<boolean>;
+
+  /**
+   * 追加一个点：
+   * - 若当前没有正在绘制的 stroke，用 meta 起一笔新的（同时清空 redoStack）。
+   * - 若已有 currentStroke，与上一个点距离过近时丢弃。
+   */
+  addPoint(point: UTSJSONObject, meta: StrokeMeta): void;
+
+  /** 收笔：把 currentStroke 提交进 strokes（空笔丢弃）。 */
+  endStroke(): void;
+
+  /** 撤销最后一笔，移入 redoStack。 */
+  undo(): void;
+
+  /** 重做最后一次撤销。 */
+  redo(): void;
+
+  /** 清空全部历史（提交成功 / 用户主动清空时调用）。 */
+  clear(): void;
+};
+
+export function useStrokes(): StrokesAPI {
+  const strokes = ref<Array<UTSJSONObject>>([] as Array<UTSJSONObject>);
+  const redoStack = ref<Array<UTSJSONObject>>([] as Array<UTSJSONObject>);
+  const currentStroke = ref<UTSJSONObject | null>(null);
+
+  const strokeCount = computed<number>((): number => {
+    return strokes.value.length + (currentStroke.value != null ? 1 : 0);
+  });
+
+  const canUndo = computed<boolean>((): boolean => strokes.value.length > 0);
+  const canRedo = computed<boolean>((): boolean => redoStack.value.length > 0);
+  const hasContent = computed<boolean>((): boolean => strokeCount.value > 0);
+
+  function _lastPointOf(stroke: UTSJSONObject): UTSJSONObject | null {
+    const raw = stroke['points'];
+    if (raw == null) return null;
+    const arr = raw as Array<UTSJSONObject>;
+    if (arr.length === 0) return null;
+    return arr[arr.length - 1];
+  }
+
+  function _isTooClose(prev: UTSJSONObject, next: UTSJSONObject): boolean {
+    const prevX: number = (prev['x'] != null ? prev['x'] : 0) as number;
+    const prevY: number = (prev['y'] != null ? prev['y'] : 0) as number;
+    const nextX: number = (next['x'] != null ? next['x'] : 0) as number;
+    const nextY: number = (next['y'] != null ? next['y'] : 0) as number;
+    return Math.abs(prevX - nextX) < MIN_POINT_DELTA_PX
+      && Math.abs(prevY - nextY) < MIN_POINT_DELTA_PX;
+  }
+
+  function addPoint(point: UTSJSONObject, meta: StrokeMeta): void {
+    if (point == null) return;
+    if (currentStroke.value == null) {
+      // 新起一笔：清空 redo（新动作让任何 redo 都失效）
+      redoStack.value = [] as Array<UTSJSONObject>;
+      const newStroke: UTSJSONObject = {
+        color: meta.color,
+        width: meta.width,
+        points: [point] as Array<UTSJSONObject>
+      };
+      currentStroke.value = newStroke;
+      return;
+    }
+    const cs = currentStroke.value as UTSJSONObject;
+    const prev = _lastPointOf(cs);
+    if (prev != null && _isTooClose(prev, point)) {
+      return;
+    }
+    const pointsRaw = cs['points'];
+    const pointsArr = pointsRaw != null ? (pointsRaw as Array<UTSJSONObject>) : ([] as Array<UTSJSONObject>);
+    // 不可变追加：替换整个 points 引用 + 替换 currentStroke 引用，
+    // 触发依赖 currentStroke.value 的 watch / computed 重新求值。
+    const nextPoints: Array<UTSJSONObject> = [...pointsArr, point];
+    const nextStroke: UTSJSONObject = {
+      color: cs['color'],
+      width: cs['width'],
+      points: nextPoints
+    };
+    currentStroke.value = nextStroke;
+  }
+
+  function endStroke(): void {
+    if (currentStroke.value == null) return;
+    const cs = currentStroke.value as UTSJSONObject;
+    const pointsRaw = cs['points'];
+    const len = pointsRaw != null ? (pointsRaw as Array<UTSJSONObject>).length : 0;
+    if (len === 0) {
+      // 空笔丢弃，不污染历史
+      currentStroke.value = null;
+      return;
+    }
+    strokes.value = [...strokes.value, cs];
+    currentStroke.value = null;
+  }
+
+  function undo(): void {
+    if (strokes.value.length === 0) return;
+    const last = strokes.value[strokes.value.length - 1];
+    strokes.value = strokes.value.slice(0, strokes.value.length - 1);
+    redoStack.value = [...redoStack.value, last];
+  }
+
+  function redo(): void {
+    if (redoStack.value.length === 0) return;
+    const last = redoStack.value[redoStack.value.length - 1];
+    redoStack.value = redoStack.value.slice(0, redoStack.value.length - 1);
+    strokes.value = [...strokes.value, last];
+  }
+
+  function clear(): void {
+    strokes.value = [] as Array<UTSJSONObject>;
+    redoStack.value = [] as Array<UTSJSONObject>;
+    currentStroke.value = null;
+  }
+
+  return {
+    strokes,
+    redoStack,
+    currentStroke,
+    strokeCount,
+    canUndo,
+    canRedo,
+    hasContent,
+    addPoint,
+    endStroke,
+    undo,
+    redo,
+    clear
+  } as StrokesAPI;
+}
