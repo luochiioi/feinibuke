@@ -1,0 +1,318 @@
+/**
+ * hooks/ai-canva/useAITask · AI 任务提交与轮询
+ *
+ * 职责：
+ * - 包装 aiHandlerService.submitTask + queryTask，对外暴露
+ *   submit / startPolling / retry / cancel / stop 五个动作。
+ * - 维护轮询状态机（idle / submitting / polling / success / failed / canceled / timeout）。
+ * - 双保险超时：达到 MAX_POLL_COUNT 或 MAX_WALL_CLOCK_MS 任一即终止
+ *   （Android 端页面后台时 setInterval 可能被节流到 1 次/分钟，单纯计次会让
+ *   超时延后到 ~40 分钟；wall-clock 兜底确保 120s 后无论如何都终止）。
+ * - setInterval 在 onUnmounted 时强制清理，避免组件卸载后定时器泄漏。
+ *
+ * 重构来源：
+ * - pages/ai-canva/result.uvue 的 pollTimer / maxPollCount / clearPolling /
+ *   queryTaskStatus / startPolling / retryQuery + onUnload 清理。
+ * - pages/ai-canva/index.uvue 的 callAICloudFunction 的提交段（轮询段不在 index 内，
+ *   index 走的是 navigateTo 到 result 页继续轮询）。
+ * - 调用方将在 4c Step C 中接入。
+ *
+ * UTS 严格模式约束：
+ * - setInterval 返回 number（uvue 与 H5/MP 一致）。
+ * - aiHandlerService.queryTask 返回 UTSJSONObject | null；字段访问用 ['key'] 形式。
+ * - 数值字段必须 `as number` 才能算术（陷阱 #14）。
+ * - error 三档降级：UTSJSONObject ['message'/'errMsg'] → as Error.message → '' + error
+ *   （陷阱 #10，与 index.uvue formatErrorMessage 一致的范式）。
+ */
+import { computed, ref, onUnmounted, type ComputedRef, type Ref } from 'vue';
+import { aiHandlerService } from '@/services/ai-handler';
+
+const POLL_INTERVAL_MS: number = 3000;
+const MAX_POLL_COUNT: number = 40;
+const MAX_WALL_CLOCK_MS: number = 120000;
+
+export type AITaskPhase = 'idle' | 'submitting' | 'polling' | 'success' | 'failed' | 'canceled' | 'timeout';
+
+export type SubmitInput = {
+  /** Web 端：base64 dataUrl；MP-WEIXIN：留空，使用 sketchUrl */
+  sketchDataUrl: string;
+  /** MP-WEIXIN：上传到 unicloud 后拿到的 fileID；Web 端留空 */
+  sketchUrl: string;
+  /** 提交给模型的最终 prompt */
+  prompt: string;
+};
+
+export type AITaskAPI = {
+  // ─── reactive 状态 ─────────────────────────────────────
+  phase: Ref<AITaskPhase>;
+  taskId: Ref<string>;
+  pollCount: Ref<number>;
+  /** 成功时的图片 URL；其它阶段为空字符串 */
+  resultUrl: Ref<string>;
+  /** 任意失败/超时/取消时的人话错误信息；空表示无错 */
+  errorMessage: Ref<string>;
+
+  // ─── 派生状态 ─────────────────────────────────────────
+  isLoading: ComputedRef<boolean>;
+  isTerminal: ComputedRef<boolean>;
+  hasError: ComputedRef<boolean>;
+
+  /**
+   * 提交任务，成功返回 taskId（同时写入 state.taskId）。
+   * 失败抛 Error，调用方在 catch 中决定 UI（Modal / Toast）。
+   * 注意：本方法不会自动开始轮询；index.uvue 提交后跳转到 result 页轮询，
+   * 而 result 页可能用现成 taskId 直接 startPolling。两个用法解耦。
+   */
+  submit(input: SubmitInput): Promise<string>;
+
+  /**
+   * 开始轮询给定 taskId（覆盖之前的 taskId / 清空既有 timer）。
+   * 立即查询一次，然后每 3s 查询一次，直到任一终止条件触发。
+   */
+  startPolling(taskIdToPoll: string): void;
+
+  /** 用当前 taskId 重新轮询（result 页"重新查询"按钮用）。 */
+  retry(): void;
+
+  /**
+   * best-effort 取消云端任务 + 本地停止轮询，phase → 'canceled'。
+   * 即使云端 cancelTask 失败，本地也会停。
+   */
+  cancel(): Promise<void>;
+
+  /** 停止轮询但不改 phase（页面卸载时清理用）。 */
+  stop(): void;
+};
+
+export function useAITask(): AITaskAPI {
+  const phase = ref<AITaskPhase>('idle');
+  const taskId = ref<string>('');
+  const pollCount = ref<number>(0);
+  const resultUrl = ref<string>('');
+  const errorMessage = ref<string>('');
+
+  let pollTimer: number = 0;
+  let pollStartedAt: number = 0;
+
+  const isLoading = computed<boolean>((): boolean => {
+    return phase.value === 'submitting' || phase.value === 'polling';
+  });
+  const isTerminal = computed<boolean>((): boolean => {
+    const p = phase.value;
+    return p === 'success' || p === 'failed' || p === 'canceled' || p === 'timeout';
+  });
+  const hasError = computed<boolean>((): boolean => {
+    return errorMessage.value.length > 0;
+  });
+
+  function _formatError(error: any | null): string {
+    if (error == null) return '发生了未知错误，请稍后重试。';
+    if (typeof error === 'string') return error as string;
+    try {
+      const errObj = error as UTSJSONObject;
+      const msg = errObj['message'];
+      if (msg != null) return '' + msg;
+      const errMsg = errObj['errMsg'];
+      if (errMsg != null) return '' + errMsg;
+    } catch (_e) {
+      // 落到下一档：as Error
+    }
+    try {
+      const e = error as Error;
+      if (e.message != null && e.message.length > 0) return e.message;
+    } catch (_e2) {
+      // 落到 toString 兜底
+    }
+    return '' + error;
+  }
+
+  function _stopTimer(): void {
+    if (pollTimer > 0) {
+      clearInterval(pollTimer);
+      pollTimer = 0;
+    }
+  }
+
+  function _isTimedOut(): boolean {
+    if (pollCount.value >= MAX_POLL_COUNT) return true;
+    if (pollStartedAt === 0) return false;
+    const elapsed: number = Date.now() - pollStartedAt;
+    return elapsed >= MAX_WALL_CLOCK_MS;
+  }
+
+  function _toTimeout(reason: string): void {
+    _stopTimer();
+    phase.value = 'timeout';
+    errorMessage.value = reason;
+  }
+
+  function _toFailed(reason: string): void {
+    _stopTimer();
+    phase.value = 'failed';
+    errorMessage.value = reason;
+  }
+
+  function _toSuccess(url: string): void {
+    _stopTimer();
+    resultUrl.value = url;
+    errorMessage.value = '';
+    phase.value = 'success';
+  }
+
+  /**
+   * 解释一次 queryTask 的返回。返回 true 表示继续轮询，false 表示已终止
+   * （内部已切到 success/failed/timeout 之一，并停掉 timer）。
+   */
+  function _interpretQueryResult(data: UTSJSONObject | null): boolean {
+    if (data == null) {
+      // 云端无返回：仅在超时时终止，否则继续等
+      if (_isTimedOut()) {
+        _toTimeout('长时间未拿到可用结果，请稍后再试。');
+        return false;
+      }
+      return true;
+    }
+    const statusRaw = data['task_status'];
+    const status: string = statusRaw != null ? ('' + statusRaw) : '';
+
+    if (status === 'SUCCEEDED') {
+      const resultsRaw = data['results'];
+      if (resultsRaw != null) {
+        const results = resultsRaw as Array<UTSJSONObject>;
+        if (results.length > 0) {
+          const urlRaw = results[0]['url'];
+          if (urlRaw != null) {
+            _toSuccess('' + urlRaw);
+            return false;
+          }
+        }
+      }
+      // SUCCEEDED 但无 url：等同 failed
+      _toFailed('任务已完成，但没有生成可用图片。');
+      return false;
+    }
+
+    if (status === 'FAILED' || status === 'CANCELED') {
+      const msgRaw = data['message'];
+      const reason: string = msgRaw != null ? ('' + msgRaw) : '任务已结束，但没有生成可用图片。';
+      if (status === 'CANCELED') {
+        _stopTimer();
+        phase.value = 'canceled';
+        errorMessage.value = reason;
+      } else {
+        _toFailed(reason);
+      }
+      return false;
+    }
+
+    // 仍在跑（PENDING / RUNNING / 空 status）：检查超时
+    if (_isTimedOut()) {
+      _toTimeout('等待结果超时，请稍后重新查询。');
+      return false;
+    }
+    return true;
+  }
+
+  async function _pollOnce(): Promise<void> {
+    pollCount.value = pollCount.value + 1;
+    try {
+      const data = await aiHandlerService.queryTask(taskId.value);
+      _interpretQueryResult(data);
+    } catch (error) {
+      // 单次查询出错：仅在超时时终止；偶发网络抖动允许下一拍重试
+      if (_isTimedOut()) {
+        _toFailed(_formatError(error));
+      }
+    }
+  }
+
+  async function submit(input: SubmitInput): Promise<string> {
+    phase.value = 'submitting';
+    errorMessage.value = '';
+    resultUrl.value = '';
+    try {
+      const r = await aiHandlerService.submitTask({
+        sketchDataUrl: input.sketchDataUrl,
+        sketchUrl: input.sketchUrl,
+        prompt: input.prompt
+      });
+      taskId.value = r.taskId;
+      // 提交完成后回到 idle；调用方决定是 startPolling 还是 navigateTo 到 result 页
+      phase.value = 'idle';
+      return r.taskId;
+    } catch (error) {
+      const msg = _formatError(error);
+      _toFailed(msg);
+      throw new Error(msg);
+    }
+  }
+
+  function startPolling(taskIdToPoll: string): void {
+    if (taskIdToPoll == null || taskIdToPoll === '') {
+      _toFailed('缺少任务编号，暂时无法查询生成结果。');
+      return;
+    }
+    _stopTimer();
+    taskId.value = taskIdToPoll;
+    pollCount.value = 0;
+    pollStartedAt = Date.now();
+    resultUrl.value = '';
+    errorMessage.value = '';
+    phase.value = 'polling';
+
+    // 先查询一次，再起 interval
+    _pollOnce();
+    pollTimer = setInterval((): void => {
+      // 终止状态下不再触发 query；理论上 _stopTimer 已清掉，这里是保险
+      if (isTerminal.value) {
+        _stopTimer();
+        return;
+      }
+      _pollOnce();
+    }, POLL_INTERVAL_MS);
+  }
+
+  function retry(): void {
+    if (taskId.value === '') return;
+    startPolling(taskId.value);
+  }
+
+  async function cancel(): Promise<void> {
+    _stopTimer();
+    const id = taskId.value;
+    phase.value = 'canceled';
+    errorMessage.value = '已取消任务。';
+    if (id !== '') {
+      try {
+        await aiHandlerService.cancelTask(id);
+      } catch (_e) {
+        // service.cancelTask 已 swallow，这里不会到，但保险
+      }
+    }
+  }
+
+  function stop(): void {
+    _stopTimer();
+  }
+
+  // 卸载时强制清理 timer，防止组件销毁后还在轮询造成泄漏
+  onUnmounted((): void => {
+    _stopTimer();
+  });
+
+  return {
+    phase,
+    taskId,
+    pollCount,
+    resultUrl,
+    errorMessage,
+    isLoading,
+    isTerminal,
+    hasError,
+    submit,
+    startPolling,
+    retry,
+    cancel,
+    stop
+  } as AITaskAPI;
+}
