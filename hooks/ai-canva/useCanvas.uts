@@ -1,0 +1,448 @@
+/**
+ * hooks/ai-canva/useCanvas · 跨平台画布初始化 / 渲染 / 导出
+ *
+ * 职责:
+ * - 收敛 Web / APP / MP-WEIXIN 三端的 canvas context 获取(init)
+ * - 暴露 setupSize / measureRect 让页面在 onReady 时校准尺寸
+ * - redraw(strokes, currentStroke):数据驱动重绘,页面 watch refs 触发
+ * - exportForSubmit(): 返回 { sketchDataUrl, sketchUrl },与 useAITask.submit 对齐
+ *
+ * 重构来源: pages/ai-canva/index.uvue 的 initCanvas / initCanvasAsync /
+ *   measureCanvasRect / setupCanvasSize / redrawCanvas / drawStroke 一族 /
+ *   buildWebSketchDataUrl / exportLegacyCanvas / uploadLegacySketch / exportAppCanvas
+ *
+ * UTS 严格模式约束(参见 project_uts_compile_pitfalls):
+ * - APP 端 createCanvasContextAsync 是 callback void(陷阱 #17),
+ *   必须 success 回调 + 自包 Promise; await 后 cast 任意类型 100% 崩
+ * - boundingClientRect 回调 data 是 NodeInfo typed(陷阱 #13),不能 cast UTSJSONObject
+ * - canvasNode.style 等 DOM 字段访问只在 #ifdef WEB 内安全(陷阱 #16)
+ * - boxed Number 字段从 NodeInfo 取出后需 `as number` 才能算术(陷阱 #14)
+ */
+import { ref, type Ref } from 'vue';
+
+const CANVAS_EXPORT_SIZE: number = 1024;
+const MIN_DISPLAY_SIZE: number = 280;
+const MAX_DISPLAY_SIZE: number = 560;
+
+let useLegacyCanvasFlag: boolean = false;
+// #ifdef MP-WEIXIN
+useLegacyCanvasFlag = true;
+// #endif
+
+export type CanvasRectInfo = {
+  left: number;
+  top: number;
+  width: number;
+  height: number;
+};
+
+export type CanvasOptions = {
+  /** canvas DOM id, 例如 'sketchCanvas' */
+  canvasId: string;
+  /** 覆盖在 canvas 之上的透明 surface DOM id (Web 端用作 pointer 绑定目标) */
+  surfaceId: string;
+  /** getCurrentInstance().proxy, createCanvasContext 系列 API 必需 */
+  pageInstance: any | null;
+};
+
+export type ExportPayload = {
+  sketchDataUrl: string;
+  sketchUrl: string;
+};
+
+export type CanvasAPI = {
+  ready: Ref<boolean>;
+  displaySize: Ref<number>;
+  exportSize: number;
+  rect: Ref<CanvasRectInfo>;
+  useLegacy: boolean;
+  /** Web 端绑定 pointer 用; APP/MP 始终为 null */
+  surfaceNodeRef: Ref<UTSJSONObject | null>;
+
+  setupSize(): void;
+  init(): Promise<void>;
+  measureRect(): void;
+  redraw(strokes: Array<UTSJSONObject>, currentStroke: UTSJSONObject | null): void;
+  exportForSubmit(strokes: Array<UTSJSONObject>, currentStroke: UTSJSONObject | null): Promise<ExportPayload>;
+};
+
+export function useCanvas(options: CanvasOptions): CanvasAPI {
+  const ready = ref<boolean>(false);
+  const displaySize = ref<number>(320);
+  const rect = ref<CanvasRectInfo>({ left: 0, top: 0, width: 0, height: 0 } as CanvasRectInfo);
+  const surfaceNodeRef = ref<UTSJSONObject | null>(null);
+
+  let canvasNode: UTSJSONObject | null = null;
+  let canvasContextRef: CanvasContext | null = null;
+  let context2d: CanvasRenderingContext2D | null = null;
+
+  function _wait(duration: number): Promise<unknown> {
+    return new Promise((resolve) => {
+      setTimeout((): void => { resolve(null); }, duration);
+    });
+  }
+
+  function setupSize(): void {
+    const systemInfo = uni.getSystemInfoSync();
+    let size: number = (systemInfo.windowWidth > 0 ? systemInfo.windowWidth : 360) - 40;
+    if (size > MAX_DISPLAY_SIZE) size = MAX_DISPLAY_SIZE;
+    if (size < MIN_DISPLAY_SIZE) size = MIN_DISPLAY_SIZE;
+    displaySize.value = size;
+  }
+
+  function measureRect(): void {
+    const query = uni.createSelectorQuery();
+    const sel: string = useLegacyCanvasFlag ? ('#' + options.canvasId) : ('#' + options.surfaceId);
+    query.select(sel).boundingClientRect((data) => {
+      if (data == null) return;
+      // 陷阱 #13: NodeInfo 是平台 typed, 不能 cast 到 UTSJSONObject
+      const info = data as NodeInfo;
+      rect.value = {
+        left: info.left != null ? (info.left as number) : 0,
+        top: info.top != null ? (info.top as number) : 0,
+        width: info.width != null ? (info.width as number) : displaySize.value,
+        height: info.height != null ? (info.height as number) : displaySize.value
+      } as CanvasRectInfo;
+    }).exec();
+  }
+
+  async function init(): Promise<void> {
+    if (useLegacyCanvasFlag) {
+      // #ifdef MP-WEIXIN
+      canvasContextRef = uni.createCanvasContext(options.canvasId, options.pageInstance);
+      // #endif
+      canvasNode = null;
+      context2d = null;
+      ready.value = true;
+      return;
+    }
+
+    let resolvedCanvas: UTSJSONObject | null = null;
+    let resolvedContext: CanvasRenderingContext2D | null = null;
+
+    // #ifdef WEB
+    for (let i = 0; i < 4; i += 1) {
+      const canvasElement = uni.getElementById(options.canvasId);
+      if (canvasElement != null) {
+        resolvedCanvas = canvasElement as UTSJSONObject;
+        resolvedContext = (canvasElement as UTSJSONObject).getContext('2d') as CanvasRenderingContext2D | null;
+      }
+      if (resolvedContext != null) break;
+      await _wait(50);
+    }
+    // #endif
+
+    if (resolvedContext == null) {
+      // #ifdef WEB
+      const canvasContext = await uni.createCanvasContextAsync({
+        id: options.canvasId,
+        component: options.pageInstance
+      });
+      if (canvasContext == null) {
+        throw new Error('无法创建 CanvasContext。');
+      }
+      canvasContextRef = canvasContext;
+      const ctxAny: any = (canvasContext as any).getContext('2d');
+      resolvedContext = ctxAny != null ? (ctxAny as CanvasRenderingContext2D) : null;
+      resolvedCanvas = ctxAny != null ? ((ctxAny as UTSJSONObject)['canvas'] as UTSJSONObject | null) : null;
+      // #endif
+
+      // #ifdef APP
+      // 陷阱 #17: APP 端 createCanvasContextAsync 是 callback void, await 它取到
+      // Kotlin Unit; 后续任何 cast 都会被折叠成 Unit→ ClassCastException 必崩。
+      // 必须走 success 回调, 自己包一层 Promise 接入 async 流。
+      let appCanvas: CanvasContext | null = null;
+      await new Promise<boolean>((resolve) => {
+        uni.createCanvasContextAsync({
+          id: options.canvasId,
+          component: options.pageInstance,
+          success: (ctx: CanvasContext) => {
+            appCanvas = ctx;
+            resolve(true);
+          },
+          fail: () => { resolve(false); }
+        });
+      });
+      if (appCanvas == null) {
+        throw new Error('无法创建 CanvasContext。');
+      }
+      const ac = appCanvas!!;
+      canvasContextRef = ac;
+      resolvedContext = ac.getContext('2d');
+      // #endif
+    }
+
+    canvasNode = resolvedCanvas;
+    context2d = resolvedContext;
+
+    // #ifdef WEB
+    if (canvasNode != null) {
+      canvasNode.width = CANVAS_EXPORT_SIZE;
+      canvasNode.height = CANVAS_EXPORT_SIZE;
+      if (canvasNode.style != null) {
+        canvasNode.style.width = displaySize.value + 'px';
+        canvasNode.style.height = displaySize.value + 'px';
+      }
+    }
+    surfaceNodeRef.value = uni.getElementById(options.surfaceId);
+    // #endif
+
+    if (context2d == null) {
+      throw new Error('Canvas 2D 上下文未初始化。');
+    }
+    ready.value = true;
+  }
+
+  // ─── 渲染原语 (内部) ─────────────────────────────
+  function _renderWidth(): number {
+    if (canvasNode != null) {
+      const w = canvasNode!!['width'];
+      if (w != null) {
+        const parsed = parseFloat('' + w);
+        if (!isNaN(parsed) && parsed > 0) return parsed;
+      }
+    }
+    return CANVAS_EXPORT_SIZE;
+  }
+
+  function _renderHeight(): number {
+    if (canvasNode != null) {
+      const h = canvasNode!!['height'];
+      if (h != null) {
+        const parsed = parseFloat('' + h);
+        if (!isNaN(parsed) && parsed > 0) return parsed;
+      }
+    }
+    return CANVAS_EXPORT_SIZE;
+  }
+
+  function _toRenderPoint(point: UTSJSONObject): UTSJSONObject {
+    const scaleX: number = _renderWidth() / CANVAS_EXPORT_SIZE;
+    const scaleY: number = _renderHeight() / CANVAS_EXPORT_SIZE;
+    const px: number = parseFloat('' + point['x']);
+    const py: number = parseFloat('' + point['y']);
+    const result: UTSJSONObject = { x: px * scaleX, y: py * scaleY };
+    return result;
+  }
+
+  function _applyStrokeStyle(stroke: UTSJSONObject): void {
+    if (context2d == null) return;
+    const scaleX: number = _renderWidth() / CANVAS_EXPORT_SIZE;
+    const scaleY: number = _renderHeight() / CANVAS_EXPORT_SIZE;
+    const lineScale: number = Math.min(scaleX, scaleY);
+    const color: string = '' + stroke['color'];
+    const width: number = parseFloat('' + stroke['width']);
+    context2d!!.strokeStyle = color;
+    context2d!!.lineWidth = Math.max(1, width * lineScale);
+    context2d!!.lineCap = 'round';
+    context2d!!.lineJoin = 'round';
+  }
+
+  function _drawStrokeWeb(stroke: UTSJSONObject): void {
+    if (context2d == null) return;
+    const pointsRaw = stroke['points'];
+    if (pointsRaw == null) return;
+    const pointsArr = pointsRaw as Array<any>;
+    if (pointsArr.length === 0) return;
+    _applyStrokeStyle(stroke);
+    if (pointsArr.length === 1) {
+      const p = _toRenderPoint(pointsArr[0] as UTSJSONObject);
+      const px: number = parseFloat('' + p['x']);
+      const py: number = parseFloat('' + p['y']);
+      context2d!!.beginPath();
+      context2d!!.moveTo(px, py);
+      context2d!!.lineTo(px + 0.1, py + 0.1);
+      context2d!!.stroke();
+      return;
+    }
+    context2d!!.beginPath();
+    const first = _toRenderPoint(pointsArr[0] as UTSJSONObject);
+    const fx: number = parseFloat('' + first['x']);
+    const fy: number = parseFloat('' + first['y']);
+    context2d!!.moveTo(fx, fy);
+    for (let i = 1; i < pointsArr.length; i += 1) {
+      const next = _toRenderPoint(pointsArr[i] as UTSJSONObject);
+      const nx: number = parseFloat('' + next['x']);
+      const ny: number = parseFloat('' + next['y']);
+      context2d!!.lineTo(nx, ny);
+    }
+    context2d!!.stroke();
+  }
+
+  // #ifdef MP-WEIXIN
+  function _drawStrokeLegacy(ctx: CanvasContext, stroke: UTSJSONObject): void {
+    const pointsRaw = stroke['points'];
+    if (pointsRaw == null) return;
+    const pointsArr = pointsRaw as Array<any>;
+    if (pointsArr.length === 0) return;
+    const color: string = '' + stroke['color'];
+    const width: number = parseFloat('' + stroke['width']);
+    ctx.setStrokeStyle(color);
+    ctx.setLineWidth(width);
+    ctx.setLineCap('round');
+    ctx.setLineJoin('round');
+    ctx.beginPath();
+    const p0 = pointsArr[0] as UTSJSONObject;
+    const p0x: number = parseFloat('' + p0['x']);
+    const p0y: number = parseFloat('' + p0['y']);
+    ctx.moveTo(p0x, p0y);
+    if (pointsArr.length === 1) {
+      ctx.lineTo(p0x + 0.1, p0y + 0.1);
+    } else {
+      for (let i = 1; i < pointsArr.length; i += 1) {
+        const pi = pointsArr[i] as UTSJSONObject;
+        const pix: number = parseFloat('' + pi['x']);
+        const piy: number = parseFloat('' + pi['y']);
+        ctx.lineTo(pix, piy);
+      }
+    }
+    ctx.stroke();
+  }
+  // #endif
+
+  function redraw(strokes: Array<UTSJSONObject>, currentStroke: UTSJSONObject | null): void {
+    // #ifdef MP-WEIXIN
+    if (useLegacyCanvasFlag) {
+      if (canvasContextRef == null) return;
+      const ctx = canvasContextRef!!;
+      ctx.clearRect(0, 0, CANVAS_EXPORT_SIZE, CANVAS_EXPORT_SIZE);
+      ctx.setFillStyle('#ffffff');
+      ctx.fillRect(0, 0, CANVAS_EXPORT_SIZE, CANVAS_EXPORT_SIZE);
+      for (let i = 0; i < strokes.length; i += 1) {
+        _drawStrokeLegacy(ctx, strokes[i]);
+      }
+      if (currentStroke != null) {
+        const cs = currentStroke!!;
+        const csPoints = cs['points'];
+        if (csPoints != null && (csPoints as Array<any>).length > 0) {
+          _drawStrokeLegacy(ctx, cs);
+        }
+      }
+      ctx.draw();
+      return;
+    }
+    // #endif
+
+    if (context2d == null) return;
+    context2d!!.clearRect(0, 0, CANVAS_EXPORT_SIZE, CANVAS_EXPORT_SIZE);
+    context2d!!.fillStyle = '#ffffff';
+    context2d!!.fillRect(0, 0, CANVAS_EXPORT_SIZE, CANVAS_EXPORT_SIZE);
+    for (let i = 0; i < strokes.length; i += 1) {
+      _drawStrokeWeb(strokes[i]);
+    }
+    if (currentStroke != null) {
+      const cs = currentStroke!!;
+      const csPoints = cs['points'];
+      if (csPoints != null && (csPoints as Array<any>).length > 0) {
+        _drawStrokeWeb(cs);
+      }
+    }
+  }
+
+  // ─── 导出 (三平台) ─────────────────────────────────
+  // #ifdef WEB
+  function _drawStrokeForExport(exportCtx: any, stroke: any): void {
+    if (!stroke || !stroke.points || stroke.points.length === 0) return;
+    exportCtx.strokeStyle = '#111111';
+    exportCtx.lineWidth = Math.max(4, stroke.width);
+    exportCtx.lineCap = 'round';
+    exportCtx.lineJoin = 'round';
+    exportCtx.beginPath();
+    exportCtx.moveTo(stroke.points[0].x, stroke.points[0].y);
+    if (stroke.points.length === 1) {
+      exportCtx.lineTo(stroke.points[0].x + 0.1, stroke.points[0].y + 0.1);
+    } else {
+      for (let i = 1; i < stroke.points.length; i += 1) {
+        exportCtx.lineTo(stroke.points[i].x, stroke.points[i].y);
+      }
+    }
+    exportCtx.stroke();
+  }
+
+  function _exportWebDataUrl(strokes: Array<UTSJSONObject>, currentStroke: UTSJSONObject | null): string {
+    if (typeof document === 'undefined') return '';
+    const exportCanvas = document.createElement('canvas');
+    exportCanvas.width = CANVAS_EXPORT_SIZE;
+    exportCanvas.height = CANVAS_EXPORT_SIZE;
+    const exportCtx = exportCanvas.getContext('2d');
+    if (!exportCtx) return '';
+    exportCtx.fillStyle = '#ffffff';
+    exportCtx.fillRect(0, 0, CANVAS_EXPORT_SIZE, CANVAS_EXPORT_SIZE);
+    for (let i = 0; i < strokes.length; i += 1) {
+      _drawStrokeForExport(exportCtx, strokes[i]);
+    }
+    if (currentStroke != null) {
+      const cs: any = currentStroke;
+      if (cs.points && cs.points.length > 0) {
+        _drawStrokeForExport(exportCtx, cs);
+      }
+    }
+    return exportCanvas.toDataURL('image/png');
+  }
+  // #endif
+
+  async function exportForSubmit(strokes: Array<UTSJSONObject>, currentStroke: UTSJSONObject | null): Promise<ExportPayload> {
+    // #ifdef WEB
+    const dataUrl = _exportWebDataUrl(strokes, currentStroke);
+    if (dataUrl === '' || dataUrl.indexOf('data:image') !== 0) {
+      throw new Error('未能生成可用的草图数据。');
+    }
+    return { sketchDataUrl: dataUrl, sketchUrl: '' } as ExportPayload;
+    // #endif
+
+    // #ifdef MP-WEIXIN
+    if (canvasContextRef == null) {
+      throw new Error('小程序画布上下文不可用，请重试。');
+    }
+    redraw(strokes, currentStroke);
+    const tempFilePath = await new Promise<string>((resolve, reject) => {
+      setTimeout((): void => {
+        uni.canvasToTempFilePath({
+          canvasId: options.canvasId,
+          destWidth: CANVAS_EXPORT_SIZE,
+          destHeight: CANVAS_EXPORT_SIZE,
+          success: (res) => {
+            if (res == null || res.tempFilePath == null || res.tempFilePath === '') {
+              reject(new Error('未获取到临时草图文件。'));
+              return;
+            }
+            resolve('' + res.tempFilePath);
+          },
+          fail: (error) => {
+            reject(new Error('画布导出失败：' + ('' + error)));
+          }
+        }, options.pageInstance);
+      }, 180);
+    });
+    const uploadRes = await uniCloud.uploadFile({
+      filePath: tempFilePath,
+      cloudPath: 'sketch-' + Date.now() + '.png'
+    });
+    if (uploadRes == null || uploadRes.fileID == null || uploadRes.fileID === '') {
+      throw new Error('云存储上传成功，但没有返回 fileID。');
+    }
+    return { sketchDataUrl: '', sketchUrl: '' + uploadRes.fileID } as ExportPayload;
+    // #endif
+
+    // #ifdef APP
+    throw new Error('AI 创作在 Android 端暂需升级 HBuilderX 版本以支持画布导出，请在 Web 端体验此功能。');
+    // #endif
+
+    // 兜底: 理论不可达, 所有平台都已在上方 ifdef 内 return / throw
+    throw new Error('当前平台不支持画布导出。');
+  }
+
+  return {
+    ready,
+    displaySize,
+    exportSize: CANVAS_EXPORT_SIZE,
+    rect,
+    useLegacy: useLegacyCanvasFlag,
+    surfaceNodeRef,
+    setupSize,
+    init,
+    measureRect,
+    redraw,
+    exportForSubmit
+  } as CanvasAPI;
+}
