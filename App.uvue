@@ -1,5 +1,6 @@
 <script setup lang="uts">
   import { state, checkSystemTheme, setSafeArea, setStatusBarHeight, setDevicePixelRatio } from '@/store/index.uts'
+  import { clearUserInfo } from '@/user/index.uts'
 
   onLaunch((res: OnLaunchOptions) => {
     console.log('App Launch', res.path)
@@ -37,6 +38,21 @@
       })
     }
     // #endif
+
+    // Token 检查
+    const token = uni.getStorageSync('uni_id_token') as string | null
+    const tokenExpired = uni.getStorageSync('uni_id_token_expired')
+
+    if (token == null || token === '') {
+      console.log('未登录，游客模式')
+      return
+    }
+    if (tokenExpired != null && Date.now() > (tokenExpired as number)) {
+      console.log('Token 已过期，清理中...')
+      clearUserInfo()
+      return
+    }
+    verifyLogin()
   })
 
   onShow((_res: OnShowOptions) => {
@@ -46,6 +62,16 @@
   onHide(() => {
     console.log('App Hide')
   })
+
+  async function verifyLogin() {
+    try {
+      const userApi = uniCloud.importObject('user-center')
+      await userApi.checkToken()
+      console.log('Token 验证通过')
+    } catch (e) {
+      console.log('Token 验证失败', e)
+    }
+  }
 </script>
 
 <style>

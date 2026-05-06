@@ -43,6 +43,13 @@
         "navigationStyle": "custom",
         "navigationBarTitleText": "登录"
       }
+    },
+    {
+      "path": "pages/signUp/signUp",
+      "style": {
+        "navigationStyle": "custom",
+        "navigationBarTitleText": "注册"
+      }
     }
   ],
   "globalStyle": {

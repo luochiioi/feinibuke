@@ -1,0 +1,225 @@
+<template>
+  <view class="page-container">
+    <view class="back-btn" @click="goBack">
+      <text class="back-icon">&#8592;</text>
+    </view>
+
+    <view class="login-content">
+      <view class="login-card">
+        <text class="title">欢迎登录</text>
+        <text class="subtitle">地图打卡</text>
+
+        <view class="input-group">
+          <input class="custom-input" v-model="userName" placeholder="请输入用户名称" placeholder-class="placeholder-style" />
+        </view>
+
+        <view class="input-group">
+          <input class="custom-input" v-model="userPassword" type="password" placeholder="请输入用户密码" placeholder-class="placeholder-style" />
+        </view>
+
+        <view class="input-group captcha-group">
+          <input class="custom-input" v-model="captcha" placeholder="请输入验证码" placeholder-class="placeholder-style" />
+          <text class="get-captcha-btn" @click="getCaptcha">获取验证码</text>
+        </view>
+
+        <button class="confirm-btn" hover-class="btn-hover" @click="comfirm">立即登录</button>
+
+        <view class="links-group">
+          <text class="signUp-text" @click="signUp">还没有账号？点此注册新账号</text>
+        </view>
+      </view>
+    </view>
+  </view>
+</template>
+
+<script>
+  import { UserInfo, setUserInfo } from '@/user/index.uts'
+
+  export default {
+    data() {
+      return {
+        userId: '',
+        userPassword: '',
+        userName: '',
+        captcha: '',
+        code: '',
+      }
+    },
+    methods: {
+      goBack() {
+        uni.navigateBack()
+      },
+
+      async comfirm() {
+        if (this.code === '') {
+          uni.showToast({ title: '请先获取验证码', icon: 'none' })
+          return
+        }
+
+        if (parseInt(this.captcha) !== parseInt(this.code)) {
+          uni.showToast({ title: '验证码错误', icon: 'none' })
+          return
+        }
+
+        const userLogin = uniCloud.importObject('user-center')
+        const res = await userLogin.login(this.userName.trim(), this.userPassword.trim()) as UTSJSONObject
+
+        const errCode = res["errCode"] as number
+
+        if (errCode === 0) {
+          const resData = res["data"] as UTSJSONObject
+
+          const resUserId = resData["userId"] as string
+          const resUserName = resData["userName"] as string
+          const resToken = resData["token"] as string
+          const resTokenExpired = resData["tokenExpired"] as number
+
+          const userData = {
+            userId: resUserId,
+            userName: resUserName,
+          } as UserInfo
+
+          setUserInfo(userData, resToken, resTokenExpired)
+
+          uni.showToast({ title: '登录成功', icon: 'none', duration: 1500 })
+          setTimeout(() => {
+            uni.navigateBack()
+          }, 1500)
+        }
+      },
+
+      signUp() {
+        uni.navigateTo({ url: '/pages/signUp/signUp' })
+      },
+
+      getCaptcha() {
+        const randomNum = Math.floor(Math.random() * 900000 + 100000)
+        this.code = randomNum.toString()
+        uni.showToast({ title: `你的验证码是${this.code}`, icon: 'none', duration: 3000 })
+      }
+    }
+  }
+</script>
+
+<style>
+.back-btn {
+  position: absolute;
+  top: 140rpx;
+  left: 30rpx;
+  padding: 20rpx;
+  z-index: 99;
+}
+
+.back-icon {
+  font-size: 48rpx;
+  color: #2ecc71;
+  font-weight: bold;
+}
+
+.page-container {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  background: linear-gradient(180deg, #e8f8e8 0%, #f0faf0 40%, #e8f8e8 100%);
+  min-height: 100vh;
+  position: relative;
+}
+
+.login-content {
+  flex: 1;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 40rpx;
+}
+
+.login-card {
+  width: 100%;
+  background-color: #ffffff;
+  padding: 60rpx 50rpx;
+  border-radius: 24rpx;
+  box-shadow: 0 10rpx 30rpx rgba(46, 204, 113, 0.12);
+  border: 2rpx solid #e0f5e0;
+}
+
+.title {
+  font-size: 52rpx;
+  color: #2ecc71;
+  font-weight: bold;
+  margin-bottom: 16rpx;
+  text-align: center;
+}
+
+.subtitle {
+  font-size: 26rpx;
+  color: #9ab89a;
+  text-align: center;
+  display: block;
+  margin-bottom: 60rpx;
+}
+
+.input-group {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  border-bottom: 2rpx solid #2ecc71;
+  padding-bottom: 20rpx;
+  margin-bottom: 50rpx;
+  width: 100%;
+}
+
+.custom-input {
+  flex: 1;
+  height: 60rpx;
+  font-size: 32rpx;
+  color: #333333;
+}
+
+.placeholder-style {
+  color: #aabb99;
+  font-size: 28rpx;
+}
+
+.captcha-group {
+  justify-content: space-between;
+}
+
+.get-captcha-btn {
+  font-size: 28rpx;
+  color: #2ecc71;
+  padding-left: 30rpx;
+  border-left: 2rpx solid #d0f0d0;
+  height: 60rpx;
+  line-height: 60rpx;
+}
+
+.confirm-btn {
+  width: 100%;
+  height: 90rpx;
+  background-color: #2ecc71;
+  color: #ffffff;
+  font-size: 34rpx;
+  font-weight: bold;
+  border-radius: 45rpx;
+  margin-top: 60rpx;
+  box-shadow: 0 8rpx 16rpx rgba(46, 204, 113, 0.3);
+}
+
+.btn-hover {
+  opacity: 0.9;
+  transform: translateY(2rpx);
+  box-shadow: 0 4rpx 8rpx rgba(46, 204, 113, 0.3);
+}
+
+.links-group {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin-top: 50rpx;
+}
+
+.signUp-text {
+  font-size: 26rpx;
+  color: #7a8b7a;
+}
+</style>
