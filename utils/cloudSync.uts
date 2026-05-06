@@ -1,81 +1,100 @@
 // 云端同步：离线队列 + 批量推送
-// 会话 1 仅落骨架与契约，会话 7 补全 flush / 冲突合并 / 重试退避
-import type { ApiResult } from '@/types/app'
-
-// 待同步任务类型枚举
-export type SyncTaskType =
-  | 'marker.add'
-  | 'marker.update'
-  | 'marker.checkin'
-  | 'marker.delete'
-  | 'task.complete'
-  | 'photo.upload'
-
-export type SyncTask = {
-  id: string                    // 本地生成的唯一 ID
-  type: SyncTaskType
-  payload: UTSJSONObject        // 业务数据（按 type 反序列化）
-  createdAt: number             // 入队时间（毫秒）
-  retries: number               // 已重试次数
-}
 
 const KEY_SYNC_QUEUE = 'sync_queue'
-const MAX_RETRIES = 5
+const MAX_RETRIES = 4
 
-// ===== 队列读写 =====
+type QueueItem = {
+  id: string
+  action: string
+  payload: Record<string, any>
+  createdAt: number
+  retries: number
+}
 
-function readQueue(): SyncTask[] {
-  const raw = uni.getStorageSync(KEY_SYNC_QUEUE) as any
-  if (raw == null) return [] as SyncTask[]
-  if (typeof raw !== 'string' || (raw as string).length === 0) return [] as SyncTask[]
+function readQueue(): QueueItem[] {
   try {
-    return JSON.parse(raw as string) as SyncTask[]
+    const raw = uni.getStorageSync(KEY_SYNC_QUEUE)
+    if (raw == null) return []
+    if (typeof raw === 'string' && (raw as string).length > 0) {
+      return JSON.parse<QueueItem[]>(raw as string)
+    }
+    if (Array.isArray(raw)) return raw as QueueItem[]
+    return []
   } catch (e) {
-    console.error('readQueue parse fail', e)
-    return [] as SyncTask[]
+    return []
   }
 }
 
-function writeQueue(queue: SyncTask[]): void {
+function writeQueue(queue: QueueItem[]): void {
   uni.setStorageSync(KEY_SYNC_QUEUE, JSON.stringify(queue))
 }
 
-// ===== 公共 API =====
-
-// 入队（业务层在云端调用失败时调用）
-export function enqueue(type: SyncTaskType, payload: UTSJSONObject): void {
+// Enqueue an action that failed to sync to cloud
+// action: 'checkin' | 'add_marker' | 'task_complete'
+export function enqueueAction(action: string, payload: Record<string, any>): void {
   const queue = readQueue()
   queue.push({
     id: 'sync_' + Date.now() + '_' + Math.floor(Math.random() * 1000),
-    type: type,
+    action: action,
     payload: payload,
     createdAt: Date.now(),
-    retries: 0,
-  } as SyncTask)
+    retries: 0
+  })
   writeQueue(queue)
+  console.log('[cloudSync] enqueued:', action, 'pending:', queue.length)
 }
 
 export function pendingCount(): number {
   return readQueue().length
 }
 
-// 占位：会话 7 实现真正的批量 flush（按类型路由到 marker-center / photo-center 等云对象）
-export async function flushSyncQueue(): Promise<ApiResult<number>> {
+// Flush all queued actions to cloud objects
+export async function flushSyncQueue(): Promise<number> {
   const queue = readQueue()
-  if (queue.length === 0) {
-    return { errCode: 0, errMsg: null, data: 0 } as ApiResult<number>
+  if (queue.length === 0) return 0
+
+  let flushed = 0
+  const remaining: QueueItem[] = []
+
+  for (const item of queue) {
+    try {
+      if (item.action === 'checkin') {
+        const markerApi = uniCloud.importObject('marker-center')
+        await markerApi.checkin(item.payload)
+      } else if (item.action === 'add_marker') {
+        const markerApi = uniCloud.importObject('marker-center')
+        await markerApi.add(item.payload)
+      } else if (item.action === 'task_complete') {
+        // tasks handled server-side in marker-center.checkin
+      }
+      flushed++
+    } catch (e) {
+      item.retries++
+      if (item.retries <= MAX_RETRIES) {
+        remaining.push(item)
+      } else {
+        console.log('[cloudSync] dropped after max retries:', item.id, item.action)
+      }
+    }
   }
-  console.log('[cloudSync] flush 占位，pending=' + queue.length + '（会话 7 实现）')
-  return { errCode: 0, errMsg: null, data: queue.length } as ApiResult<number>
+
+  writeQueue(remaining)
+  console.log('[cloudSync] flush done: flushed=' + flushed + ' remaining=' + remaining.length)
+  return flushed
 }
 
-// 占位：从云端拉取 markers（会话 4 真正接入 marker-center.getAll）
-export async function pullMarkers(): Promise<ApiResult<UTSJSONObject[]>> {
-  console.log('[cloudSync] pullMarkers 占位（会话 4 实现）')
-  return { errCode: 0, errMsg: null, data: [] as UTSJSONObject[] } as ApiResult<UTSJSONObject[]>
-}
-
-// 重试上限校验（会话 7 由 flush 调度时使用）
-export function canRetry(task: SyncTask): boolean {
-  return task.retries < MAX_RETRIES
+// Pull markers from cloud
+export async function pullMarkers(): Promise<UTSJSONObject[]> {
+  try {
+    const markerApi = uniCloud.importObject('marker-center')
+    const res = await markerApi.getAll() as UTSJSONObject
+    const errCode = res["errCode"] as number
+    if (errCode === 0) {
+      return res["data"] as UTSJSONObject[]
+    }
+    return []
+  } catch (e) {
+    console.log('[cloudSync] pullMarkers failed', e)
+    return []
+  }
 }
