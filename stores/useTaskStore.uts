@@ -1,22 +1,72 @@
 import { defineStore } from 'pinia'
-import { ref } from 'vue'
-import type { Task } from '@/types/task'
-import { loadTasks } from '@/utils/storage'
+import { ref, computed } from 'vue'
+import type { Task, Reward } from '@/types/task'
+import type { Marker } from '@/types/marker'
 import { getDefaultTasks } from '@/utils/defaults'
+import { loadTasks, saveTasks, loadUserTasks, saveUserTasks, loadRewards, saveRewards } from '@/utils/storage'
 
 export const useTaskStore = defineStore('tasks', () => {
   const tasks = ref<Task[]>([])
+  const userTasks = ref<Record<string, { status: string; completedAt: number }>>({})
+  const rewards = ref<Reward[]>([])
+
+  const completedTaskCount = computed(() => tasks.value.filter(t => t.status === 'completed').length)
+  const totalTaskCount = computed(() => tasks.value.length)
 
   function loadFromStorage(): void {
     let stored = loadTasks()
     if (stored.length === 0) {
       stored = getDefaultTasks()
+      saveTasks(stored)
     }
-    tasks.value = stored
+    const ut = loadUserTasks()
+    tasks.value = stored.map(t => {
+      const progress = ut[t.id]
+      if (progress && progress.status === 'completed') {
+        return { ...t, status: 'completed' as const, completedAt: progress.completedAt }
+      }
+      return t
+    })
+    userTasks.value = ut
+    rewards.value = loadRewards()
+  }
+
+  function persist(): void {
+    saveTasks(tasks.value)
+    saveUserTasks(userTasks.value)
+    saveRewards(rewards.value)
+  }
+
+  function checkTaskCompletion(marker: Marker): Task[] {
+    const completed: Task[] = []
+    tasks.value.forEach(task => {
+      if (task.status === 'completed') return
+      const match = task.targetMarkerId === marker.id || task.targetTitle === marker.title
+      if (!match) return
+      task.status = 'completed'
+      task.completedAt = Date.now()
+      userTasks.value[task.id] = { status: 'completed', completedAt: task.completedAt }
+      const reward: Reward = {
+        id: `reward_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+        taskId: task.id,
+        taskName: task.name,
+        reward: task.reward,
+        earnedAt: task.completedAt
+      }
+      rewards.value.push(reward)
+      completed.push(task)
+    })
+    if (completed.length > 0) persist()
+    return completed
+  }
+
+  function findTaskById(id: string): Task | undefined {
+    return tasks.value.find(t => t.id === id)
   }
 
   return {
-    tasks,
-    loadFromStorage
+    tasks, userTasks, rewards,
+    completedTaskCount, totalTaskCount,
+    loadFromStorage, persist, checkTaskCompletion, findTaskById
   }
 })
