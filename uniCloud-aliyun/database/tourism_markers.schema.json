@@ -1,0 +1,38 @@
+{
+  "bsonType": "object",
+  "required": ["title", "latitude", "longitude"],
+  "permission": {
+    "read": true,
+    "create": "auth.uid != null",
+    "update": "doc.createdBy == auth.uid || auth.role == 'admin'",
+    "delete": "auth.role == 'admin'"
+  },
+  "properties": {
+    "_id": { "description": "云端自动生成的文档ID" },
+    "id": { "bsonType": "number", "description": "本地兼容数字ID" },
+    "title": { "bsonType": "string", "minLength": 1, "maxLength": 50, "description": "打卡点名称" },
+    "latitude": { "bsonType": "double", "description": "纬度（GCJ-02）" },
+    "longitude": { "bsonType": "double", "description": "经度（GCJ-02）" },
+    "checked": { "bsonType": "bool", "defaultValue": false, "description": "是否已被打卡（全局状态）" },
+    "checkinCount": { "bsonType": "int", "defaultValue": 0, "description": "累计打卡人次" },
+    "checkedBy": {
+      "bsonType": "array",
+      "items": {
+        "bsonType": "object",
+        "properties": {
+          "userId": { "bsonType": "string", "description": "打卡用户ID" },
+          "checkedAt": { "bsonType": "timestamp", "description": "打卡时间" },
+          "photoCloudURL": { "bsonType": "string", "description": "打卡照片云存储URL" },
+          "note": { "bsonType": "string", "maxLength": 200 }
+        }
+      },
+      "description": "所有打卡记录（支持多人打卡同一点）"
+    },
+    "iconPath": { "bsonType": "string", "description": "标记图标" },
+    "width": { "bsonType": "number", "defaultValue": 36 },
+    "height": { "bsonType": "number", "defaultValue": 36 },
+    "createdBy": { "bsonType": "string", "description": "创建者 userId" },
+    "createdAt": { "bsonType": "timestamp" },
+    "updatedAt": { "bsonType": "timestamp" }
+  }
+}

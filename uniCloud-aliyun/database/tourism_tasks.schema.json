@@ -1,0 +1,21 @@
+{
+  "bsonType": "object",
+  "required": ["name", "targetTitle", "reward"],
+  "permission": {
+    "read": true,
+    "create": "auth.role == 'admin'",
+    "update": "auth.role == 'admin'",
+    "delete": "auth.role == 'admin'"
+  },
+  "properties": {
+    "_id": {},
+    "id": { "bsonType": "string", "description": "如 task_001" },
+    "name": { "bsonType": "string" },
+    "description": { "bsonType": "string" },
+    "targetTitle": { "bsonType": "string" },
+    "targetMarkerId": { "bsonType": "number" },
+    "reward": { "bsonType": "string" },
+    "status": { "bsonType": "string", "enum": ["active", "archived"], "defaultValue": "active" },
+    "createdAt": { "bsonType": "timestamp" }
+  }
+}

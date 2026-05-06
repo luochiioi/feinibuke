@@ -1,0 +1,17 @@
+{
+  "bsonType": "object",
+  "required": ["userId", "taskId", "status"],
+  "permission": {
+    "read": "auth.uid != null",
+    "create": "auth.uid != null",
+    "update": "doc.userId == auth.uid",
+    "delete": "auth.role == 'admin'"
+  },
+  "properties": {
+    "_id": {},
+    "userId": { "bsonType": "string", "description": "uni-id 用户ID" },
+    "taskId": { "bsonType": "string", "description": "任务业务ID" },
+    "status": { "bsonType": "string", "enum": ["pending", "completed"] },
+    "completedAt": { "bsonType": "int", "description": "完成时间戳（毫秒）" }
+  }
+}

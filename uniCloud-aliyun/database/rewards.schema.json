@@ -1,0 +1,18 @@
+{
+  "bsonType": "object",
+  "required": ["userId", "taskId", "taskName", "reward"],
+  "permission": {
+    "read": "auth.uid != null",
+    "create": "auth.uid != null",
+    "update": "auth.role == 'admin'",
+    "delete": "auth.role == 'admin'"
+  },
+  "properties": {
+    "_id": {},
+    "userId": { "bsonType": "string" },
+    "taskId": { "bsonType": "string" },
+    "taskName": { "bsonType": "string" },
+    "reward": { "bsonType": "string" },
+    "earnedAt": { "bsonType": "int", "description": "获得时间戳（毫秒）" }
+  }
+}
