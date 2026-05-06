@@ -1,0 +1,34 @@
+import { reactive } from 'vue'
+
+export type UserInfo = {
+  userId: string
+  userName: string
+}
+
+const savedUserInfo = uni.getStorageSync('userInfo')
+
+let processedUserInfo: UserInfo | null = null
+
+if (savedUserInfo instanceof UTSJSONObject) {
+  processedUserInfo = JSON.parse<UserInfo>(JSON.stringify(savedUserInfo))
+} else if (savedUserInfo != null) {
+  uni.removeStorageSync('userInfo')
+}
+
+export const state = reactive({
+  userInfo: processedUserInfo
+})
+
+export function setUserInfo(data: UserInfo, token: string, tokenExpired: number) {
+  state.userInfo = data
+  uni.setStorageSync('userInfo', data)
+  uni.setStorageSync('uni_id_token', token)
+  uni.setStorageSync('uni_id_token_expired', tokenExpired)
+}
+
+export function clearUserInfo() {
+  state.userInfo = null
+  uni.removeStorageSync('userInfo')
+  uni.removeStorageSync('uni_id_token')
+  uni.removeStorageSync('uni_id_token_expired')
+}
