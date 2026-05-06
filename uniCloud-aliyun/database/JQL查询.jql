@@ -1,12 +1,20 @@
-// 本文件用于，使用JQL语法操作项目关联的uniCloud空间的数据库，方便开发调试和远程数据库管理
-// 编写clientDB的js API（也支持常规js语法，比如var），可以对云数据库进行增删改查操作。不支持uniCloud-db组件写法
-// 可以全部运行，也可以选中部分代码运行。点击工具栏上的运行按钮或者按下【F5】键运行代码
-// 如果文档中存在多条JQL语句，只有最后一条语句生效
-// 如果混写了普通js，最后一条语句需是数据库操作语句
-// 此处代码运行不受DB Schema的权限控制，移植代码到实际业务中注意在schema中配好permission
-// 不支持clientDB的action
-// 数据库查询有最大返回条数限制，详见：https://uniapp.dcloud.net.cn/uniCloud/cf-database.html#limit
-// 详细JQL语法，请参考：https://uniapp.dcloud.net.cn/uniCloud/jql.html
+// 地图打卡项目 — JQL 调试查询
+// 使用方式：在 HBuilderX 中打开此文件，选中查询语句，按 F5 运行
 
-// 下面示例查询uni-id-users表的所有数据
-db.collection('uni-id-users').get();
+// 查询所有打卡点
+db.collection('tourism_markers').orderBy('createdAt', 'asc').get();
+
+// 查询活跃任务
+db.collection('tourism_tasks').where({ status: 'active' }).get();
+
+// 查询用户打卡记录（替换 userId）
+// db.collection('user_tasks').where({ userId: 'YOUR_USER_ID' }).get();
+
+// 查询奖励记录（替换 userId）
+// db.collection('rewards').where({ userId: 'YOUR_USER_ID' }).orderBy('earnedAt', 'desc').get();
+
+// 查询用户扩展信息
+// db.collection('users').where({ userId: 'YOUR_USER_ID' }).get();
+
+// 初始数据种子（可选运行一次）
+// db.collection('tourism_tasks').add({ id: 'task_001', name: '故宫探索者', description: '打卡北京故宫', targetTitle: '北京故宫', targetMarkerId: 1, reward: '10 积分', status: 'active', createdAt: Date.now() });

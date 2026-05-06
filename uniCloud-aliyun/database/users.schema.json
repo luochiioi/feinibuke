@@ -1,0 +1,20 @@
+{
+  "bsonType": "object",
+  "required": ["userId"],
+  "permission": {
+    "read": "auth.uid != null",
+    "create": "auth.uid != null",
+    "update": "doc.userId == auth.uid || auth.role == 'admin'",
+    "delete": "auth.role == 'admin'"
+  },
+  "properties": {
+    "_id": {},
+    "userId": { "bsonType": "string", "description": "关联 uni-id 的 uid" },
+    "nickname": { "bsonType": "string", "maxLength": 30 },
+    "avatar": { "bsonType": "string", "description": "头像云存储URL" },
+    "totalCheckins": { "bsonType": "int", "defaultValue": 0 },
+    "totalPhotos": { "bsonType": "int", "defaultValue": 0 },
+    "totalCreated": { "bsonType": "int", "defaultValue": 0 },
+    "createdAt": { "bsonType": "timestamp" }
+  }
+}
