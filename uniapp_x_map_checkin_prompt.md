@@ -48,6 +48,52 @@
 - **存储**：`uni.setStorageSync` → Android SharedPreferences
 - **构建**：HBuilderX 云打包 或 Android Studio
 
+### 1.4 完整产品定位（迭代终局）
+
+> **核心理念**：步行打卡 + 城市文化 + 电子宠物 + 双城剧情 的休闲互动 APP
+
+| 维度 | 内容 |
+|------|------|
+| **目标用户** | 18-35 岁年轻群体 |
+| **核心价值** | 绿色出行、文旅体验、情感陪伴 |
+| **双城** | 澳门 + 长沙，双主线并行，最终交汇 |
+| **差异化** | 双城联动、剧情故事、自有 IP、文化结合 |
+| **参考竞品** | 港澳地区爆款步行打卡 APP（操作逻辑对齐，降低学习成本） |
+| **主线故事** | 《一念归期》— 澳门线 + 长沙线 → 交汇结局 |
+
+**三种打卡模式**：
+
+| 模式 | 适用场景 | 核心机制 |
+|------|---------|---------|
+| 好友异地联动 | 两个人分别在澳门和长沙 | 输入同一组队码，同时到达对应打卡点 → 触发双城联动剧情 |
+| NPC 陪伴模式 | 没有好友，单人游玩 | 自定义 NPC 形象，到打卡点触发小游戏 → 激活 NPC → 陪伴体验双城剧情 |
+| 单人独立打卡 | 只在一个城市游玩 | 按顺序完成本地打卡点，跨城后继续补完剧情，进度自动保存 |
+
+**出行规则**：
+
+| 城市 | 交通方式 |
+|------|---------|
+| 澳门 | 仅步行 |
+| 长沙 | 步行 + 骑行 |
+
+**剧情触发方式**：
+
+| 方式 | 说明 |
+|------|------|
+| 实时触发 | AR 形象出现在真实场景中（仅当下显示） |
+| 汇总触发 | 完成一段路线后，系统自动生成完整小动画 |
+
+**电子宠物系统**：
+
+| 要素 | 说明 |
+|------|------|
+| 初始宠物 | 注册即获"奥喵" |
+| 资源获取 | 步行步数 → 猫粮、道具、装扮 |
+| 升级解锁 | 猫 → 狗等更多形象 |
+| 与打卡挂钩 | 宠物等级关联打卡进度，提升使用频率 |
+
+> ⚠️ **本节为迭代终局愿景**。当前阶段（Phase 1）先完成基础地图打卡功能。上述三种模式、剧情系统、AR、电子宠物等属于后续迭代（Phase 2-4），详见第十六章《迭代路线图》。
+
 ---
 
 ## 二、项目结构（完整目录树）
@@ -1458,50 +1504,235 @@ page {
 
 ---
 
-## 十、实施顺序
+## 十、实施顺序（含 Git 分支 + 会话断点）
 
-严格按照以下依赖顺序构建，确保每一步都可以独立验证：
+### ⚠️ 每个新会话开始前必做：禁用 gateguard-fact-force hook
 
-### 第 1 步：项目骨架（HBuilderX 创建）
-```
-1. 在 HBuilderX 中新建 uniapp x 项目
-2. 配置 manifest.json（权限、地图 SDK）
-3. 配置 pages.json（6 个页面路由）
-4. 复制 uni.scss 和 static/ 资源
-```
+> **问题**：`gateguard-fact-force` PreToolUse hook 会在每次工具调用时拦截并要求贴出 4 项事实。
+> 会话 1 实际被拦 ~11 次，对类型/工具这种小文件是纯开销。后续会话文件更多，开销更大。
 
-### 第 2 步：类型定义（5 个文件）
+**操作**（会话开始时执行一次）：
 ```
-types/marker.uts → types/location.uts → types/task.uts → types/achievement.uts → types/app.uts
+用 /update-config 临时禁用 gateguard-fact-force hook，
+会话结束时再开回来。
 ```
+或手动：在项目 `.claude/settings.json` 中删除或注释该 hook。
 
-### 第 3 步：工具函数（4 个文件）
-```
-utils/coordinate.uts → utils/format.uts → utils/defaults.uts → utils/storage.uts
-```
+---
 
-### 第 4 步：Pinia Stores（5 个文件）
+### Git 仓库
+
 ```
-stores/useMarkerStore.uts
-stores/useLocationStore.uts
-stores/useTaskStore.uts
-stores/useAchievementStore.uts
-stores/useMapStore.uts
+远程仓库：git@github.com:luochiioi/map.git
+规则：
+  - 主干分支不改名（当前是 master 就用 master），每个会话从 master 切出新分支
+  - 绝不直接修改 master 分支
+  - 每个会话结束后合并到 master（git checkout master && git merge --no-ff <分支名>）
+  - 分支命名：setup/project-scaffold、setup/cloud-infra、setup/auth-layer、
+    feature/map-page、feature/checkin-flow、feature/tasks-achievements、
+    feature/cloud-sync、feature/admin-panel
 ```
 
-### 第 5 步：入口文件
+### 会话断点设计
+
+> **原则**：每个会话完成后，master 分支处于可运行状态。下次会话从 master 切出新分支继续。
+
+| 会话 # | 分支名 | 产出 | 结束后 master 状态 |
+|--------|--------|------|-----------------|
+| 1 | `setup/project-scaffold` | 项目骨架、pages.json、manifest.json、类型定义、工具函数、**7 个页面空占位 .uvue** | 可编译，类型齐全 |
+| 2 | `setup/cloud-infra` | uniCloud 服务空间、5 个 DB schema、云对象部署 | 云端可用（从 master 切出） |
+| 3 | `setup/auth-layer` | 从 feiyi_Demo3 复制登录/注册/鉴权，App.uvue token 检查 | 可登录/注册（从 master 切出） |
+| 4 | `feature/map-page` | 主地图页 + MapTools + BottomSheet + Pinia Stores | 地图可展示标记（从 master 切出） |
+| 5 | `feature/checkin-flow` | 打卡页 + 新增页 + 照片上传 | 打卡闭环可走通（从 master 切出） |
+| 6 | `feature/tasks-achievements` | 任务页 + 任务详情 + 统计页 + 成就 | 全功能可用（从 master 切出） |
+| 7 | `feature/cloud-sync` | 离线队列、云端同步、数据拉取 | 多端数据同步（从 master 切出） |
+| 8 | `feature/admin-panel` | uni-admin 后台部署 | 后台可管理（从 master 切出） |
+
+### Phase 1：基础功能（当前阶段）— 详细步骤
+
+### 会话 1 — 项目骨架 + 类型 + 工具（分支：`setup/project-scaffold`）
+
 ```
-main.uts → App.uvue
+1. 清理 map_new 中的 hello-uniapp-x 演示代码
+   - 删除 pages/component/、pages/API/、pages/CSS/、pages/tabBar/、pages/template/ 等演示目录
+   - 删除 uni_modules/ 中与地图打卡无关的演示插件（保留需要的）
+   - 保留 App.uvue、main.uts、manifest.json、pages.json、uni.scss
+   - 删除 store/index.uts 中的演示数据，保留 reactive 结构
+
+2. 配置 manifest.json（Android 权限：GPS + 相机 + 存储、腾讯地图 SDK Key）
+   - ⚠️ 需要你提供腾讯地图 Android Key（app-android.distribute.modules.uni-map.tencent.key）
+   - 如暂无，先填占位符，后续 HBuilderX 云打包时再替换
+
+3. 配置 pages.json（7 个页面路由）：
+   - pages/index/index、pages/stats/stats、pages/checkin/checkin
+   - pages/add-marker/add-marker、pages/tasks/tasks
+   - pages/task-detail/task-detail、pages/login/login
+
+4. 创建目录结构：pages/、stores/、utils/、types/、components/
+
+5. 类型定义（6 个文件）：
+   types/marker.uts → types/location.uts → types/task.uts
+   → types/achievement.uts → types/user.uts → types/app.uts
+
+6. 工具函数（5 个文件）：
+   utils/coordinate.uts → utils/format.uts → utils/defaults.uts
+   → utils/storage.uts → utils/cloudSync.uts
+
+7. ⚠️ 创建 7 个页面的空占位 .uvue 文件（防止 HBuilderX 编译报 pages.json 引用不存在的页面）：
+   每个文件最小内容：
+   <template><view><text>页面名称</text></view></template>
+   <script setup lang="uts"></script>
+   <style></style>
+
+   文件列表：
+   pages/index/index.uvue、pages/stats/stats.uvue、
+   pages/checkin/checkin.uvue、pages/add-marker/add-marker.uvue、
+   pages/tasks/tasks.uvue、pages/task-detail/task-detail.uvue、
+   pages/login/login.uvue
+
+8. HBuilderX 试编译（Android 真机预览或云打包）→ 确认无编译错误
+9. 提交 → 合并到 master
 ```
 
-### 第 6 步：UI 组件（5 个文件）
+**会话 1 结束标准**：HBuilderX 编译通过，类型和工具函数齐全，7 个页面空占位存在。
+
+### 会话 2 — uniCloud 基础设施（分支：`setup/cloud-infra`）
+
 ```
-ProgressBar → BadgeCard → PhotoPicker → MapTools → BottomSheet
+1. 在 uniCloud 控制台创建/关联阿里云服务空间
+2. 从 feiyi_Demo3 复制 uni_modules/uni-id-common/ 和 uni_modules/uni-config-center/
+3. 部署 5 个数据库集合 schema（含权限）
+4. 创建并部署 marker-center 云对象（getAll 先公开，其余加鉴权）
+5. 创建并部署 photo-center 云对象
+6. 创建并部署 admin-center 云对象
+7. 用 HBuilderX 内置测试验证各云对象可用
+8. 提交 → 合并到 main
 ```
 
-### 第 7 步：页面（按复杂度从低到高）
+**会话 2 结束标准**：云端数据库和云对象全部可用，HBuilderX 测试通过。
+
+### 会话 3 — 认证层（分支：`setup/auth-layer`）
+
 ```
-add-marker → task-detail → stats → checkin → tasks → index
+1. 从 feiyi_Demo3 复制并适配：
+   - uniCloud-aliyun/cloudfunctions/user-center/index.obj.js（补充 checkToken）
+   - uniCloud-aliyun/cloudfunctions/common/auth-util/index.js
+   - user/index.uts（去除电商类型）
+   - pages/login/login.uvue（调整配色为主题色）
+   - pages/signUp/signUp.uvue（调整配色）
+
+2. 更新 App.uvue：添加 token 检查和 verifyLogin 逻辑
+3. 更新 pages.json：注册 login 和 signUp 路由
+4. 测试：注册 → 登录 → Token 持久化 → 重启 App Token 仍有效
+5. 提交 → 合并到 main
+```
+
+**会话 3 结束标准**：用户可注册、登录，Token 正常工作。
+
+### 会话 4 — 主地图页（分支：`feature/map-page`）
+
+```
+1. Pinia Stores（5 个）：
+   stores/useMarkerStore.uts → stores/useLocationStore.uts → stores/useMapStore.uts
+
+2. UI 组件：MapTools.uvue → BottomSheet.uvue
+
+3. 页面：pages/index/index.uvue（主地图页）
+   - 全屏地图 + 标记渲染
+   - GPS 定位卡片 + 精度指示
+   - 标记点击 → BottomSheet 弹出（距离/打卡状态）
+   - 地图工具按钮（缩放/定位/任务入口）
+   - 长按地图 → 跳转新增页
+   - onShow 时从云端拉取 markers（marker-center.getAll()）
+
+4. 提交 → 合并到 main
+```
+
+**会话 4 结束标准**：地图可展示标记，可交互，云端数据拉取正常。
+
+### 会话 5 — 打卡闭环（分支：`feature/checkin-flow`）
+
+```
+1. 更新 checkin.uvue：
+   - 拍照 → 压缩 → photo-center.upload() → 获取 cloudURL
+   - 5 秒轮询 GPS → 距离计算 → 校验是否在范围内
+   - marker-center.checkin() → 服务端校验 → 打卡成功
+
+2. 新增页 add-marker.uvue：
+   - 三种坐标来源（地图中心/当前位置/手动）
+   - marker-center.add() → 云端写入
+
+3. PhotoPicker.uvue 组件（拍照/相册/压缩/上传）
+4. 支持离线打卡（本地先写，联网后同步）
+
+5. 提交 → 合并到 main
+```
+
+**会话 5 结束标准**：拍照打卡完整闭环可走通（含云端同步）。
+
+### 会话 6 — 任务+成就+统计（分支：`feature/tasks-achievements`）
+
+```
+1. Pinia Stores：useTaskStore.uts → useAchievementStore.uts
+2. UI 组件：BadgeCard.uvue → ProgressBar.uvue
+3. 页面：
+   - pages/tasks/tasks.uvue（任务+列表+成就+迷你地图）
+   - pages/task-detail/task-detail.uvue（任务详情）
+   - pages/stats/stats.uvue（统计页）
+
+4. 打卡时触发任务检查 → 成就重新计算
+5. 提交 → 合并到 main
+```
+
+**会话 6 结束标准**：全部 6 个页面可用，基础功能完整。
+
+### 会话 7 — 云端同步完善（分支：`feature/cloud-sync`）
+
+```
+1. utils/cloudSync.uts：离线队列 + 批量同步
+2. App.onShow 时 flushSyncQueue
+3. 数据合并策略（本地 vs 云端冲突处理）
+4. 多设备测试
+5. 提交 → 合并到 main
+```
+
+**会话 7 结束标准**：离线打卡 → 联网自动同步，多设备数据一致。
+
+### 会话 8 — 后台管理（分支：`feature/admin-panel`）
+
+```
+1. 创建 uni-admin 项目
+2. 仪表盘页面
+3. 打卡点管理页面
+4. 打卡记录查看页面
+5. 用户管理页面
+6. 部署到 uniCloud 前端网页托管
+7. 提交 → 合并到 main
+```
+
+**会话 8 结束标准**：管理员可通过浏览器查看和管理数据。
+
+---
+
+### 前端 UI 设计规范
+
+> **强制要求**：每次写 UI 代码前，使用 `frontend-design` skill 确保设计质量。
+> 遵循 `C:\Users\Raymond\.claude\rules\web\design-quality.md` 中的反模板政策。
+
+**设计方向**：文旅 + 年轻化 + 温暖陪伴感
+
+| 要素 | 规范 |
+|------|------|
+| **主色调** | 暖绿 (#2ecc71 → #27ae60) + 暖橙 (#f39c12)，呼应"步行+城市" |
+| **辅助色** | 澳门线 — 葡式蓝白 (#1a5599/#ffffff)；长沙线 — 湘绣红金 (#c0392b/#f39c12) |
+| **字体** | 标题用圆体/手写风格，正文用思源黑体 |
+| **设计品质** | 每页面至少满足 4 项 Required Qualities（详见 design-quality.md） |
+| **禁止** | 默认卡片网格、通用渐变 blob、无观点灰色配比、uniform spacing |
+| **动画** | 仅 transform/opacity/clip-path（compositor-friendly） |
+
+**每次写前端代码前**：
+```
+使用 frontend-design skill → 确认设计方向 → 写代码 → 自检 Component Checklist
 ```
 
 ---
@@ -2540,6 +2771,74 @@ const cloudURL = uploadData["cloudURL"] as string
 - [ ] 后台打卡记录查看：筛选/搜索
 - [ ] 后台用户管理：查看列表/详情
 - [ ] 多设备数据同步：A 设备打卡 → B 设备拉取可见
+
+---
+
+## 十六、迭代路线图（Phase 2-4：差异化功能）
+
+> ⚠️ **以下为未来迭代计划，不在当前 Phase 1 范围内。**
+> Phase 1 完成后，基础地图打卡功能已可用。Phase 2-4 逐步加入双城剧情、电子宠物、AR 等差异化功能。
+
+### Phase 2 — 双城打卡 + 剧情系统
+
+| 功能 | 说明 | 依赖 |
+|------|------|------|
+| 双城数据模型 | markers 新增 `city` 字段（`macau`/`changsha`），任务绑定城市 | DB schema 变更 |
+| 双城地图分页 | 首页增加城市切换 Tab（澳门/长沙），各自独立的标记集 | map page 重构 |
+| 单人独立打卡模式 | 用户按顺序完成一个城市的打卡点，进度持久化。跨城后继续补完 | task system 已有基础 |
+| 剧情章节系统 | `story_chapters` 集合：章节定义、触发条件（完成 N 个打卡点）、解锁顺序 | 新增 DB + 云对象 |
+| 剧情触发（汇总型） | 完成一段路线 → 服务端生成小动画（序列帧/简单 Lottie）→ 客户端播放 | 动画资源 |
+| 打卡照片回顾 | 照片墙页面：按城市/时间浏览打卡照片 | photo-center 已有基础 |
+
+**数据库新增**：
+```
+story_chapters — 剧情章节定义（id, city, chapterOrder, title, description, requiredMarkers[], animationURL, unlockCondition）
+user_progress — 用户剧情进度（userId, city, currentChapter, completedChapters[], lastCheckinAt）
+```
+
+### Phase 3 — 好友联动 + NPC 模式
+
+| 功能 | 说明 | 依赖 |
+|------|------|------|
+| 组队码系统 | 生成 6 位唯一组队码，两人输入同一码 → 建立双人会话 | 新增 `teams` 集合 |
+| 异地联动打卡 | 两人同时（±30 秒窗口）在对应打卡点 → 双城联动触发 | WebSocket 或轮询 |
+| 联动剧情 | 双城同时打卡成功 → 解锁专属联动剧情章节 | story_chapters |
+| NPC 形象自定义 | 外观选择器（发型、服装、配饰） | 静态资源 |
+| 打卡点小游戏 | 到达打卡点 → 触发简单交互（拼图/答题/找茬）→ 激活 NPC | 游戏逻辑模块 |
+| NPC 陪伴模式 | NPC 在剧情动画中出现，有对话气泡 | 动画资源 |
+
+**数据库新增**：
+```
+teams — 组队信息（teamCode, members[{userId, city}], createdAt, status）
+mini_games — 小游戏定义（id, markerId, gameType, config, reward）
+```
+
+### Phase 4 — 电子宠物 + AR
+
+| 功能 | 说明 | 依赖 |
+|------|------|------|
+| 步数统计 | 接入 uni.getLocation 连续追踪 + 计步算法，或调用系统计步 API | GPS 已有基础 |
+| 宠物系统 | `pets` 集合：宠物定义、等级、外观。用户注册获初始"奥喵" | 新增 DB |
+| 步数 → 资源 | 每日步数换算猫粮/道具/装扮。商店兑换 | 新增云对象 |
+| 宠物升级 | 累计步数 + 打卡次数 → 升级 → 解锁狗等新形象 | pets 逻辑 |
+| AR 实时触发 | 打卡成功时，AR 形象叠加在相机画面中（使用 uni-ar 或 WebView AR） | 设备兼容性 |
+| 宠物互动 | 喂食、抚摸、换装（基础 Tamagotchi 式交互） | UI 组件 |
+
+**数据库新增**：
+```
+pets — 宠物定义（id, name, type, levels[{level, requiredSteps, requiredCheckins, avatar}]）
+user_pets — 用户宠物（userId, petId, level, exp, equippedItems[]）
+pet_items — 道具/装扮（id, name, type[food/decor/costume], effect, cost）
+user_inventory — 用户背包（userId, itemId, count）
+```
+
+### Phase 2-4 实施顺序（届时）
+
+```
+Phase 2: 双城模型 → 城市切换 → 单人独立模式 → 剧情章节 → 汇总动画 → 照片墙
+Phase 3: 组队码 → 异地联动 → 联动剧情 → NPC 自定义 → 小游戏 → NPC 陪伴
+Phase 4: 步数统计 → 宠物基础 → 步数换资源 → 宠物升级 → AR 触发 → 宠物互动
+```
 
 ---
 
