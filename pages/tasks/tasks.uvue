@@ -4,7 +4,7 @@
     <view class="hero">
       <view class="hero-stat">
         <text class="hero-value">{{ markerStore.doneCount }}/{{ markerStore.totalCount }}</text>
-        <text class="hero-label">已打卡</text>
+        <text class="hero-label">已打�?/text>
       </view>
       <view class="hero-stat">
         <text class="hero-value">{{ taskStore.completedTaskCount }}/{{ taskStore.totalTaskCount }}</text>
@@ -59,7 +59,7 @@
     <view class="marker-list">
       <view v-if="filteredMarkers.length === 0" class="empty-state">
         <text class="empty-icon">📍</text>
-        <text class="empty-text">暂无打卡点</text>
+        <text class="empty-text">暂无打卡�?/text>
       </view>
       <view v-for="item in filteredMarkers" :key="item.id" class="spot-card">
         <view class="spot-status-dot" :class="item.checked ? 'done' : 'pending'"></view>
@@ -100,8 +100,8 @@ const activeFilter = ref<FilterMode>('all')
 
 const filters = [
   { key: 'all' as FilterMode, label: '全部' },
-  { key: 'pending' as FilterMode, label: '待打卡' },
-  { key: 'done' as FilterMode, label: '已打卡' }
+  { key: 'pending' as FilterMode, label: '待打�? },
+  { key: 'done' as FilterMode, label: '已打�? }
 ]
 
 // Link tasks to markers for display
@@ -150,7 +150,7 @@ function focusOnMap(marker: Marker): void {
 function deleteSpot(item: Marker): void {
   uni.showModal({
     title: '确认删除',
-    content: `确定要删除"${item.title}"吗？`,
+    content: `确定要删�?${item.title}"吗？`,
     success: (res: any) => {
       if (res.confirm) {
         markerStore.deleteMarker(item.id)
@@ -164,7 +164,7 @@ function deleteSpot(item: Marker): void {
 .tasks-page {
   flex: 1;
   background-color: #f5f7f5;
-  min-height: 100vh;
+  min-height: 800px;
 }
 
 /* Hero */
@@ -173,7 +173,7 @@ function deleteSpot(item: Marker): void {
   flex-direction: row;
   padding: 32rpx;
   background: linear-gradient(135deg, #2ecc71, #27ae60);
-  gap: 0;
+  
 }
 
 .hero-stat {
@@ -181,7 +181,6 @@ function deleteSpot(item: Marker): void {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 4rpx;
 }
 
 .hero-value {
@@ -214,7 +213,6 @@ function deleteSpot(item: Marker): void {
 .badge-list {
   display: flex;
   flex-direction: row;
-  gap: 16rpx;
   padding-bottom: 16rpx;
 }
 
@@ -236,7 +234,6 @@ function deleteSpot(item: Marker): void {
 .filter-bar {
   display: flex;
   flex-direction: row;
-  gap: 16rpx;
   padding: 24rpx 32rpx;
 }
 
@@ -250,26 +247,19 @@ function deleteSpot(item: Marker): void {
   justify-content: center;
 }
 
-.filter-chip text {
-  font-size: 26rpx;
-  color: #888888;
-}
+
 
 .filter-chip.active {
   background-color: #2ecc71;
 }
 
-.filter-chip.active text {
-  color: #ffffff;
-  font-weight: 500;
-}
+
 
 /* Marker list */
 .marker-list {
   padding: 0 32rpx;
   display: flex;
   flex-direction: column;
-  gap: 16rpx;
 }
 
 .empty-state {
@@ -296,7 +286,6 @@ function deleteSpot(item: Marker): void {
   background-color: #ffffff;
   border-radius: 16rpx;
   padding: 24rpx;
-  gap: 16rpx;
 }
 
 .spot-status-dot {
@@ -318,7 +307,6 @@ function deleteSpot(item: Marker): void {
   flex: 1;
   display: flex;
   flex-direction: column;
-  gap: 4rpx;
 }
 
 .spot-name {
@@ -340,7 +328,6 @@ function deleteSpot(item: Marker): void {
 .spot-actions {
   display: flex;
   flex-direction: row;
-  gap: 20rpx;
 }
 
 .action-link {

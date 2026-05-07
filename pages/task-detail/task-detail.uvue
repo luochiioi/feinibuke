@@ -3,7 +3,7 @@
     <view v-if="task" class="content">
       <!-- Task hero -->
       <view class="task-hero" :class="task.status === 'completed' ? 'done' : 'pending'">
-        <text class="task-status-icon">{{ task.status === 'completed' ? '✅' : '⏳' }}</text>
+        <text class="task-status-icon">{{ task.status === 'completed' ? '�? : '�? }}</text>
         <text class="task-name">{{ task.name }}</text>
         <text class="task-desc">{{ task.description }}</text>
         <text class="task-reward">🎁 {{ task.reward }}</text>
@@ -11,7 +11,7 @@
 
       <!-- Linked marker -->
       <view class="section">
-        <text class="section-title">关联打卡点</text>
+        <text class="section-title">关联打卡�?/text>
         <view class="linked-marker" v-if="linkedMarker">
           <view class="marker-status-dot" :class="linkedMarker.checked ? 'done' : 'pending'"></view>
           <view class="marker-info">
@@ -31,11 +31,11 @@
 
       <!-- Status info -->
       <view class="section">
-        <text class="section-title">状态</text>
+        <text class="section-title">状�?/text>
         <view class="info-row">
-          <text class="info-label">任务状态</text>
+          <text class="info-label">任务状�?/text>
           <text class="info-value" :class="task.status === 'completed' ? 'done' : 'pending'">
-            {{ task.status === 'completed' ? '已完成' : '待完成' }}
+            {{ task.status === 'completed' ? '已完�? : '待完�? }}
           </text>
         </view>
         <view class="info-row" v-if="task.completedAt">
@@ -47,7 +47,7 @@
 
     <view v-else class="empty">
       <text class="empty-icon">📋</text>
-      <text class="empty-text">任务不存在</text>
+      <text class="empty-text">任务不存�?/text>
     </view>
   </scroll-view>
 </template>
@@ -93,7 +93,7 @@ function goToMarker(): void {
 .detail-page {
   flex: 1;
   background-color: #f5f7f5;
-  min-height: 100vh;
+  min-height: 800px;
 }
 
 .content {
@@ -106,7 +106,6 @@ function goToMarker(): void {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 12rpx;
 }
 
 .task-hero.done {
@@ -159,7 +158,6 @@ function goToMarker(): void {
   display: flex;
   flex-direction: row;
   align-items: center;
-  gap: 16rpx;
   background-color: #f8f8f8;
   border-radius: 12rpx;
   padding: 20rpx;
@@ -178,7 +176,6 @@ function goToMarker(): void {
   flex: 1;
   display: flex;
   flex-direction: column;
-  gap: 4rpx;
 }
 
 .marker-title {
@@ -205,10 +202,7 @@ function goToMarker(): void {
   padding: 20rpx;
 }
 
-.not-found text {
-  font-size: 26rpx;
-  color: #999999;
-}
+
 
 /* Info rows */
 .info-row {

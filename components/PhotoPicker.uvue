@@ -7,8 +7,8 @@
         <text class="empty-text">{{ hint }}</text>
       </view>
     </view>
-    <text class="status-text" v-if="isUploading">上传中...</text>
-    <text class="status-text" v-else-if="isCompressing">压缩中...</text>
+    <text class="status-text" v-if="isUploading">上传�?..</text>
+    <text class="status-text" v-else-if="isCompressing">压缩�?..</text>
   </view>
 </template>
 
@@ -114,7 +114,6 @@ function compressImageAsync(path: string): Promise<string> {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 4rpx;
 }
 
 .empty-icon {

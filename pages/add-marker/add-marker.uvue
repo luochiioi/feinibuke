@@ -1,80 +1,40 @@
 <template>
   <view class="add-page">
-    <!-- Coordinate source tabs -->
     <view class="source-tabs">
-      <view
-        class="tab-chip"
-        :class="{ active: activeSource === 'center' }"
-        @click="setSource('center')"
-      >
-        <text>地图中心</text>
+      <view class="tab-chip" :class="{ active: activeSource === 'center' }" @click="setSource('center')">
+        <text class="tab-chip-text">地图中心</text>
       </view>
-      <view
-        class="tab-chip"
-        :class="{ active: activeSource === 'current' }"
-        @click="setSource('current')"
-      >
-        <text>当前位置</text>
+      <view class="tab-chip" :class="{ active: activeSource === 'current' }" @click="setSource('current')">
+        <text class="tab-chip-text">当前位置</text>
       </view>
-      <view
-        class="tab-chip"
-        :class="{ active: activeSource === 'manual' }"
-        @click="setSource('manual')"
-      >
-        <text>手动输入</text>
+      <view class="tab-chip" :class="{ active: activeSource === 'manual' }" @click="setSource('manual')">
+        <text class="tab-chip-text">手动输入</text>
       </view>
     </view>
 
-    <!-- Form -->
     <view class="form-section">
-      <!-- Title -->
       <view class="form-group">
         <text class="form-label">地点名称 *</text>
-        <input
-          class="form-input"
-          v-model="formTitle"
-          placeholder="请输入打卡点名称"
-          placeholder-class="input-placeholder"
-        />
+        <input class="form-input" v-model="formTitle" placeholder="请输入打卡点名称" placeholder-class="input-placeholder" />
       </view>
-
-      <!-- Latitude -->
       <view class="form-group">
         <text class="form-label">纬度 (Latitude)</text>
-        <input
-          class="form-input mono"
-          v-model="formLat"
-          placeholder="39.9163"
-          placeholder-class="input-placeholder"
-          :disabled="activeSource !== 'manual'"
-        />
+        <input class="form-input form-input-mono" v-model="formLat" placeholder="39.9163" placeholder-class="input-placeholder" :disabled="activeSource !== 'manual'" />
       </view>
-
-      <!-- Longitude -->
       <view class="form-group">
         <text class="form-label">经度 (Longitude)</text>
-        <input
-          class="form-input mono"
-          v-model="formLng"
-          placeholder="116.3972"
-          placeholder-class="input-placeholder"
-          :disabled="activeSource !== 'manual'"
-        />
+        <input class="form-input form-input-mono" v-model="formLng" placeholder="116.3972" placeholder-class="input-placeholder" :disabled="activeSource !== 'manual'" />
       </view>
     </view>
 
-    <!-- Source info -->
     <view class="source-info">
       <text class="info-text" v-if="activeSource === 'center'">使用地图中心坐标</text>
       <text class="info-text" v-else-if="activeSource === 'current'">使用当前 GPS 定位坐标</text>
       <text class="info-text" v-else>手动输入坐标（GCJ-02）</text>
     </view>
 
-    <!-- Submit -->
     <view class="submit-section">
-      <button class="submit-btn" hover-class="btn-hover" @click="submitHandler">
-        添加打卡点
-      </button>
+      <button class="submit-btn" hover-class="btn-hover" @click="submitHandler">添加打卡点</button>
     </view>
   </view>
 </template>
@@ -112,14 +72,11 @@ onShow((): void => {
   centerLngFromMap = query.centerLng ?? ''
   currentLatFromMap = query.currentLat ?? ''
   currentLngFromMap = query.currentLng ?? ''
-
-  // Default: use map center coordinates
   setSource('center')
 })
 
 function setSource(source: CoordSource): void {
   activeSource.value = source
-
   if (source === 'center') {
     formLat.value = centerLatFromMap
     formLng.value = centerLngFromMap
@@ -132,17 +89,15 @@ function setSource(source: CoordSource): void {
       formLat.value = currentLatFromMap
       formLng.value = currentLngFromMap
     }
-    // Fallback: fetch fresh location
     locationStore.pollLocationOnce().then((loc) => {
       formLat.value = String(loc.latitude)
       formLng.value = String(loc.longitude)
     })
   }
-  // manual: keep whatever user typed
 }
 
 async function submitHandler(): Promise<void> {
-  if (!formTitle.value.trim()) {
+  if (formTitle.value.trim() == '') {
     uni.showToast({ title: '请输入地点名称', icon: 'none' })
     return
   }
@@ -156,14 +111,12 @@ async function submitHandler(): Promise<void> {
   }
 
   try {
-    // Local add
     await markerStore.addMarker({
       title: formTitle.value.trim(),
       latitude: lat,
       longitude: lng
     })
 
-    // Cloud sync
     try {
       const markerApi = uniCloud.importObject('marker-center')
       await markerApi.add({
@@ -192,13 +145,11 @@ async function submitHandler(): Promise<void> {
 .add-page {
   flex: 1;
   background-color: #f5f7f5;
-  min-height: 100vh;
 }
 
 .source-tabs {
   display: flex;
   flex-direction: row;
-  gap: 16rpx;
   padding: 24rpx 32rpx;
   background-color: #ffffff;
   border-bottom: 1rpx solid #e8ece8;
@@ -212,9 +163,14 @@ async function submitHandler(): Promise<void> {
   display: flex;
   align-items: center;
   justify-content: center;
+  margin-right: 16rpx;
 }
 
-.tab-chip text {
+.tab-chip:last-child {
+  margin-right: 0;
+}
+
+.tab-chip-text {
   font-size: 26rpx;
   color: #888888;
 }
@@ -223,7 +179,7 @@ async function submitHandler(): Promise<void> {
   background-color: #2ecc71;
 }
 
-.tab-chip.active text {
+.tab-chip.active .tab-chip-text {
   color: #ffffff;
   font-weight: 500;
 }
@@ -253,7 +209,7 @@ async function submitHandler(): Promise<void> {
   box-sizing: border-box;
 }
 
-.form-input.mono {
+.form-input-mono {
   font-family: monospace;
   font-size: 28rpx;
 }

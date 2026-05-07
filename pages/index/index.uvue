@@ -10,7 +10,7 @@
         <view class="accuracy-badge" :class="'accuracy-' + locationStore.accuracyLevel">
           <text class="accuracy-text">{{ locationStore.accuracyText }}</text>
         </view>
-        <text class="stats">{{ markerStore.doneCount }}/{{ markerStore.totalCount }} 已打卡</text>
+        <text class="stats">{{ markerStore.doneCount }}/{{ markerStore.totalCount }} 已打�?/text>
       </view>
     </view>
 
@@ -37,7 +37,7 @@
           <cover-view class="tool-label">+</cover-view>
         </cover-view>
         <cover-view class="tool-btn zoom-out" @click="mapStore.zoomOut()">
-          <cover-view class="tool-label">−</cover-view>
+          <cover-view class="tool-label">�?/cover-view>
         </cover-view>
         <cover-view class="tool-btn locate-btn" @click="locateCurrent">
           <cover-view class="tool-label">📍</cover-view>
@@ -54,7 +54,7 @@
       <cover-view class="bottom-sheet" v-if="mapStore.activeMarker">
         <cover-view class="sheet-header">
           <cover-view class="sheet-title">{{ mapStore.activeMarker.title }}</cover-view>
-          <cover-view class="sheet-close" @click="mapStore.setActiveMarker(null)">✕</cover-view>
+          <cover-view class="sheet-close" @click="mapStore.setActiveMarker(null)">�?/cover-view>
         </cover-view>
         <cover-view class="sheet-body">
           <template v-if="mapStore.activeMarker.checked">
@@ -78,7 +78,7 @@
               </cover-view>
             </cover-view>
             <cover-view class="sheet-row">
-              <text class="status-pending">未打卡</text>
+              <text class="status-pending">未打�?/text>
             </cover-view>
             <cover-view class="sheet-actions">
               <cover-view class="action-btn primary" @click="goToCheckIn(mapStore.activeMarker!)" v-if="canCheckIn">
@@ -196,7 +196,7 @@ function deleteCurrentMarker(): void {
   if (!mapStore.activeMarker) return
   uni.showModal({
     title: '确认删除',
-    content: `确定要删除"${mapStore.activeMarker.title}"吗？`,
+    content: `确定要删�?${mapStore.activeMarker.title}"吗？`,
     success: (res: any) => {
       if (res.confirm) {
         markerStore.deleteMarker(mapStore.activeMarker!.id)
@@ -211,7 +211,7 @@ function deleteCurrentMarker(): void {
 .map-page {
   flex: 1;
   width: 750rpx;
-  height: 100vh;
+  height: 100%;
   position: relative;
 }
 
@@ -229,11 +229,9 @@ function deleteCurrentMarker(): void {
   z-index: 10;
   background-color: rgba(255, 255, 255, 0.92);
   padding: 20rpx 30rpx;
-  padding-top: calc(20rpx + var(--status-bar-height, 44px));
+  padding-top: 88rpx;
   display: flex;
   flex-direction: column;
-  gap: 12rpx;
-  backdrop-filter: blur(10px);
 }
 
 .loc-row {
@@ -293,7 +291,6 @@ function deleteCurrentMarker(): void {
   top: 280rpx;
   display: flex;
   flex-direction: column;
-  gap: 16rpx;
 }
 
 .tool-btn {
@@ -340,7 +337,7 @@ function deleteCurrentMarker(): void {
   background-color: #2ecc71;
   color: #ffffff;
   font-size: 52rpx;
-  font-weight: 300;
+  font-weight: 400;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -397,17 +394,13 @@ function deleteCurrentMarker(): void {
 .sheet-body {
   display: flex;
   flex-direction: column;
-  gap: 20rpx;
 }
 
 .sheet-row {
   padding: 8rpx 0;
 }
 
-.sheet-row text {
-  font-size: 28rpx;
-  color: #333333;
-}
+
 
 .status-pending {
   color: #f39c12;
@@ -420,21 +413,14 @@ function deleteCurrentMarker(): void {
   border-radius: 12rpx;
 }
 
-.sheet-note text {
-  font-size: 26rpx;
-  color: #666666;
-}
+
 
 .sheet-distance {
   display: flex;
   flex-direction: column;
-  gap: 12rpx;
 }
 
-.sheet-distance text {
-  font-size: 28rpx;
-  color: #333333;
-}
+
 
 .distance-bar {
   height: 8rpx;
@@ -453,7 +439,6 @@ function deleteCurrentMarker(): void {
 .sheet-actions {
   display: flex;
   flex-direction: row;
-  gap: 20rpx;
   margin-top: 16rpx;
 }
 
@@ -466,24 +451,17 @@ function deleteCurrentMarker(): void {
   justify-content: center;
 }
 
-.action-btn text {
-  font-size: 30rpx;
-  font-weight: 500;
-}
+
 
 .action-btn.primary {
   background-color: #2ecc71;
 }
 
-.action-btn.primary text {
-  color: #ffffff;
-}
+
 
 .action-btn.danger {
   background-color: #f8f8f8;
 }
 
-.action-btn.danger text {
-  color: #ff3b30;
-}
+
 </style>

@@ -4,7 +4,7 @@
     <view class="hero-panel">
       <text class="hero-tag">TRIP INSIGHTS</text>
       <text class="hero-rate">{{ markerStore.completionRate }}%</text>
-      <text class="hero-sub">{{ markerStore.doneCount }} / {{ markerStore.totalCount }} 已完成</text>
+      <text class="hero-sub">{{ markerStore.doneCount }} / {{ markerStore.totalCount }} 已完�?/text>
       <ProgressBar :value="markerStore.completionRate" color="#ffffff" :height="10" :showLabel="false" />
     </view>
 
@@ -16,15 +16,15 @@
       </view>
       <view class="stat-card">
         <text class="stat-value done">{{ markerStore.doneCount }}</text>
-        <text class="stat-label">已打卡</text>
+        <text class="stat-label">已打�?/text>
       </view>
       <view class="stat-card">
         <text class="stat-value pending">{{ markerStore.pendingMarkers.length }}</text>
-        <text class="stat-label">待打卡</text>
+        <text class="stat-label">待打�?/text>
       </view>
       <view class="stat-card">
         <text class="stat-value">{{ markerStore.completionRate }}%</text>
-        <text class="stat-label">完成率</text>
+        <text class="stat-label">完成�?/text>
       </view>
     </view>
 
@@ -59,7 +59,7 @@
     <view class="timeline">
       <view v-if="markerStore.checkedMarkers.length === 0" class="empty-state">
         <text class="empty-icon">🏃</text>
-        <text class="empty-text">还没有打卡记录，快去地图上探索吧！</text>
+        <text class="empty-text">还没有打卡记录，快去地图上探索吧�?/text>
       </view>
       <view v-for="m in markerStore.checkedMarkers" :key="m.id" class="timeline-item">
         <view class="timeline-dot"></view>
@@ -99,7 +99,7 @@ onShow((): void => {
 .stats-page {
   flex: 1;
   background-color: #f5f7f5;
-  min-height: 100vh;
+  min-height: 800px;
 }
 
 /* Hero */
@@ -108,7 +108,6 @@ onShow((): void => {
   padding: 48rpx 32rpx 40rpx;
   display: flex;
   flex-direction: column;
-  gap: 12rpx;
 }
 
 .hero-tag {
@@ -134,7 +133,6 @@ onShow((): void => {
   display: flex;
   flex-direction: row;
   padding: 24rpx 32rpx;
-  gap: 16rpx;
 }
 
 .stat-card {
@@ -145,7 +143,6 @@ onShow((): void => {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 8rpx;
 }
 
 .stat-value {
@@ -257,7 +254,6 @@ onShow((): void => {
   padding-bottom: 32rpx;
   display: flex;
   flex-direction: column;
-  gap: 8rpx;
 }
 
 .timeline-title {
