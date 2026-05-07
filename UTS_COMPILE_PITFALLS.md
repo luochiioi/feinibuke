@@ -36,9 +36,11 @@
 | 10 | **模板中不可内联复杂对象字面量** | `:class="{ a: expr }"` 类型推断失败 | `:class="{ a: true, b: !expr }"` | 用 `computed` 计算为字符串 |
 | 11 | **`setTimeout` 在 Promise 中** | executor 须返回 void，setTimeout 返回 number | `new Promise(r => setTimeout(r,ms))` | `new Promise(r => { setTimeout(() => { r() }, ms) })` |
 | 12 | **Pinia 模块不可用** | uniapp x 不内置 npm pinia 包 | `import { defineStore } from 'pinia'` | 本地 shim: `from './pinia-shim'` |
-| 13 | **`as any` 完全不绕过属性检查** | `.prop` 和 `["prop"]` 均不可用于类型外属性 | `(x as any).unknownProp` | 无法访问类型定义之外的属性，删除该逻辑或扩展类型定义 |
+| 13 | **`as any` 完全不绕过属性检查** | `.prop` 和 `["prop"]` 均不可用于类型外属性 | `(x as any).unknown` | 无法访问类型定义之外的属性，删除该逻辑或扩展类型定义 |
 | 14 | **`Array.from()` 不可用** | UTS 不支持 `Array.from(iterable)` | `Array.from(map.values())` | 手动 `forEach` + `push` 构建数组 |
 | 15 | **内联对象字面量不匹配命名类型** | `func({ a: 1 })` 匿名类型 ≠ `T` 即使结构相同 | `setSafeArea({ top: 1 })` | 先声明 `const v: T = { ... }` 再传入 |
+| 16 | **`<script setup>` 函数不提升** | UTS 不 hoist 函数声明，定义必须在使用前 | 函数定义在 `onLaunch` 之后 | 函数定义移到 `onLaunch` 之前 |
+| 17 | **Promise 回调需显式类型** | `.then(cb)` 和 `.catch(cb)` 参数类型无法推断 | `.then(() => {})` | `.then((_: void): void => {})` |
 
 ---
 
@@ -50,8 +52,9 @@
 | 2 | **子组件用 option-style defineProps** | 所有 `defineProps` 和 `defineEmits` 使用 option 语法，禁止泛型语法 |
 | 3 | **Store 用本地 Pinia shim** | 项目中已创建 `stores/pinia-shim.uts`，所有 Store 从该文件导入 `defineStore` |
 | 4 | **文件编码** | 所有 `.uvue`/`.uts` 文件用 Write 工具写入（确保 UTF-8），避免 PowerShell `Set-Content` |
-| 5 | **`as any` 不能绕过属性名检查** | `(obj as any).unknownProp` 仍会报"找不到名称"，必须用 bracket 语法 `(obj as any)["unknownProp"]` |
+| 5 | **`as any` 不能绕过属性名检查** | `(obj as any).unknownProp` 仍会报"找不到名称"，必须用 bracket 语法 `(obj as any)["unknownProp"]` — 注：bracket 同样可能失败，最安全是删除类型外属性访问 |
 | 6 | **`Array.from()` 不可用** | UTS 不支持 `Array.from(iterable)`，需手动 `forEach` + `push` 构建数组 |
+| 7 | **函数定义顺序** | `<script setup>` 中函数不提升，必须定义在调用之前 |
 
 ---
 
@@ -61,11 +64,13 @@
 |-------------|------|------|
 | `UTS110111120` | 条件非布尔类型 | 检查 `if`/`&&`/`\|\|`/`!`，改用显式布尔比较 |
 | `UTS110111101` | 内联对象字面量类型 | 定义了 `{ key: Type }`，改为 named type 或 `UTSJSONObject` |
-| `找不到名称 "xxx"` (变量) | 作用域内未定义变量/模块 | 检查 import、变量拼写、或用 computed |
-| `找不到名称 "xxx"` (属性) | `as any` 不绕过属性名检查 | 用 bracket 访问：`(obj as any)["xxx"]` |
+| `找不到名称 "xxx"` (变量/模块) | import 缺失或拼写错误 | 检查 import 路径和导出名 |
+| `找不到名称 "xxx"` (函数) | 函数定义在调用之后 | UTS 不提升函数声明，移到调用之前 |
+| `找不到名称 "xxx"` (属性) | `as any` 不绕过属性名检查 | 无法访问类型外属性，删除逻辑或扩展类型 |
 | `Cannot infer type` | 泛型类型推断失败 | 去掉泛型，使用显式类型标注 |
 | `Only safe (?.) or non-null (!!.)` | 可空变量非安全访问 | 加 `?.` 或 `!!.` |
 | `Return type mismatch` | 返回类型不匹配 | 检查 return 语句类型与函数签名一致 |
+| `Smart cast impossible` | 闭包内变量被修改，无法智能转换 | 避免在闭包外修改捕获的变量，改用简单的对象属性访问 |
 | `property value not supported` | CSS 属性值不合法 | 参考第一章 CSS 规则 |
 | `Element is missing end tag` | 标签未闭合 | 检查 UTF-8 是否被截断，用 Write 重写文件 |
 | `Selector is not supported` | CSS 选择器不合法 | 改为纯 class 选择器 |
