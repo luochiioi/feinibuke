@@ -107,7 +107,50 @@ return arr ?? []
 
 ---
 
-### F. fail 回调可以保留 `any`(唯一安全场景)
+### F. SDK 类型重名碰撞 — typed `Marker[]` 不能直接传给 `<map :markers>`
+
+**真机 logcat(2026-05-07,导致空白页 + ANR 卡死)**:
+```
+java.lang.ClassCastException:
+  uni.UNIC0495C1.Marker cannot be cast to uts.sdk.modules.DCloudUniMapTencent.Marker
+  at uts.sdk.modules.DCloudUniMapTencent.TencentMap.setMarkers(index.kt:1064)
+```
+
+**根因**:我们 `types/marker.uts` 定义的 `Marker` 编译成 `uni.UNIC0495C1.Marker`,腾讯地图插件**自己也有一个 Marker 类**`uts.sdk.modules.DCloudUniMapTencent.Marker`。Kotlin 名义类型系统下,这两个**同名不同 namespace**的类不能互换——`<map :markers>` watcher 把我们的 Marker[] 传给插件 `setMarkers`,插件逐个 `as Marker` 失败 → 异常 → 反复重试 → ANR。
+
+**为什么更早发现不了**:Phase 1.5 修 `loadMarkers` 之前,markers 装的是 UTSJSONObject(假 cast),插件碰巧能消化。Phase 1.5 让 markers 真正 typed 之后,反而被插件拒收。**修了一个 bug 暴露了下一层 bug**,这是 Phase 1.5 链式发现的延续。
+
+**解法 — 边界上转成 UTSJSONObject[]**:
+```ts
+// stores/useMarkerStore.uts
+export const displayMarkers = computed<UTSJSONObject[]>(() => {
+  const result: UTSJSONObject[] = []
+  markers.value.forEach(m => {
+    const mm = {} as UTSJSONObject
+    mm["id"] = m.id
+    mm["latitude"] = m.latitude
+    mm["longitude"] = m.longitude
+    mm["title"] = m.title
+    mm["iconPath"] = m.iconPath
+    mm["width"] = m.width
+    mm["height"] = m.height
+    result.push(mm)
+  })
+  return result
+})
+```
+
+模板:`<map :markers="displayMarkers" />`(不再用 `markers`)。
+应用内部逻辑(findById、filter、m.checked)继续用 typed `markers`——业务态留在自己的 namespace 里。
+
+**通用规则**:
+1. **app 的 type 名不要和已知 SDK type 重合**(Marker/Task/User/Location 等通用名优先重命名为 `CheckinMarker` / `AppTask` / `AppUser` / `LocationData`)
+2. **SDK prop 边界全部走 UTSJSONObject**——SDK 接受的"动态对象"是动态字段读取,UTSJSONObject 通过;而 typed 类即使字段相同也会被名义检查拒收
+3. **诊断顺序**:看到"莫名空白 + 卡死"时,先看 logcat 全栈,再看代码。Vue 渲染失败默认静默,只有 logcat 暴露真因
+
+---
+
+### G. fail 回调可以保留 `any`(唯一安全场景)
 
 ```ts
 fail: (err: any): void => { reject(err) }  // ✅ 不访问成员,只透传

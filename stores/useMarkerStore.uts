@@ -15,10 +15,34 @@ export const completionRate = computed(() =>
   totalCount.value === 0 ? 0 : Math.round((doneCount.value / totalCount.value) * 100)
 )
 
-// displayMarkers 已移除（死代码 + JSON.parse as UTSJSONObject 假转换）。
-// checked 状态下的不同图标已通过 doCheckIn 中直接 mutate iconPath 实现（见下方 line ~60）。
-// 后续若需更复杂的 marker 视觉差异（label/zIndex 等），应扩展 Marker 类型本身，
-// 而不是用 JSON.stringify→parse 反序列化技巧。
+// displayMarkers — 把 app 的 typed Marker[] 转成腾讯地图插件期待的 UTSJSONObject[]。
+//
+// 真机 logcat 真因（2026-05-07）：
+//   java.lang.ClassCastException:
+//     uni.UNIC0495C1.Marker cannot be cast to uts.sdk.modules.DCloudUniMapTencent.Marker
+//
+// 我们 types/marker.uts 的 Marker 和插件 uts.sdk.modules.DCloudUniMapTencent.Marker
+// 同名但是两个 Kotlin 类。插件的 setMarkers 把入参逐个 cast 到自己的 Marker 类，
+// 我们 typed 的 Marker 实例 cast 失败 → ClassCastException → Vue watcher 反复抛 → ANR。
+//
+// 解法是在边界上转成 UTSJSONObject[]：插件接受动态对象，逐字段读取就能消化。
+// 注意：只输出腾讯 Marker 文档定义的字段（id/latitude/longitude/title/iconPath/width/height），
+// 不要带 app 自己的字段（_id/checked/createdAt 等）—— 那些是业务态，留在 typed markers 数组里。
+export const displayMarkers = computed<UTSJSONObject[]>(() => {
+  const result: UTSJSONObject[] = []
+  markers.value.forEach(m => {
+    const mm = {} as UTSJSONObject
+    mm["id"] = m.id
+    mm["latitude"] = m.latitude
+    mm["longitude"] = m.longitude
+    mm["title"] = m.title
+    mm["iconPath"] = m.iconPath
+    mm["width"] = m.width
+    mm["height"] = m.height
+    result.push(mm)
+  })
+  return result
+})
 
 export async function loadFromStorage(): Promise<void> {
   isLoading.value = true

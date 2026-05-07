@@ -13,7 +13,7 @@
       </view>
     </view>
 
-    <map id="mainMap" class="map-component" :latitude="latitude" :longitude="longitude" :scale="scale" :markers="markers" show-location coord-type="gcj02" @markertap="onMarkerTap" @longpress="onMapLongPress" @regionchange="onRegionChange">
+    <map id="mainMap" class="map-component" :latitude="latitude" :longitude="longitude" :scale="scale" :markers="displayMarkers" show-location coord-type="gcj02" @markertap="onMarkerTap" @longpress="onMapLongPress" @regionchange="onRegionChange">
       <cover-view class="floating-add-btn" @click="goAddMarker">
         <cover-view class="add-icon">+</cover-view>
         <cover-view class="add-label">在此新增</cover-view>
@@ -58,7 +58,7 @@
 
 <script setup lang="uts">
 import { ref, computed, onShow, onHide } from 'vue'
-import { loadFromStorage as loadMarkers, deleteMarker, findById, markers, doneCount, totalCount } from '@/stores/useMarkerStore'
+import { loadFromStorage as loadMarkers, deleteMarker, findById, markers, displayMarkers, doneCount, totalCount } from '@/stores/useMarkerStore'
 import { currentLocation, accuracyLevel, accuracyText, startTracking, stopTracking, distanceTo } from '@/stores/useLocationStore'
 import { latitude, longitude, scale, activeMarker, setActiveMarker, zoomIn, zoomOut, moveToLocation, onRegionChangeEnd, mapCenterLat, mapCenterLng, requestFocus, consumeFocus } from '@/stores/useMapStore'
 import { loadFromStorage as loadTasks } from '@/stores/useTaskStore'
