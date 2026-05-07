@@ -1,18 +1,18 @@
 import { ref } from 'vue'
-import type { Marker } from '@/types/marker'
+import type { CheckinMarker } from '@/types/marker'
 
 export const latitude = ref<number>(39.9163)
 export const longitude = ref<number>(116.3972)
 export const scale = ref<number>(12)
-export const activeMarker = ref<Marker | null>(null)
+export const activeMarker = ref<CheckinMarker | null>(null)
 export const mapCenterLat = ref<number>(39.9163)
 export const mapCenterLng = ref<number>(116.3972)
 export const mapContext = ref<UTSJSONObject | null>(null)
-export const focusTarget = ref<Marker | null>(null)
+export const focusTarget = ref<CheckinMarker | null>(null)
 
-export function setActiveMarker(m: Marker | null): void {
+export function setActiveMarker(m: CheckinMarker | null): void {
   activeMarker.value = m
-  if (m != null) { const mm = m as Marker; latitude.value = mm.latitude; longitude.value = mm.longitude }
+  if (m != null) { const mm = m as CheckinMarker; latitude.value = mm.latitude; longitude.value = mm.longitude }
 }
 export function zoomIn(): void { if (scale.value < 20) scale.value++ }
 export function zoomOut(): void { if (scale.value > 3) scale.value-- }
@@ -22,5 +22,5 @@ export function moveToLocation(lat: number, lng: number, targetScale: number = 1
 export function onRegionChangeEnd(centerLat: number, centerLng: number): void {
   mapCenterLat.value = centerLat; mapCenterLng.value = centerLng
 }
-export function requestFocus(marker: Marker): void { focusTarget.value = marker }
-export function consumeFocus(): Marker | null { const m = focusTarget.value; focusTarget.value = null; return m }
+export function requestFocus(marker: CheckinMarker): void { focusTarget.value = marker }
+export function consumeFocus(): CheckinMarker | null { const m = focusTarget.value; focusTarget.value = null; return m }

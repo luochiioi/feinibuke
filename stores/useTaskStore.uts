@@ -1,6 +1,6 @@
 import { ref, computed } from 'vue'
 import type { Task, Reward } from '@/types/task'
-import type { Marker } from '@/types/marker'
+import type { CheckinMarker } from '@/types/marker'
 import { getDefaultTasks } from '@/utils/defaults'
 import { loadTasks, saveTasks, loadUserTasks, saveUserTasks, loadRewards, saveRewards } from '@/utils/storage'
 import type { UserTaskProgress } from '@/utils/storage'
@@ -31,7 +31,7 @@ export function loadFromStorage(): void {
 }
 export function persist(): void { saveTasks(tasks.value); saveUserTasks(userTasks.value); saveRewards(rewards.value) }
 
-export function checkTaskCompletion(marker: Marker): Task[] {
+export function checkTaskCompletion(marker: CheckinMarker): Task[] {
   const completed: Task[] = []
   tasks.value.forEach(task => {
     if (task.status === 'completed') return

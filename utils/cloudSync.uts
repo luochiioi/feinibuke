@@ -1,5 +1,5 @@
 // 云端同步：离线队列 + 批量推送 + 数据合并
-import type { Marker } from '@/types/marker'
+import type { CheckinMarker } from '@/types/marker'
 import { loadMarkers, saveMarkers } from '@/utils/storage'
 
 const KEY_SYNC_QUEUE = 'sync_queue'
@@ -148,7 +148,7 @@ export async function pullMarkers(): Promise<UTSJSONObject[]> {
 
 // ===== Sync markers: pull cloud + merge with local =====
 
-export async function syncMarkers(): Promise<Marker[]> {
+export async function syncMarkers(): Promise<CheckinMarker[]> {
   const localMarkers = loadMarkers()
   const cloudData = await pullMarkers()
 
@@ -157,7 +157,7 @@ export async function syncMarkers(): Promise<Marker[]> {
     return localMarkers
   }
 
-  const merged = new Map<number, Marker>()
+  const merged = new Map<number, CheckinMarker>()
   const now = Date.now()
 
   // Index local markers by id
@@ -168,7 +168,7 @@ export async function syncMarkers(): Promise<Marker[]> {
   // Merge cloud markers
   for (const raw of cloudData) {
     const jsonStr = JSON.stringify(raw)
-    const cloudMarker = JSON.parse(jsonStr) as Marker
+    const cloudMarker = JSON.parse(jsonStr) as CheckinMarker
     if (cloudMarker == null) continue
 
     const local = merged.get(cloudMarker.id)
@@ -190,12 +190,12 @@ export async function syncMarkers(): Promise<Marker[]> {
       if (cloudMarker.photoPath != null) {
         local.photoPath = cloudMarker.photoPath
       }
-      // checkinCount not in Marker type — skip cloud metadata merge
+      // checkinCount not in CheckinMarker type — skip cloud metadata merge
     }
   }
 
-  const result: Marker[] = []
-  merged.forEach((v: Marker, _k: number) => { result.push(v) })
+  const result: CheckinMarker[] = []
+  merged.forEach((v: CheckinMarker, _k: number) => { result.push(v) })
   saveMarkers(result)
   setLastSyncTime(now)
   console.log('[cloudSync] syncMarkers: local=' + localMarkers.length + ' cloud=' + cloudData.length + ' merged=' + result.length)

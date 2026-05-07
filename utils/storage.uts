@@ -2,7 +2,7 @@
 // UTS 反序列化必须用 JSON.parse<T>() 泛型形式才会真正构造 typed 实例。
 // 直接 JSON.parse(raw) as T[] 是 Kotlin 假 cast，运行期 ClassCastException。
 // 详见 UTS_COMPILE_PITFALLS.md §Phase 1.5/D。
-import type { Marker } from '@/types/marker'
+import type { CheckinMarker } from '@/types/marker'
 import type { Task, Reward } from '@/types/task'
 import type { User } from '@/types/user'
 
@@ -30,19 +30,19 @@ export function removeKey(key: string): void {
 
 const KEY_MARKERS = 'tourism_markers'
 
-export function loadMarkers(): Marker[] {
+export function loadMarkers(): CheckinMarker[] {
   const raw = readString(KEY_MARKERS)
-  if (raw == null) return [] as Marker[]
+  if (raw == null) return [] as CheckinMarker[]
   try {
-    const parsed = JSON.parse<Marker[]>(raw)
-    return parsed ?? ([] as Marker[])
+    const parsed = JSON.parse<CheckinMarker[]>(raw)
+    return parsed ?? ([] as CheckinMarker[])
   } catch (e) {
     console.error('loadMarkers parse fail', e)
-    return [] as Marker[]
+    return [] as CheckinMarker[]
   }
 }
 
-export function saveMarkers(markers: Marker[]): void {
+export function saveMarkers(markers: CheckinMarker[]): void {
   writeString(KEY_MARKERS, JSON.stringify(markers))
 }
 

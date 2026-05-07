@@ -1,6 +1,7 @@
 // 打卡点（Marker）类型
 // 既用于本地存储（tourism_markers 键），也用于 uniCloud tourism_markers 集合
-export type Marker = {
+// 重命名: 原 Marker → CheckinMarker，避免与腾讯地图插件 uts.sdk.modules.DCloudUniMapTencent.Marker 类型冲突
+export type CheckinMarker = {
   id: number              // 唯一 ID（新标记用 Date.now()）
   _id: string             // 字符串 ID（uniCloud 主键 / 兼容旧数据）
   title: string           // 打卡点名称

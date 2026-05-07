@@ -1,10 +1,10 @@
 import { ref, computed } from 'vue'
-import type { Marker, NewMarkerInput } from '@/types/marker'
+import type { CheckinMarker, NewMarkerInput } from '@/types/marker'
 import { loadMarkers, saveMarkers } from '@/utils/storage'
 import { getDefaultMarkers } from '@/utils/defaults'
 import { syncMarkers } from '@/utils/cloudSync'
 
-export const markers = ref<Marker[]>([])
+export const markers = ref<CheckinMarker[]>([])
 export const isLoading = ref<boolean>(false)
 
 export const checkedMarkers = computed(() => markers.value.filter(m => m.checked))
@@ -15,19 +15,19 @@ export const completionRate = computed(() =>
   totalCount.value === 0 ? 0 : Math.round((doneCount.value / totalCount.value) * 100)
 )
 
-// displayMarkers — 把 app 的 typed Marker[] 转成腾讯地图插件期待的 UTSJSONObject[]。
+// displayMarkers — 把 app 的 typed CheckinMarker[] 转成腾讯地图插件期待的 UTSJSONObject[]。
 //
-// 真机 logcat 真因（2026-05-07）：
+// 历史 logcat（2026-05-07，方案 A 重命名前）：
 //   java.lang.ClassCastException:
 //     uni.UNIC0495C1.Marker cannot be cast to uts.sdk.modules.DCloudUniMapTencent.Marker
 //
-// 我们 types/marker.uts 的 Marker 和插件 uts.sdk.modules.DCloudUniMapTencent.Marker
-// 同名但是两个 Kotlin 类。插件的 setMarkers 把入参逐个 cast 到自己的 Marker 类，
-// 我们 typed 的 Marker 实例 cast 失败 → ClassCastException → Vue watcher 反复抛 → ANR。
+// 当时 app 类型也叫 Marker，与插件 uts.sdk.modules.DCloudUniMapTencent.Marker 同名但
+// 是两个 Kotlin 类。插件 setMarkers 把入参逐个 cast 到自己的 Marker 类，cast 失败 →
+// ClassCastException → Vue watcher 反复抛 → ANR。
 //
-// 解法是在边界上转成 UTSJSONObject[]：插件接受动态对象，逐字段读取就能消化。
-// 注意：只输出腾讯 Marker 文档定义的字段（id/latitude/longitude/title/iconPath/width/height），
-// 不要带 app 自己的字段（_id/checked/createdAt 等）—— 那些是业务态，留在 typed markers 数组里。
+// 方案 A 修复：把 app 类型重命名为 CheckinMarker，彻底消除同名冲突。
+// 边界仍然走 UTSJSONObject[]（仅输出腾讯 Marker 文档定义的字段：
+// id/latitude/longitude/title/iconPath/width/height），插件可直接消化。
 export const displayMarkers = computed<UTSJSONObject[]>(() => {
   const result: UTSJSONObject[] = []
   markers.value.forEach(m => {
@@ -59,8 +59,8 @@ export function persist(): void {
   saveMarkers(markers.value)
 }
 
-export async function addMarker(input: NewMarkerInput): Promise<Marker> {
-  const marker: Marker = {
+export async function addMarker(input: NewMarkerInput): Promise<CheckinMarker> {
+  const marker: CheckinMarker = {
     id: Date.now(),
     _id: '' + Date.now(),
     title: input.title,
@@ -77,9 +77,9 @@ export async function addMarker(input: NewMarkerInput): Promise<Marker> {
   return marker
 }
 
-export async function doCheckIn(markerId: number, photoPath: string | null, note: string | null): Promise<Marker> {
+export async function doCheckIn(markerId: number, photoPath: string | null, note: string | null): Promise<CheckinMarker> {
   const idx = markers.value.findIndex(m => m.id === markerId)
-  if (idx === -1) throw new Error('Marker not found: ' + markerId)
+  if (idx === -1) throw new Error('CheckinMarker not found: ' + markerId)
   markers.value[idx].checked = true
   markers.value[idx].checkedAt = Date.now()
   markers.value[idx].iconPath = '/static/marker_checked.png'
@@ -94,12 +94,12 @@ export async function deleteMarker(markerId: number): Promise<void> {
   persist()
 }
 
-export function findById(id: number): Marker | null {
+export function findById(id: number): CheckinMarker | null {
   const found = markers.value.find(m => m.id === id)
   return found ?? null
 }
 
-export function findByTitle(title: string): Marker | null {
+export function findByTitle(title: string): CheckinMarker | null {
   const found = markers.value.find(m => m.title === title)
   return found ?? null
 }

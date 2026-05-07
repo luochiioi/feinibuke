@@ -62,7 +62,7 @@ import { loadFromStorage as loadMarkers, deleteMarker, findById, markers, displa
 import { currentLocation, accuracyLevel, accuracyText, startTracking, stopTracking, distanceTo } from '@/stores/useLocationStore'
 import { latitude, longitude, scale, activeMarker, setActiveMarker, zoomIn, zoomOut, moveToLocation, onRegionChangeEnd, mapCenterLat, mapCenterLng, requestFocus, consumeFocus } from '@/stores/useMapStore'
 import { loadFromStorage as loadTasks } from '@/stores/useTaskStore'
-import type { Marker } from '@/types/marker'
+import type { CheckinMarker } from '@/types/marker'
 import { formatDateTime, formatDistance } from '@/utils/format'
 
 // MapContext 是 uni-app x 控制地图的命令式句柄。createMapContext 调用很轻量

@@ -1844,6 +1844,8 @@ page {
 > | `Event` | `AppEvent` 或具体名 |
 >
 > **理由**：腾讯地图、uniCloud、uni-id 等 SDK 各自定义同名类型，在 UTS Kotlin 名义类型下会触发 ClassCastException，且 Vue reactive 包装一层后包装类（`MarkerReactiveObject`）仍被拒。一旦撞名只能重命名，治标的边界转换都无效。
+>
+> **执行状态（2026-05-07）**：`Marker → CheckinMarker` 已在 app 全量落地（types/stores/utils/pages 共 10 文件）。后续若新增打卡点类型，**直接用 `CheckinMarker`，不要再起名 `Marker`**；其他通用名（Task/User/Region/Event 等）按表执行。
 
 ---
 

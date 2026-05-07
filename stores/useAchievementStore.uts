@@ -1,12 +1,12 @@
 import { computed } from 'vue'
 import type { Achievement } from '@/types/achievement'
-import type { Marker } from '@/types/marker'
+import type { CheckinMarker } from '@/types/marker'
 import { checkedMarkers, totalCount } from './useMarkerStore'
 import { totalTaskCount, completedTaskCount } from './useTaskStore'
 
 export function getAchievements(): Achievement[] {
-  const done = checkedMarkers.value as Marker[]
-  const photo = done.filter((m: Marker): boolean => { return m.photoPath != null }) as Marker[]
+  const done = checkedMarkers.value as CheckinMarker[]
+  const photo = done.filter((m: CheckinMarker): boolean => { return m.photoPath != null }) as CheckinMarker[]
   const userCreated = Math.max(0, totalCount.value - 8)
   return [
     { id: 'first',   icon: 'L1', name: '初探者',  desc: '完成首次打卡',    unlocked: done.length >= 1 },

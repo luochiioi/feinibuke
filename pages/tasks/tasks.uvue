@@ -42,7 +42,7 @@ import { markers, checkedMarkers, totalCount, doneCount, loadFromStorage as load
 import { completedTaskCount, totalTaskCount, loadFromStorage as loadTasks } from '@/stores/useTaskStore'
 import { achievements, unlockedCount } from '@/stores/useAchievementStore'
 import { requestFocus } from '@/stores/useMapStore'
-import type { Marker } from '@/types/marker'
+import type { CheckinMarker } from '@/types/marker'
 import type { FilterMode } from '@/types/app'
 import BadgeCard from '@/components/BadgeCard.uvue'
 
@@ -67,8 +67,8 @@ const miniScale = ref<number>(4)
 onShow((): void => { loadMarkers(); loadTasks() })
 
 function setFilter(key: any | null): void { if (key != null) activeFilter.value = key as FilterMode }
-function goFocus(item: Marker): void { requestFocus(item); uni.navigateBack() }
-function doDelete(item: Marker): void {
+function goFocus(item: CheckinMarker): void { requestFocus(item); uni.navigateBack() }
+function doDelete(item: CheckinMarker): void {
   uni.showModal({
     title: '确认删除', content: `确定要删除"${item.title}"吗？`,
     success: (res: any): void => {

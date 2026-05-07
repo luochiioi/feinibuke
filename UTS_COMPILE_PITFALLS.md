@@ -107,7 +107,7 @@ return arr ?? []
 
 ---
 
-### F. SDK 类型重名碰撞 — typed `Marker[]` 不能直接传给 `<map :markers>`
+### F. SDK 类型重名碰撞 — typed `Marker[]` 不能直接传给 `<map :markers>` ✅ 已修复(方案 A 重命名,2026-05-07)
 
 **真机 logcat(2026-05-07,导致空白页 + ANR 卡死)**:
 ```
@@ -156,6 +156,15 @@ export const displayMarkers = computed<UTSJSONObject[]>(() => {
 - 6 个 `.uvue` 页面的 import + 类型注解
 
 机械式重命名,risk 低,~15 min。一次做完,以后写 `const m: Marker = ...` 自动指向 SDK 的 Marker。
+
+**修复执行记录(2026-05-07)**: 方案 A 已落地,app 类型已统一重命名为 `CheckinMarker`。涉及文件:
+- `types/marker.uts` (`export type CheckinMarker`)
+- `stores/useMarkerStore.uts`、`stores/useMapStore.uts`、`stores/useTaskStore.uts`、`stores/useAchievementStore.uts`
+- `utils/storage.uts`、`utils/defaults.uts`、`utils/cloudSync.uts`
+- `pages/index/index.uvue`、`pages/tasks/tasks.uvue`
+
+`uni_modules/uni-openLocation/...` 是第三方插件示例,使用的是 SDK 自己的 `Marker`(不同 namespace),不动。
+模板侧仍保留 `displayMarkers: UTSJSONObject[]` 边界,`<map :markers="displayMarkers">`。`CheckinMarker` 仅出现在业务态,SDK `Marker` 仅出现在边界,二者再无重名。
 
 ---
 
