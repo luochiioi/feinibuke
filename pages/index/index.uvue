@@ -13,7 +13,7 @@
       </view>
     </view>
 
-    <map id="mainMap" class="map-component" :latitude="latitude" :longitude="longitude" :scale="scale" :markers="displayMarkers" show-location coord-type="gcj02" @markertap="onMarkerTap" @longpress="onMapLongPress" @regionchange="onRegionChange">
+    <checkin-map map-id="mainMap" class="map-component" :latitude="latitude" :longitude="longitude" :scale="scale" :markers-data="markersData" :show-location="true" @markertap="onMarkerTap" @longpress="onMapLongPress" @regionchange="onRegionChange">
       <cover-view class="floating-add-btn" @click="goAddMarker">
         <cover-view class="add-icon">+</cover-view>
         <cover-view class="add-label">在此新增</cover-view>
@@ -43,7 +43,7 @@
           </template>
         </cover-view>
       </cover-view>
-    </map>
+    </checkin-map>
 
     <!-- 底部工具条：在 map 外作普通 view，避开 cover-view-on-native-map 的层叠陷阱。
          flex 横向四等分，每个按钮宽度自适应，点击响应 100% 可靠。 -->
@@ -72,23 +72,24 @@ function ensureMapCtx(): MapContext | null {
   return uni.createMapContext('mainMap')
 }
 
-// displayMarkers — 默认 8 个打卡点的 SDK Marker[]。
-// 关键：不要用 `Marker` 这个名字 —— UTS 5.07 会在 cast 位置和 ref<> 推导位置
-// 把它解析到不同 namespace（详见 UTS_COMPILE_PITFALLS §F）。
-// 用全限定路径自定义别名 SdkMarker —— 这个名字在 SDK 里不存在，编译器不会
-// 合成 `uni.UNIC0495C1.SdkMarker`，cast 唯一指向 SDK 真身，避开命名空间歧义。
-type SdkMarker = uts.sdk.modules.DCloudUniMapTencent.Marker
+// markersData — 喂给 <checkin-map> 子组件的普通对象数组。
+// 不再涉及 SDK Marker 类型 —— 全部 SDK 边界已下沉到 uni_modules/checkin-map/。
+// 这里只管业务态：把 markers (CheckinMarker[]) 投影成子组件 props 期待的形状。
+//
+// 图标路径用 uni_modules 下提供的 marker.png（项目 /static/ 暂时没有真正的 marker 图标）。
+const MARKER_ICON = '/uni_modules/checkin-map/components/checkin-map/marker.png'
 
-const displayMarkers = ref([
-  { id: 1, latitude: 39.9163, longitude: 116.3972, title: '北京故宫', iconPath: '/static/location.png', width: 36, height: 36 } as SdkMarker,
-  { id: 2, latitude: 31.1465, longitude: 121.6593, title: '上海迪士尼', iconPath: '/static/location.png', width: 36, height: 36 } as SdkMarker,
-  { id: 3, latitude: 28.1836, longitude: 112.9388, title: '长沙岳麓书院', iconPath: '/static/location.png', width: 36, height: 36 } as SdkMarker,
-  { id: 4, latitude: 22.1979, longitude: 113.5413, title: '澳门大三巴', iconPath: '/static/location.png', width: 36, height: 36 } as SdkMarker,
-  { id: 5, latitude: 28.1968, longitude: 112.9625, title: '长沙橘子洲', iconPath: '/static/location.png', width: 36, height: 36 } as SdkMarker,
-  { id: 6, latitude: 23.1065, longitude: 113.3246, title: '广州塔', iconPath: '/static/location.png', width: 36, height: 36 } as SdkMarker,
-  { id: 7, latitude: 23.0622, longitude: 113.3894, title: '中山大学东校区', iconPath: '/static/location.png', width: 36, height: 36 } as SdkMarker,
-  { id: 8, latitude: 39.9505, longitude: 116.3474, title: '北京交通大学', iconPath: '/static/location.png', width: 36, height: 36 } as SdkMarker,
-] as SdkMarker[])
+const markersData = computed(() => markers.value.map((m: CheckinMarker) => {
+  return {
+    id: m.id,
+    latitude: m.latitude,
+    longitude: m.longitude,
+    title: m.title,
+    iconPath: MARKER_ICON,
+    width: 36,
+    height: 36
+  }
+}))
 
 const dist = computed(() => {
   const m = activeMarker.value

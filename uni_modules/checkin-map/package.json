@@ -1,0 +1,65 @@
+{
+  "id": "checkin-map",
+  "displayName": "checkin-map",
+  "version": "1.0.0",
+  "description": "Internal wrapper for Tencent map. Constructs SDK Marker[] inside uni_modules namespace to avoid app-namespace collision (see project root UTS_COMPILE_PITFALLS.md section F).",
+  "keywords": [
+    "map",
+    "checkin",
+    "marker"
+  ],
+  "repository": "",
+  "engines": {
+    "HBuilderX": "^3.1.0"
+  },
+  "dcloudext": {
+    "type": "component-vue",
+    "sale": {
+      "regular": {
+        "price": "0.00"
+      },
+      "sourcecode": {
+        "price": "0.00"
+      }
+    },
+    "contact": {
+      "qq": ""
+    },
+    "declaration": {
+      "ads": "",
+      "data": "",
+      "permissions": ""
+    },
+    "npmurl": ""
+  },
+  "uni_modules": {
+    "dependencies": [],
+    "encrypt": [],
+    "platforms": {
+      "cloud": {
+        "tcb": "y",
+        "aliyun": "y"
+      },
+      "client": {
+        "App": {
+          "app-android": "y",
+          "app-ios": "y"
+        },
+        "H5-mobile": {
+          "Safari": "y",
+          "Android Browser": "y"
+        },
+        "H5-pc": {
+          "Chrome": "y",
+          "Edge": "y",
+          "Firefox": "y",
+          "Safari": "y"
+        },
+        "Vue": {
+          "vue2": "n",
+          "vue3": "y"
+        }
+      }
+    }
+  }
+}
