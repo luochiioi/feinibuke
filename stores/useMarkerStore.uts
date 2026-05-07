@@ -49,7 +49,7 @@ export const useMarkerStore = defineStore('markers', () => {
   async function addMarker(input: NewMarkerInput): Promise<Marker> {
     const marker: Marker = {
       id: Date.now(),
-      _id: String(Date.now()),
+      _id: '' + Date.now(),
       title: input.title,
       latitude: input.latitude,
       longitude: input.longitude,
@@ -70,8 +70,8 @@ export const useMarkerStore = defineStore('markers', () => {
     markers.value[idx].checked = true
     markers.value[idx].checkedAt = Date.now()
     markers.value[idx].iconPath = '/static/marker_checked.png'
-    if (photoPath) markers.value[idx].photoPath = photoPath
-    if (note) markers.value[idx].note = note
+    if (photoPath != null) markers.value[idx].photoPath = photoPath
+    if (note != null) markers.value[idx].note = note
     persist()
     return markers.value[idx]
   }
