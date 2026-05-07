@@ -79,8 +79,9 @@ function pickSource(source: CoordSource): void {
       formLng.value = currentLngFromMap
     }
     pollLocationOnce().then((loc: any): void => {
-      formLat.value = '' + (loc as any).latitude
-      formLng.value = '' + (loc as any).longitude
+      const l = loc as UTSJSONObject
+      formLat.value = '' + (l["latitude"] as number)
+      formLng.value = '' + (l["longitude"] as number)
     })
   }
 }
@@ -113,10 +114,14 @@ async function doSubmit(): Promise<void> {
       const markerApi = uniCloud.importObject('marker-center')
       await markerApi.add({ title: formTitle.value.trim(), latitude: lat, longitude: lng })
     } catch (e) {
-      enqueueAction('add_marker', { title: formTitle.value.trim(), latitude: lat, longitude: lng })
+      const payload = JSON.parse('{}') as UTSJSONObject
+      payload["title"] = formTitle.value.trim()
+      payload["latitude"] = lat
+      payload["longitude"] = lng
+      enqueueAction('add_marker', payload)
     }
     uni.showToast({ title: '添加成功', icon: 'success' })
-    setTimeout(() => uni.navigateBack(), 800)
+    setTimeout((): void => { uni.navigateBack() }, 800)
   } catch (e) {
     uni.showToast({ title: '添加失败', icon: 'error' })
   }

@@ -10,7 +10,7 @@ const RETRY_DELAY_BASE = 2000  // base delay in ms, doubles each retry
 type QueueItem = {
   id: string
   action: string
-  payload: Record<string, any>
+  payload: UTSJSONObject
   createdAt: number
   retries: number
 }
@@ -52,7 +52,7 @@ function setLastSyncTime(ts: number): void {
 
 // ===== Enqueue =====
 
-export function enqueueAction(action: string, payload: Record<string, any>): void {
+export function enqueueAction(action: string, payload: UTSJSONObject): void {
   const queue = readQueue()
   // Deduplicate: skip if an identical pending item already exists
   const isDuplicate = queue.some(
