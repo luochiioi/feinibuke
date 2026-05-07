@@ -78,7 +78,7 @@
               </cover-view>
             </cover-view>
             <cover-view class="sheet-row">
-              <text class="status-pending">未打minus_sign_placeholder/text>
+              <text class="status-pending">未打卡</text>
             </cover-view>
             <cover-view class="sheet-actions">
               <cover-view class="action-btn primary" @click="goToCheckIn(mapStore.activeMarker!)" v-if="canCheckIn">
