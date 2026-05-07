@@ -10,7 +10,7 @@
       <view class="gps-card" :class="withinRange ? 'in-range' : 'out-range'">
         <text class="gps-label">{{ withinRange ? '在打卡范围内' : '距离过远' }}</text>
         <text class="gps-distance" v-if="distance != null">{{ (distance as number).toFixed(0) }}m</text>
-        <text class="gps-accuracy">{{ accText }}</text>
+        <text class="gps-accuracy">{{ locAccText }}</text>
       </view>
     </view>
     <view class="photo-section">
@@ -37,7 +37,7 @@
 <script setup lang="uts">
 import { ref, computed, onShow, onHide } from 'vue'
 import { findById, doCheckIn } from '@/stores/useMarkerStore'
-import { currentLocation, accuracy, startPolling, stopPolling, distanceTo } from '@/stores/useLocationStore'
+import { currentLocation, accuracy, accuracyText as locAccText, startPolling, stopPolling, distanceTo } from '@/stores/useLocationStore'
 import { checkTaskCompletion } from '@/stores/useTaskStore'
 import { formatDistance } from '@/utils/format'
 import { enqueueAction } from '@/utils/cloudSync'
@@ -50,7 +50,6 @@ const note = ref<string>('')
 const isSubmitting = ref<boolean>(false)
 
 const marker = computed(() => findById(markerId.value))
-const accText = accuracyText
 
 const distance = computed(() => {
   const m = marker.value

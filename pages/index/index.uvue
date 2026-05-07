@@ -36,11 +36,11 @@
 
       <cover-view class="bottom-sheet" v-if="activeMarker != null">
         <cover-view class="sheet-header">
-          <cover-view class="sheet-title">{{ activeMarker.title }}</cover-view>
+          <cover-view class="sheet-title">{{ activeMarker!!.title }}</cover-view>
           <cover-view class="sheet-close" @click="closeSheet">X</cover-view>
         </cover-view>
         <cover-view class="sheet-body">
-          <template v-if="activeMarker.checked">
+          <template v-if="activeMarker!!.checked">
             <cover-view class="sheet-row"><text>已打卡</text></cover-view>
             <cover-view class="sheet-actions">
               <cover-view class="action-btn danger" @click="doDelete"><text>删除</text></cover-view>
@@ -48,7 +48,7 @@
           </template>
           <template v-else>
             <cover-view class="sheet-distance" v-if="dist != null">
-              <text>距离：{{ formatDistance(dist) }}</text>
+              <text>距离：{{ (dist as number).toFixed(0) }}m</text>
             </cover-view>
             <cover-view class="sheet-row"><text class="status-pending">未打卡</text></cover-view>
             <cover-view class="sheet-actions">
