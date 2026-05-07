@@ -9,7 +9,7 @@
     <view class="gps-section">
       <view class="gps-card" :class="withinRange ? 'in-range' : 'out-range'">
         <text class="gps-label">{{ withinRange ? '在打卡范围内' : '距离过远' }}</text>
-        <text class="gps-distance" v-if="distance != null">{{ formatDistance(distance) }}</text>
+        <text class="gps-distance" v-if="distance != null">{{ (distance as number).toFixed(0) }}m</text>
         <text class="gps-accuracy">{{ accuracyText.value }}</text>
       </view>
     </view>
@@ -96,7 +96,7 @@ function choosePhoto(): void {
         count: 1, sizeType: ['compressed'], sourceType: sourceType,
         success: (imgRes: any): void => {
           const ir = imgRes as UTSJSONObject
-          const paths = ir["tempFilePaths"] as any
+          const paths = ir["tempFilePaths"] as string[]
           photoPath.value = paths[0] as string
         }
       })

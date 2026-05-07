@@ -41,6 +41,7 @@
 
 <script setup lang="uts">
 import { ref, onShow } from 'vue'
+import type { NewMarkerInput } from '@/types/marker'
 import { addMarker } from '@/stores/useMarkerStore'
 import { currentLocation, pollLocationOnce } from '@/stores/useLocationStore'
 import { enqueueAction } from '@/utils/cloudSync'
@@ -109,7 +110,8 @@ async function doSubmit(): Promise<void> {
   }
 
   try {
-    await addMarker({ title: formTitle.value.trim(), latitude: lat, longitude: lng })
+    const input: NewMarkerInput = { title: formTitle.value.trim(), latitude: lat, longitude: lng } as any as NewMarkerInput
+    await addMarker(input)
     try {
       const markerApi = uniCloud.importObject('marker-center')
       await markerApi.add({ title: formTitle.value.trim(), latitude: lat, longitude: lng })
