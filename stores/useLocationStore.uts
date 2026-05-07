@@ -84,3 +84,7 @@ export function distanceTo(lat: number, lng: number): number | null {
   if (loc == null) return null
   return haversine(loc.latitude, loc.longitude, lat, lng)
 }
+
+export function getEffectiveCheckinRadius(): number {
+  return accuracyLevel.value === 'bad' ? 700 : 500
+}

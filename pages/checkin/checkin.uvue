@@ -8,12 +8,13 @@
     </view>
     <view class="gps-section">
       <view class="gps-card" :class="withinRange ? 'in-range' : 'out-range'">
-        <text class="gps-label">{{ withinRange ? '在打卡范围内' : '距离过远' }}</text>
+        <text class="gps-label">{{ gpsLabel }}</text>
         <text class="gps-distance" v-if="distance != null">{{ (distance as number).toFixed(0) }}m</text>
         <text class="gps-accuracy">{{ locAccText }}</text>
       </view>
     </view>
     <view class="photo-section">
+      <text class="section-label">照片（选填）</text>
       <view class="photo-preview" @click="choosePhoto">
         <image v-if="photoPath != null" :src="photoPath" class="photo-image" />
         <view v-else class="photo-placeholder">
@@ -23,7 +24,7 @@
       </view>
     </view>
     <view class="note-section">
-      <text class="note-label">打卡备注（选填）</text>
+      <text class="section-label">备注（选填）</text>
       <textarea class="note-input" v-model="note" placeholder="记录此刻的心情..." placeholder-class="note-placeholder" maxlength="200" />
     </view>
     <view class="submit-section">
@@ -36,10 +37,10 @@
 
 <script setup lang="uts">
 import { ref, computed, onShow, onHide } from 'vue'
+// onLoad 在 uni-app x 中是全局页面生命周期钩子，无需 import（参见 openLocation.uvue）
 import { findById, doCheckIn } from '@/stores/useMarkerStore'
-import { currentLocation, accuracy, accuracyText as locAccText, startPolling, stopPolling, distanceTo } from '@/stores/useLocationStore'
+import { currentLocation, accuracyText as locAccText, startPolling, stopPolling, distanceTo, getEffectiveCheckinRadius } from '@/stores/useLocationStore'
 import { checkTaskCompletion } from '@/stores/useTaskStore'
-import { formatDistance } from '@/utils/format'
 import { enqueueAction } from '@/utils/cloudSync'
 
 const markerId = ref<number>(0)
@@ -51,33 +52,38 @@ const isSubmitting = ref<boolean>(false)
 
 const marker = computed(() => findById(markerId.value))
 
-const distance = computed(() => {
+const distance = computed((): number | null => {
   const m = marker.value
   const loc = currentLocation.value
   if (m == null || loc == null) return null
   return distanceTo(m.latitude, m.longitude)
 })
 
-const effectiveRadius = computed(() => {
-  return 500 + Math.min(accuracy.value * 0.5, 200)
-})
+const effectiveRadius = computed((): number => getEffectiveCheckinRadius())
 
-const withinRange = computed(() => {
+const withinRange = computed((): boolean => {
   const d = distance.value
   return d != null && d <= effectiveRadius.value
 })
 
-const canSubmit = computed(() => {
+const gpsLabel = computed((): string => {
+  if (currentLocation.value == null) return '定位中...'
+  if (distance.value == null) return '定位中...'
+  return withinRange.value ? '在打卡范围内' : '距离过远'
+})
+
+const canSubmit = computed((): boolean => {
   return withinRange.value && isSubmitting.value == false
 })
 
+onLoad((options: OnLoadOptions): void => {
+  const idStr = options['id'] as string | null
+  const titleStr = options['title'] as string | null
+  markerId.value = idStr != null ? parseInt(idStr) : 0
+  markerTitle.value = titleStr != null ? (decodeURIComponent(titleStr) ?? '') : ''
+})
+
 onShow((): void => {
-  const pages = getCurrentPages()
-  const currentPage = pages[pages.length - 1] as UTSJSONObject
-  const pg = currentPage["$page"] as UTSJSONObject
-  const query = pg != null ? pg["options"] as UTSJSONObject : {} as UTSJSONObject
-  markerId.value = parseInt((query["id"] as string) ?? '0')
-  markerTitle.value = decodeURIComponent((query["title"] as string) ?? '') as string
   startPolling(5000)
 })
 
@@ -88,16 +94,14 @@ onHide((): void => {
 function choosePhoto(): void {
   uni.showActionSheet({
     itemList: ['拍照', '从相册选择'],
-    success: (res: any): void => {
-      const r = res as UTSJSONObject
-      const tapIdx = r["tapIndex"] as number
-      const sourceType: string[] = tapIdx === 0 ? ['camera'] : ['album']
+    success: (res: ShowActionSheetSuccess): void => {
+      const sourceType: string[] = res.tapIndex == 0 ? ['camera'] : ['album']
       uni.chooseImage({
         count: 1, sizeType: ['compressed'], sourceType: sourceType,
-        success: (imgRes: any): void => {
-          const ir = imgRes as UTSJSONObject
-          const paths = ir["tempFilePaths"] as string[]
-          photoPath.value = paths[0] as string
+        success: (imgRes: ChooseImageSuccess): void => {
+          if (imgRes.tempFilePaths.length > 0) {
+            photoPath.value = imgRes.tempFilePaths[0]
+          }
         }
       })
     }
@@ -176,6 +180,7 @@ async function doSubmit(): Promise<void> {
 .gps-distance { font-size: 36rpx; font-weight: bold; color: #333333; }
 .gps-accuracy { font-size: 24rpx; color: #888888; }
 .photo-section { padding: 0 32rpx 24rpx; }
+.section-label { font-size: 26rpx; color: #666666; margin-bottom: 12rpx; }
 .photo-preview { width: 200rpx; height: 200rpx; border-radius: 24rpx; overflow: hidden; background-color: #ffffff; border: 2rpx dashed #cccccc; display: flex; align-items: center; justify-content: center; }
 .photo-image { width: 100%; height: 100%; }
 .photo-placeholder { display: flex; flex-direction: column; align-items: center; }

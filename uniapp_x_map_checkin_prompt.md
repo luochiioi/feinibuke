@@ -1127,7 +1127,9 @@ const markerStore = useMarkerStore()
 const locationStore = useLocationStore()
 const taskStore = useTaskStore()
 
-// URL 参数（通过 onLoad 或直接读取）
+// URL 参数（uni-app x 5.07：必须用 onLoad，禁止 cast getCurrentPages 为 UTSJSONObject）
+// 注意：onLoad 在 uni-app x 中是全局生命周期钩子，不要 import（错误写法："import { onLoad } from '@dcloudio/uni-app'" 会编译报 "找不到名称 onLoad"）
+
 const markerId = ref<number>(0)
 const markerTitle = ref<string>('')
 
@@ -1140,16 +1142,18 @@ const distance = computed(() => {
   if (!marker.value || !locationStore.currentLocation) return null
   return locationStore.distanceTo(marker.value.latitude, marker.value.longitude)
 })
-const effectiveRadius = computed(() => 500 + Math.min(locationStore.accuracy * 0.5, 200))
+// 与 index 详情面板保持一致（精度差时放宽至 700m）
+const effectiveRadius = computed(() => locationStore.getEffectiveCheckinRadius())
 const withinRange = computed(() => distance.value !== null && distance.value <= effectiveRadius.value)
 
+onLoad((options: OnLoadOptions): void => {
+  const idStr = options['id'] as string | null
+  const titleStr = options['title'] as string | null
+  markerId.value = idStr != null ? parseInt(idStr) : 0
+  markerTitle.value = titleStr != null ? decodeURIComponent(titleStr) : ''
+})
+
 onShow((): void => {
-  // 从页面参数获取 marker ID
-  const pages = getCurrentPages()
-  const currentPage = pages[pages.length - 1] as any
-  const query = currentPage?.$page?.options ?? {}
-  markerId.value = parseInt(query.id ?? '0')
-  markerTitle.value = decodeURIComponent(query.title ?? '')
   locationStore.startPolling(5000) // 每 5 秒轮询位置
 })
 
@@ -1158,24 +1162,20 @@ onHide((): void => {
 })
 
 async function choosePhoto(): Promise<void> {
+  // 5.07 真机：success 回调参数是 *SuccessImpl 类，cast 为 UTSJSONObject 必崩
+  // 必须用官方 typed 类型 ShowActionSheetSuccess / ChooseImageSuccess
   uni.showActionSheet({
     itemList: ['拍照', '从相册选择'],
-    success: async (res: any) => {
-      const sourceType = res.tapIndex === 0 ? ['camera'] : ['album']
+    success: (res: ShowActionSheetSuccess): void => {
+      const sourceType: string[] = res.tapIndex == 0 ? ['camera'] : ['album']
       uni.chooseImage({
         count: 1,
         sizeType: ['compressed'],
         sourceType: sourceType,
-        success: async (imgRes: any) => {
-          let path: string = imgRes.tempFilePaths[0] as string
-          // 压缩 >1MB 的图片
-          const fileInfo = await getFileInfoAsync(path)
-          if (fileInfo.size > 1024 * 1024) {
-            isCompressing.value = true
-            path = await compressImageAsync(path)
-            isCompressing.value = false
+        success: (imgRes: ChooseImageSuccess): void => {
+          if (imgRes.tempFilePaths.length > 0) {
+            photoPath.value = imgRes.tempFilePaths[0]
           }
-          photoPath.value = path
         }
       })
     }
@@ -1819,12 +1819,27 @@ page {
 >
 > ---
 >
-> **黄金法则（仍有效，5 条）**：
+> **黄金法则（仍有效，6 条）**：
 > 1. `UTSJSONObject["prop"]` 用于 JSON 数据；**原生 SDK 回调用 `.prop`**（cast 到 UTSJSONObject → 运行时 `ClassCastException`）
 > 2. 直接 `export const/function`（不用 Pinia/defineStore）
 > 3. 内联对象 → `const v: T = {...}` 先声明再传入
 > 4. 模板中只用本地变量/函数（导入的需本地 wrapper/alias）
 > 5. Write 工具写文件（PS Set-Content 截断 UTF-8）
+> 6. **页面 url 参数必须用 `onLoad((options: OnLoadOptions))`，禁止 `getCurrentPages() as UTSJSONObject`**（5.07 真机抛 `UniNormalPageImpl cannot be cast to UTSJSONObject`，导致 onShow 整段崩溃 → markerId/title 等 ref 全部失效，表现为"距离过远 / 找不到打卡点"等错觉）
+>
+> ---
+>
+> **🆘 5.07 真机崩溃黑名单（2026-05-08 新增，必读）：**
+>
+> | 写法 | 真机异常 | 改成 |
+> |------|---------|------|
+> | `(getCurrentPages()[i] as UTSJSONObject)["$page"]` | `UniNormalPageImpl cannot be cast to UTSJSONObject` | `onLoad((options: OnLoadOptions) => options['id'] as string \| null)`（**`onLoad` 是 uni-app x 全局钩子，不要 import**） |
+> | `success: (res: any) => (res as UTSJSONObject)["tapIndex"]`（showActionSheet） | `ShowActionSheetSuccessImpl cannot be cast to UTSJSONObject` | `success: (res: ShowActionSheetSuccess) => res.tapIndex` |
+> | `success: (res: any) => (res as UTSJSONObject)["tempFilePaths"]`（chooseImage） | `ChooseImageSuccessImpl cannot be cast to UTSJSONObject` | `success: (res: ChooseImageSuccess) => res.tempFilePaths[0]` |
+>
+> **诊断套路**：真机日志看到 `xxxImpl cannot be cast to UTSJSONObject` → 立即在源码里搜 `as UTSJSONObject`，把对应 success/getCurrentPages 改成官方 typed 类型。这类崩溃在编译期完全静默。
+>
+> **二级影响**：跨页面距离/状态计算如果依赖 url 参数（marker id 等），onLoad 写法可让首次渲染就有正确数据；旧 onShow + cast 写法会让 `markerId.value` 永远是 0 → marker.value 为 null → distance 计算返回 null → UI 显示"距离过远"假象。多个页面距离判断必须复用同一 `getEffectiveCheckinRadius()` 函数，不要 inline 重写公式。
 >
 > **何时 `.prop` vs `["prop"]`？** 见 `UTS_COMPILE_PITFALLS.md` 第四章对照表。
 >
@@ -2886,16 +2901,28 @@ const cloudURL = uploadData["cloudURL"] as string
 
 ## 十五、更新后的验证清单
 
-### 15.0 Phase 1 当前真实状态（2026-05-07）
+### 15.0 Phase 1 当前真实状态（2026-05-08，**P1 真机闭环 ✅**）
 
-- 地图 marker 图标显示链路已打通：页面侧通过 `markersJson` 传给 `uni_modules/checkin-map`，组件内部再解析并构造 SDK Marker，避免 UTS/Kotlin 跨命名空间 DTO 强转崩溃。
-- 当前静态资源以仓库真实文件为准：`/static/marker_default.png` 与 `/static/marker_checked.webp`。
-- “无法打卡”不代表功能未实现。现有代码已经实现首页可打卡判断、打卡页二次距离校验、照片上传、云端 checkin 调用以及失败时离线入队。
-- 真机上若暂时无法打卡，优先排查：
-  1. 是否已获取有效 GPS 位置
-  2. 是否真的进入打卡点半径内（默认 500m，精度差时会放宽）
-  3. `marker-center.checkin()` 云端是否已部署并可调用
-- 在上述主链路真机验收完成前，不建议直接进入 Phase 2。更合适的顺序是：先完成 P1 收尾验收，再开始双城与剧情迭代。
+P1 主链路已真机验收通过：
+- ✅ 地图 marker 图标显示（uni_modules 子组件方案落地，详见 `UTS_COMPILE_PITFALLS.md §F` 终极方案）
+- ✅ 打卡点详情面板距离/精度展示同步 GPS 状态
+- ✅ 跳转打卡页（`?id=...&title=...` URL 参数 + `onLoad((options))` 接收）
+- ✅ checkin 页范围判断与详情面板一致（共用 `getEffectiveCheckinRadius()`）
+- ✅ actionSheet + chooseImage 拍照/相册选图（typed 回调 `ShowActionSheetSuccess` / `ChooseImageSuccess`）
+- ✅ 提交打卡后 marker 图标切换 checked，tasks 页面同步任务/成就
+
+**P2 起点（新会话开做）**：
+
+1. **登录态打通**（最高优先级）：当前 `marker-center.checkin` 返回 `请先登录`，云端 `this.auth.uid == null`，照片 + 元数据未真正上云。
+   - 排查 App.uvue 启动 token 校验、user-center 配置、user store 与 `_before` 校验链路
+   - 复用 feiyi_Demo3 的 user-center / uni-id（参考 §15.0 旧检查清单）
+2. **tasks 页缩略地图**：`pages/tasks/tasks.uvue` 的 `<map>` 接到 `<checkin-map>` 包装组件（与 index.uvue 同模式），显示当前打卡点缩略
+3. **task-detail 路由复活**：当前 `pages/task-detail/task-detail.uvue` 已注册路由但项目内无 navigateTo 入口；要么从 tasks 列表点击进入，要么删除路由
+
+**P2 验收前必读**（避免重复踩坑）：
+- `UTS_COMPILE_PITFALLS.md §F` — uni_modules 子组件方案细则
+- `UTS_COMPILE_PITFALLS.md §四` — 5.07 真机崩溃黑名单（onLoad / typed callback / cast UTSJSONObject）
+- `UTS_COMPILE_PITFALLS.md §八` — P1 闭环 7 条修复清单
 
 - [ ] 所有 UTS 文件通过 HBuilderX 编译检查
 - [ ] uniCloud 服务空间创建并关联项目

@@ -107,7 +107,7 @@ return arr ?? []
 
 ---
 
-### F. SDK 类型重名碰撞 — `<map :markers>` 反向推导导致 error17 ⚠️ 未解决(2026-05-07,5 轮失败)
+### F. SDK 类型重名碰撞 — `<map :markers>` 反向推导导致 error17 ✅ 已解决(方案 B：uni_modules 子组件下沉，2026-05-07 落地，2026-05-08 完整真机闭环)
 
 **真机 logcat(2026-05-07,导致空白页 + ANR 卡死)**:
 ```
@@ -421,20 +421,24 @@ fail: (err: any): void => { reject(err) }  // ✅ 不访问成员,只透传
 | **1** | **原生 API 回调参数是类型化对象，不是 UTSJSONObject** | `uni.onLocationChange((res: any) => applyLocation(res as UTSJSONObject))` | `uni.onLocationChange((res: any) => applyLocation(res))` 直接用 `res.latitude` |
 | **2** | **`<map :markers="">` 需要原始 Marker 数组，不要 JSON 转换** | `JSON.parse(JSON.stringify(marker))` 产生 UTSJSONObject | 直接传 `markers.value`（Ref<Marker[]>） |
 | **3** | **`uni.showModal` 的 `res.confirm` 需 bracket 访问** | `res.confirm`（`res` 是 `any`） | `(res as UTSJSONObject)["confirm"]` |
+| **4** | **页面 url 参数必须用 `onLoad`，不要 cast `getCurrentPages()`** | `(pages[pages.length-1] as UTSJSONObject)["$page"]` 真机抛 `UniNormalPageImpl cannot be cast to UTSJSONObject`（5.07） | **`onLoad` 在 uni-app x 中是全局生命周期钩子，不要 import**（`import { onLoad } from '@dcloudio/uni-app'` 在 .uvue 里编译报 `找不到名称"onLoad"`）。直接 `onLoad((options: OnLoadOptions): void => { const id = options['id'] as string \| null })`。参见 `uni_modules/uni-openLocation/.../openLocation.uvue:349` |
+| **5** | **`showActionSheet` / `chooseImage` 等 success 回调必须用官方 typed 类型，不要 cast 成 UTSJSONObject** | `success: (res: any) => { (res as UTSJSONObject)["tapIndex"] }` 抛 `ShowActionSheetSuccessImpl cannot be cast to UTSJSONObject` | `success: (res: ShowActionSheetSuccess) => res.tapIndex` / `success: (res: ChooseImageSuccess) => res.tempFilePaths[0]` |
 
 ### 如何区分 "用 UTSJSONObject" vs "用 .prop"？
 
 | 数据类型 | 访问方式 | 示例 |
 |---------|---------|------|
 | `uni.getStorageSync` 返回值 | `UTSJSONObject` + `["prop"]` | `(data as UTSJSONObject)["key"]` |
-| `getCurrentPages()[].$page.options` | `UTSJSONObject` + `["prop"]` | `pg["options"]` |
+| **页面 url 参数（query）** | **`onLoad((options: OnLoadOptions))`** | `options['id'] as string \| null` — 不要走 `getCurrentPages` |
 | `uni.getLocation` success 回调参数 | `.prop` | `res.latitude` |
 | `uni.onLocationChange` 回调参数 | `.prop` | `res.accuracy` |
 | `map @regionchange` 事件对象 | `.prop` | `e.detail.centerLocation` |
 | `map @markertap` 事件对象 | `.prop` | `e.detail.markerId` |
-| `uni.chooseImage` success 回调 | `.prop` | `res.tempFilePaths[0]` |
-| `uni.showActionSheet` success 回调 | `.prop` | `res.tapIndex` |
+| `uni.chooseImage` success 回调 | `.prop`（类型 `ChooseImageSuccess`） | `res.tempFilePaths[0]` |
+| `uni.showActionSheet` success 回调 | `.prop`（类型 `ShowActionSheetSuccess`） | `res.tapIndex` |
 | `uni.showModal` success 回调 | `UTSJSONObject` + `["prop"]` | `(res as UTSJSONObject)["confirm"]` |
+
+> ⚠️ **5.07 真机崩溃来源（2026-05-08）**：`getCurrentPages()[i] as UTSJSONObject` 在 5.06 旧版本可能成功 cast，**5.07 起强制类型校验**抛 `ClassCastException: UniNormalPageImpl cannot be cast to UTSJSONObject`，整段 `onShow` 崩溃 → `markerId.value` 等状态全部失效 → 出现"距离过远 / 找不到 marker"等假象。**任何页面读 url 参数一律用 `onLoad`**。同理 `showActionSheet` / `chooseImage` 的 `success` 参数也是 `*SuccessImpl` 类，cast 必崩，必须用官方 typed 类型。
 
 ---
 
@@ -574,3 +578,23 @@ watchEffect(() => {
 3. 历史本地缓存的 marker 数据是否还保存着旧路径
 
 当前项目做法：`loadFromStorage()` 时统一纠正历史 `iconPath`，避免老缓存继续引用失效资源。
+
+---
+
+## 八、P1 闭环（2026-05-08）
+
+P1（地图渲染 + 打卡链路）真机闭环通过。本会话补齐的关键修复（每条都对应一次真机崩溃或交互断裂）：
+
+| # | 问题 | 修复 | 落点 |
+|---|------|------|------|
+| 1 | `getCurrentPages()[i] as UTSJSONObject` 在 5.07 抛 `UniNormalPageImpl cannot be cast to UTSJSONObject`，导致 `onShow` 整段崩溃 → markerId 永远 0 | 改用 `onLoad((options: OnLoadOptions))`（**uniapp x 全局钩子，不要 import**） | `pages/checkin/checkin.uvue` / `pages/task-detail/task-detail.uvue` |
+| 2 | `showActionSheet`/`chooseImage` success 回调 `as UTSJSONObject` 抛 `*SuccessImpl cannot be cast to UTSJSONObject`，无法选图 | 用官方 typed 类型 `ShowActionSheetSuccess` / `ChooseImageSuccess`，直接 `.tapIndex` / `.tempFilePaths` | `pages/checkin/checkin.uvue` |
+| 3 | 详情页 60m 可打卡，跳进 checkin 显示距离过远 | 两处 `effectiveRadius` 公式不一致；checkin 改调用 `getEffectiveCheckinRadius()`，与 index 共用 | `pages/checkin/checkin.uvue` |
+| 4 | `index.uvue` 跳 checkin 没传 url 参数（`url: '/pages/checkin/checkin'`），改 onLoad 后 markerId 全是 0 | 跳转改 `?id=${marker.id.toString()}&title=${encodeURIComponent(marker.title)}`，删冗余 `setStorageSync`；模板字符串里的 `number` 必须先 `.toString()` 否则 union 类型编译报错（§C） | `pages/index/index.uvue` |
+| 5 | `onLoad` 错误 import 自 `@dcloudio/uni-app` → 5.07 编译报 `找不到名称"onLoad"` | uniapp x 中 `onLoad`/`onShow`/`onHide`/`onUnload` 是**全局生命周期钩子**，不要 import；参考 `uni_modules/uni-openLocation/.../openLocation.uvue:349` | `pages/checkin/checkin.uvue` / `pages/task-detail/task-detail.uvue` |
+| 6 | `decodeURIComponent` 在 UTS 签名是 `string \| null`，外层 `!= null` 判空后仍被 Kotlin 视作 nullable | 收尾兜底 `decodeURIComponent(s) ?? ''` | `pages/checkin/checkin.uvue` |
+| 7 | `index.uvue` 模板用 `accuracyLevel` 但 script 没 import — 之前编译先在 checkin 报错就中止，掩盖了这个潜伏 bug | 在 `useLocationStore` 的 import 列表里加 `accuracyLevel` | `pages/index/index.uvue` |
+
+**P1 已通过的真机验收**：marker 图标渲染、详情面板距离显示、打卡按钮跳转、checkin 范围/精度判断、actionSheet 弹出、相册/相机选图、提交打卡、marker 图标切换为 checked、tasks 页同步状态。
+
+**已知 P2 起点**：`marker-center.checkin` 服务端返回 `请先登录`（`this.auth.uid == null`） — 需登录态打通：检查 App.uvue 启动时的 `uni-id` token 校验、user-center 配置、user 状态 store 与云对象 `_before` 校验链路；同时把 `pages/tasks/tasks.uvue` 的 `<map>` 也接到 `<checkin-map>` 包装组件、显示打卡点缩略。

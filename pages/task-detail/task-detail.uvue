@@ -28,7 +28,8 @@
 </template>
 
 <script setup lang="uts">
-import { ref, computed, onShow } from 'vue'
+import { ref, computed } from 'vue'
+// onLoad 在 uni-app x 中是全局页面生命周期钩子，无需 import
 import { findTaskById } from '@/stores/useTaskStore'
 import { findById } from '@/stores/useMarkerStore'
 import { requestFocus } from '@/stores/useMapStore'
@@ -42,12 +43,8 @@ const linkedMarker = computed(() => {
   return null
 })
 
-onShow((): void => {
-  const pages = getCurrentPages()
-  const currentPage = pages[pages.length - 1] as UTSJSONObject
-  const pg = currentPage["$page"] as UTSJSONObject
-  const query = pg != null ? pg["options"] as UTSJSONObject : {} as UTSJSONObject
-  taskId.value = (query["id"] as string) ?? ''
+onLoad((options: OnLoadOptions): void => {
+  taskId.value = (options['id'] as string | null) ?? ''
 })
 
 function goToMarker(): void {
