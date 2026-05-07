@@ -4,10 +4,11 @@ import type { Task, Reward } from '@/types/task'
 import type { Marker } from '@/types/marker'
 import { getDefaultTasks } from '@/utils/defaults'
 import { loadTasks, saveTasks, loadUserTasks, saveUserTasks, loadRewards, saveRewards } from '@/utils/storage'
+import type { UserTaskProgress } from '@/utils/storage'
 
 export const useTaskStore = defineStore('tasks', () => {
   const tasks = ref<Task[]>([])
-  const userTasks = ref<Record<string, { status: string; completedAt: number }>>({})
+  const userTasks = ref<Map<string, UserTaskProgress>>(new Map())
   const rewards = ref<Reward[]>([])
 
   const completedTaskCount = computed(() => tasks.value.filter(t => t.status === 'completed').length)
@@ -21,7 +22,7 @@ export const useTaskStore = defineStore('tasks', () => {
     }
     const ut = loadUserTasks()
     tasks.value = stored.map(t => {
-      const progress = ut[t.id]
+      const progress = ut.get(t.id)
       if (progress && progress.status === 'completed') {
         return { ...t, status: 'completed' as const, completedAt: progress.completedAt }
       }
@@ -45,7 +46,7 @@ export const useTaskStore = defineStore('tasks', () => {
       if (!match) return
       task.status = 'completed'
       task.completedAt = Date.now()
-      userTasks.value[task.id] = { status: 'completed', completedAt: task.completedAt }
+      userTasks.value.set(task.id, { status: 'completed', completedAt: task.completedAt } as UserTaskProgress)
       const reward: Reward = {
         id: `reward_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
         taskId: task.id,

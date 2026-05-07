@@ -7,8 +7,8 @@
         <text class="empty-text">{{ hint }}</text>
       </view>
     </view>
-    <text class="status-text" v-if="isUploading">上传�?..</text>
-    <text class="status-text" v-else-if="isCompressing">压缩�?..</text>
+    <text class="status-text" v-if="isUploading">上传�?..</text>
+    <text class="status-text" v-else-if="isCompressing">压缩�?..</text>
   </view>
 </template>
 
@@ -40,7 +40,7 @@ async function pickPhoto(): Promise<void> {
           let path: string = imgRes.tempFilePaths[0] as string
 
           const fileInfo = await getFileInfoAsync(path)
-          if (fileInfo.size > 1024 * 1024) {
+          if ((fileInfo as any).size > 1024 * 1024) {
             isCompressing.value = true
             path = await compressImageAsync(path)
             isCompressing.value = false
@@ -73,7 +73,7 @@ async function pickPhoto(): Promise<void> {
   })
 }
 
-function getFileInfoAsync(path: string): Promise<{ size: number }> {
+function getFileInfoAsync(path: string): Promise<UTSJSONObject> {
   return new Promise((resolve) => {
     uni.getFileInfo({ filePath: path, success: (res: any) => resolve(res) })
   })
