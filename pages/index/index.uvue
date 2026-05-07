@@ -73,23 +73,37 @@ function ensureMapCtx(): MapContext | null {
 }
 
 // markersData — 喂给 <checkin-map> 子组件的普通对象数组。
-// 不再涉及 SDK Marker 类型 —— 全部 SDK 边界已下沉到 uni_modules/checkin-map/。
-// 这里只管业务态：把 markers (CheckinMarker[]) 投影成子组件 props 期待的形状。
+// 不涉及 SDK Marker —— 全部 SDK 边界已下沉到 uni_modules/checkin-map/。
 //
-// 图标路径用 uni_modules 下提供的 marker.png（项目 /static/ 暂时没有真正的 marker 图标）。
+// 注意 1：UTS 5.07 推不出 computed 的返回类型（匿名 .map() 结果），必须显式声明。
+// 注意 2：MarkerInput 是本地命名类型，与 SDK 类型无重名，不会触发 namespace 合成歧义。
+// 注意 3：图标路径借 uni_modules/checkin-map/components/checkin-map/marker.png
+//          （项目 /static/ 没有真正的 marker 图标）。
+type MarkerInput = {
+  id: number
+  latitude: number
+  longitude: number
+  title: string
+  iconPath: string
+  width: number
+  height: number
+}
+
 const MARKER_ICON = '/uni_modules/checkin-map/components/checkin-map/marker.png'
 
-const markersData = computed(() => markers.value.map((m: CheckinMarker) => {
-  return {
-    id: m.id,
-    latitude: m.latitude,
-    longitude: m.longitude,
-    title: m.title,
-    iconPath: MARKER_ICON,
-    width: 36,
-    height: 36
-  }
-}))
+const markersData = computed((): Array<MarkerInput> => {
+  return markers.value.map((m: CheckinMarker): MarkerInput => {
+    return {
+      id: m.id,
+      latitude: m.latitude,
+      longitude: m.longitude,
+      title: m.title,
+      iconPath: MARKER_ICON,
+      width: 36,
+      height: 36
+    } as MarkerInput
+  })
+})
 
 const dist = computed(() => {
   const m = activeMarker.value
