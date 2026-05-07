@@ -14,20 +14,13 @@
     </view>
 
     <map id="mainMap" class="map-component" :latitude="latitude" :longitude="longitude" :scale="scale" :markers="markers" show-location coord-type="gcj02" @markertap="onMarkerTap" @longpress="onMapLongPress" @regionchange="onRegionChange">
-      <cover-view class="map-tools">
-        <cover-view class="tool-btn task-btn" @click="goTasks">
-          <cover-view class="tool-label">T</cover-view>
-        </cover-view>
-        <cover-view class="tool-btn zoom-in" @click="doZoomIn">
-          <cover-view class="tool-label">+</cover-view>
-        </cover-view>
-        <cover-view class="tool-btn zoom-out" @click="doZoomOut">
-          <cover-view class="tool-label">-</cover-view>
-        </cover-view>
-        <cover-view class="tool-btn locate-btn" @click="goLocate">
-          <cover-view class="tool-label">L</cover-view>
-        </cover-view>
-      </cover-view>
+      <!-- 工具按钮：每个 cover-view 独立绝对定位，避免父容器 flex 塌缩。
+           uni-app x Android：cover-view 是原生 overlay，深度嵌套不稳定，
+           文字直接写在按钮 cover-view 里，不再嵌套 .tool-label。 -->
+      <cover-view class="tool-btn tool-pos-1 task-tone" @click="goTasks">任</cover-view>
+      <cover-view class="tool-btn tool-pos-2" @click="doZoomIn">＋</cover-view>
+      <cover-view class="tool-btn tool-pos-3" @click="doZoomOut">－</cover-view>
+      <cover-view class="tool-btn tool-pos-4 locate-tone" @click="goLocate">⊙</cover-view>
 
       <cover-view class="floating-add-btn" @click="goAddMarker">
         <cover-view class="add-icon">+</cover-view>
@@ -70,6 +63,13 @@ import { latitude, longitude, scale, activeMarker, setActiveMarker, zoomIn, zoom
 import { loadFromStorage as loadTasks } from '@/stores/useTaskStore'
 import type { Marker } from '@/types/marker'
 import { formatDateTime, formatDistance } from '@/utils/format'
+
+// MapContext 是 uni-app x 控制地图的命令式句柄。createMapContext 调用很轻量
+// （内部按 mapId 缓存），所以不需要在页面层面再缓存。集中到一个 helper 是为了
+// 万一 mapId 改名时只改一处。
+function ensureMapCtx(): MapContext | null {
+  return uni.createMapContext('mainMap')
+}
 
 const dist = computed(() => {
   const m = activeMarker.value
@@ -114,7 +114,7 @@ function navigateToAddMarkerAt(centerLat: number, centerLng: number): void {
 }
 
 function onMapLongPress(): void {
-  const ctx = uni.createMapContext('mainMap')
+  const ctx = ensureMapCtx()
   if (ctx == null) return
   ctx.getCenterLocation({
     success: (res: LocationObject): void => {
@@ -125,7 +125,7 @@ function onMapLongPress(): void {
 
 function onRegionChange(e: UniMapRegionChangeEvent): void {
   if (e.type !== 'end') return
-  const ctx = uni.createMapContext('mainMap')
+  const ctx = ensureMapCtx()
   if (ctx == null) return
   ctx.getCenterLocation({
     success: (res: LocationObject): void => {
@@ -143,11 +143,32 @@ function doCheckin(): void {
 }
 function closeSheet(): void { setActiveMarker(null) }
 function goTasks(): void { uni.navigateTo({ url: '/pages/tasks/tasks' }) }
+
+// Zoom: ref-driven via :scale prop binding. uni-app x's MapContext does not expose
+// setScale/setZoom — :scale ref change is the only documented path.
 function doZoomIn(): void { zoomIn() }
 function doZoomOut(): void { zoomOut() }
+
+// Locate: prefer MapContext.moveToLocation() — when both lat/lng are omitted, native
+// uses the show-location blue dot directly with built-in animation. Falls back to
+// the GPS ref if context is unavailable, plus a toast if GPS hasn't fixed yet.
 function goLocate(): void {
+  const ctx = ensureMapCtx()
+  if (ctx != null) {
+    ctx.moveToLocation({
+      success: (): void => {},
+      fail: (): void => {
+        // ctx call failed → fallback to manual ref-based move
+        const loc = currentLocation.value
+        if (loc != null) moveToLocation(loc.latitude, loc.longitude)
+        else uni.showToast({ title: '定位中，请稍候', icon: 'none' })
+      }
+    })
+    return
+  }
   const loc = currentLocation.value
   if (loc != null) moveToLocation(loc.latitude, loc.longitude)
+  else uni.showToast({ title: '定位中，请稍候', icon: 'none' })
 }
 function doDelete(): void {
   const m = activeMarker.value; if (m == null) return
@@ -178,11 +199,29 @@ function doDelete(): void {
 .accuracy-bad .accuracy-text { color: #ff3b30; }
 .accuracy-unknown .accuracy-text { color: #999999; }
 .stats { font-size: 24rpx; color: #2ecc71; font-weight: bold; }
-.map-tools { position: absolute; right: 20rpx; top: 280rpx; display: flex; flex-direction: column; }
-.tool-btn { width: 80rpx; height: 80rpx; border-radius: 40rpx; background-color: #ffffff; display: flex; align-items: center; justify-content: center; box-shadow: 0 4rpx 12rpx rgba(0,0,0,0.12); }
-.tool-label { font-size: 36rpx; color: #2ecc71; font-weight: bold; }
-.task-btn { background-color: #2ecc71; }
-.task-btn .tool-label { color: #ffffff; font-size: 28rpx; }
+/* 每个工具按钮独立绝对定位。统一基底样式 + 独立位置类。
+   按钮高 80rpx，间隔 16rpx，从 top:280rpx 开始向下排列：
+     tool-pos-1: 280  ← 任
+     tool-pos-2: 376  ← ＋  (280 + 80 + 16)
+     tool-pos-3: 472  ← －
+     tool-pos-4: 568  ← ⊙
+   想调整起始位置或间距，改 tool-pos-* 的 top 值即可。 */
+.tool-btn {
+  position: absolute; right: 20rpx;
+  width: 80rpx; height: 80rpx;
+  border-radius: 40rpx;
+  background-color: #ffffff;
+  text-align: center; line-height: 80rpx;
+  font-size: 40rpx; color: #2ecc71; font-weight: 500;
+  box-shadow: 0 4rpx 12rpx rgba(0,0,0,0.12);
+}
+.tool-pos-1 { top: 280rpx; }
+.tool-pos-2 { top: 376rpx; }
+.tool-pos-3 { top: 472rpx; }
+.tool-pos-4 { top: 568rpx; }
+/* 色调变体：任务按钮绿色、定位按钮蓝色（视觉提示区分功能） */
+.task-tone { background-color: #2ecc71; color: #ffffff; font-size: 30rpx; font-weight: bold; }
+.locate-tone { background-color: #1e88e5; color: #ffffff; font-size: 44rpx; }
 .floating-add-btn { position: absolute; bottom: 200rpx; left: 50%; transform: translateX(-50%); display: flex; flex-direction: column; align-items: center; }
 .add-icon { width: 96rpx; height: 96rpx; border-radius: 48rpx; background-color: #2ecc71; color: #ffffff; font-size: 52rpx; font-weight: 400; display: flex; align-items: center; justify-content: center; box-shadow: 0 8rpx 24rpx rgba(46,204,113,0.4); }
 .add-label { margin-top: 8rpx; font-size: 22rpx; color: #2ecc71; background-color: rgba(255,255,255,0.9); padding: 4rpx 16rpx; border-radius: 12rpx; }

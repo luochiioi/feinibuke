@@ -73,7 +73,41 @@ return arr ?? []
 
 **所有边界返回的 JSON 都适用**:`getStorageSync` / `JSON.parse` / cloud function 响应 / `request` 返回。Kotlin 的 `as` 不做转换,只做断言。`as` 失败 = 运行期炸。
 
-### E. fail 回调可以保留 `any`(唯一安全场景)
+### E.5 cover-view 在 `<map>` 上的布局陷阱(Android 原生 overlay)
+
+`<map>` 在 Android 是原生 MapView,`<cover-view>` 是唯一能在它上面渲染 UI 的元素——但 cover-view 是**独立的原生 overlay 层**,布局规则比普通 view 严格得多。
+
+**踩过的坑(2026-05-07,4 个工具按钮全部不可见)**:
+```html
+<!-- 错:flex 容器无显式尺寸 → Android 原生层无法 measure → 整个容器塌成 0×0 -->
+<cover-view class="map-tools">  <!-- position:absolute + flex:column 但无 width/height -->
+  <cover-view class="tool-btn">
+    <cover-view class="tool-label">＋</cover-view>  <!-- 第三层嵌套,measure 不稳 -->
+  </cover-view>
+  ...
+</cover-view>
+```
+
+**修复(扁平化 + 独立绝对定位)**:
+```html
+<!-- 对:每个 cover-view 直接是 <map> 的子节点,各自带独立 top 值 -->
+<cover-view class="tool-btn tool-pos-1" @click="...">＋</cover-view>
+<cover-view class="tool-btn tool-pos-2" @click="...">－</cover-view>
+```
+
+**cover-view 在 map 上的硬规则**:
+1. **嵌套不超过 2 层**(cover-view 包 cover-view 是上限,不要再深)
+2. **文字直接写在 cover-view 里**,不要再套一个 cover-view 当 label
+3. **flex 布局不可靠**——优先用 `position: absolute` + 各自独立 top/right
+4. **必须有显式尺寸**(width/height 或 left+right+top+bottom 全集)
+5. **box-shadow / border-radius** 大部分能渲染,但**不要假定 100% 兼容**
+6. **如果一个 cover-view "莫名不见"**,先检查它的父链上有没有"无尺寸的 flex 容器"——这是 #1 元凶
+
+**单字符 unicode > emoji**:`任 ＋ － ⊙` 在原生 cover-view 渲染最稳。emoji(📍🎯)有 hit-test 区域 bug 案例,小心使用。
+
+---
+
+### F. fail 回调可以保留 `any`(唯一安全场景)
 
 ```ts
 fail: (err: any): void => { reject(err) }  // ✅ 不访问成员,只透传
