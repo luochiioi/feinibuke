@@ -66,7 +66,7 @@ const miniScale = ref<number>(4)
 
 onShow((): void => { loadMarkers(); loadTasks() })
 
-function setFilter(key: any): void { activeFilter.value = key as FilterMode }
+function setFilter(key: any | null): void { if (key != null) activeFilter.value = key as FilterMode }
 function goFocus(item: Marker): void { requestFocus(item); uni.navigateBack() }
 function doDelete(item: Marker): void {
   uni.showModal({
