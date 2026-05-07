@@ -90,7 +90,7 @@ export const useLocationStore = defineStore('location', () => {
       })
     }
     poll()
-    pollTimerId = setInterval(poll, intervalMs) as unknown as number
+    pollTimerId = setInterval(poll, intervalMs) as any as number
   }
 
   function stopPolling(): void {

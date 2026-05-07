@@ -9,12 +9,12 @@ export const useMapStore = defineStore('map', () => {
   const activeMarker = ref<Marker | null>(null)
   const mapCenterLat = ref<number>(39.9163)
   const mapCenterLng = ref<number>(116.3972)
-  const mapContext = ref<any>(null)
+  const mapContext = ref<UTSJSONObject | null>(null)
   const focusTarget = ref<Marker | null>(null)
 
   function setActiveMarker(marker: Marker | null): void {
     activeMarker.value = marker
-    if (marker) {
+    if (marker != null) {
       latitude.value = marker.latitude
       longitude.value = marker.longitude
     }
