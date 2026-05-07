@@ -190,10 +190,7 @@ export async function syncMarkers(): Promise<Marker[]> {
       if (cloudMarker.photoPath != null) {
         local.photoPath = cloudMarker.photoPath
       }
-      // Update metadata
-      if ((cloudMarker as any)["checkinCount"] as number > 0) {
-        (local as any)["checkinCount"] = (cloudMarker as any)["checkinCount"]
-      }
+      // checkinCount not in Marker type — skip cloud metadata merge
     }
   }
 
