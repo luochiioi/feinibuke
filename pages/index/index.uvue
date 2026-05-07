@@ -18,10 +18,10 @@
         <cover-view class="tool-btn task-btn" @click="goTasks">
           <cover-view class="tool-label">T</cover-view>
         </cover-view>
-        <cover-view class="tool-btn zoom-in" @click="zoomIn()">
+        <cover-view class="tool-btn zoom-in" @click="doZoomIn">
           <cover-view class="tool-label">+</cover-view>
         </cover-view>
-        <cover-view class="tool-btn zoom-out" @click="zoomOut()">
+        <cover-view class="tool-btn zoom-out" @click="doZoomOut">
           <cover-view class="tool-label">-</cover-view>
         </cover-view>
         <cover-view class="tool-btn locate-btn" @click="goLocate">
@@ -37,7 +37,7 @@
       <cover-view class="bottom-sheet" v-if="activeMarker != null">
         <cover-view class="sheet-header">
           <cover-view class="sheet-title">{{ activeMarker.title }}</cover-view>
-          <cover-view class="sheet-close" @click="setActiveMarker(null)">X</cover-view>
+          <cover-view class="sheet-close" @click="closeSheet">X</cover-view>
         </cover-view>
         <cover-view class="sheet-body">
           <template v-if="activeMarker.checked">
@@ -122,7 +122,10 @@ function doCheckin(): void {
   const m = activeMarker.value; if (m == null) return
   uni.navigateTo({ url: `/pages/checkin/checkin?id=${m.id}&title=${encodeURIComponent(m.title)}` })
 }
+function closeSheet(): void { setActiveMarker(null) }
 function goTasks(): void { uni.navigateTo({ url: '/pages/tasks/tasks' }) }
+function doZoomIn(): void { zoomIn() }
+function doZoomOut(): void { zoomOut() }
 function goLocate(): void {
   const loc = currentLocation.value
   if (loc != null) moveToLocation(loc.latitude, loc.longitude)
@@ -132,7 +135,8 @@ function doDelete(): void {
   uni.showModal({
     title: '确认删除', content: `确定要删除"${m.title}"吗？`,
     success: (res: any): void => {
-      if (res.confirm) { deleteMarker(m.id); setActiveMarker(null) }
+      const r = res as UTSJSONObject
+      if ((r["confirm"] as boolean) == true) { deleteMarker(m.id); setActiveMarker(null) }
     }
   })
 }

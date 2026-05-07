@@ -10,7 +10,7 @@
       <view class="gps-card" :class="withinRange ? 'in-range' : 'out-range'">
         <text class="gps-label">{{ withinRange ? '在打卡范围内' : '距离过远' }}</text>
         <text class="gps-distance" v-if="distance != null">{{ (distance as number).toFixed(0) }}m</text>
-        <text class="gps-accuracy">{{ accuracyText }}</text>
+        <text class="gps-accuracy">{{ accText }}</text>
       </view>
     </view>
     <view class="photo-section">
@@ -50,6 +50,7 @@ const note = ref<string>('')
 const isSubmitting = ref<boolean>(false)
 
 const marker = computed(() => findById(markerId.value))
+const accText = accuracyText
 
 const distance = computed(() => {
   const m = marker.value
