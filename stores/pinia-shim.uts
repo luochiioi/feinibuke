@@ -1,15 +1,14 @@
 // Minimal Pinia-compatible defineStore shim for uniapp x
-// Replaces `import { defineStore } from 'pinia'` with this local implementation
 
 type StoreSetup = () => any
 
 export function defineStore(_id: string, setup: StoreSetup): () => any {
   let inited: boolean = false
-  let instance: any = null
+  let instance: UTSJSONObject | null = null
   return (): any => {
-    if (inited) return instance
+    if (inited) return instance!!
     inited = true
-    instance = setup()
+    instance = setup() as UTSJSONObject
     return instance
   }
 }

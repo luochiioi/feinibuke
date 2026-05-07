@@ -61,13 +61,20 @@ export const useTaskStore = defineStore('tasks', () => {
     return completed
   }
 
-  function findTaskById(id: string): Task | undefined {
-    return tasks.value.find(t => t.id === id)
+  function findTaskById(id: string): Task | null {
+    const found = tasks.value.find(t => t.id === id)
+    return found ?? null
   }
 
   return {
-    tasks, userTasks, rewards,
-    completedTaskCount, totalTaskCount,
-    loadFromStorage, persist, checkTaskCompletion, findTaskById
-  }
+    tasks: tasks,
+    userTasks: userTasks,
+    rewards: rewards,
+    completedTaskCount: completedTaskCount,
+    totalTaskCount: totalTaskCount,
+    loadFromStorage: loadFromStorage,
+    persist: persist,
+    checkTaskCompletion: checkTaskCompletion,
+    findTaskById: findTaskById
+  } as any
 })

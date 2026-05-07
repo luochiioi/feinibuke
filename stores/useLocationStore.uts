@@ -109,10 +109,10 @@ export const useLocationStore = defineStore('location', () => {
   }
 
   return {
-    currentLocation, accuracy, isTracking,
-    accuracyLevel, accuracyText,
-    startTracking, stopTracking, applyLocation,
-    pollLocationOnce, startPolling, stopPolling,
-    distanceTo
-  }
+    currentLocation: currentLocation, accuracy: accuracy, isTracking: isTracking,
+    accuracyLevel: accuracyLevel, accuracyText: accuracyText,
+    startTracking: startTracking, stopTracking: stopTracking, applyLocation: applyLocation,
+    pollLocationOnce: pollLocationOnce, startPolling: startPolling, stopPolling: stopPolling,
+    distanceTo: distanceTo
+  } as any
 })

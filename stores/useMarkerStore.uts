@@ -81,12 +81,14 @@ export const useMarkerStore = defineStore('markers', () => {
     persist()
   }
 
-  function findById(id: number): Marker | undefined {
-    return markers.value.find(m => m.id === id)
+  function findById(id: number): Marker | null {
+    const found = markers.value.find(m => m.id === id)
+    return found ?? null
   }
 
-  function findByTitle(title: string): Marker | undefined {
-    return markers.value.find(m => m.title === title)
+  function findByTitle(title: string): Marker | null {
+    const found = markers.value.find(m => m.title === title)
+    return found ?? null
   }
 
   async function syncFromCloud(): Promise<number> {
@@ -98,9 +100,21 @@ export const useMarkerStore = defineStore('markers', () => {
   }
 
   return {
-    markers, isLoading,
-    checkedMarkers, pendingMarkers, totalCount, doneCount, completionRate, displayMarkers,
-    loadFromStorage, persist, addMarker, doCheckIn, deleteMarker,
-    findById, findByTitle, syncFromCloud
-  }
+    markers: markers,
+    isLoading: isLoading,
+    checkedMarkers: checkedMarkers,
+    pendingMarkers: pendingMarkers,
+    totalCount: totalCount,
+    doneCount: doneCount,
+    completionRate: completionRate,
+    displayMarkers: displayMarkers,
+    loadFromStorage: loadFromStorage,
+    persist: persist,
+    addMarker: addMarker,
+    doCheckIn: doCheckIn,
+    deleteMarker: deleteMarker,
+    findById: findById,
+    findByTitle: findByTitle,
+    syncFromCloud: syncFromCloud
+  } as any
 })

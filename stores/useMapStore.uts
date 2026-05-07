@@ -50,9 +50,9 @@ export const useMapStore = defineStore('map', () => {
   }
 
   return {
-    latitude, longitude, scale, activeMarker,
-    mapCenterLat, mapCenterLng, mapContext, focusTarget,
-    setActiveMarker, zoomIn, zoomOut, moveToLocation,
-    onRegionChangeEnd, requestFocus, consumeFocus
-  }
+    latitude: latitude, longitude: longitude, scale: scale, activeMarker: activeMarker,
+    mapCenterLat: mapCenterLat, mapCenterLng: mapCenterLng, mapContext: mapContext, focusTarget: focusTarget,
+    setActiveMarker: setActiveMarker, zoomIn: zoomIn, zoomOut: zoomOut, moveToLocation: moveToLocation,
+    onRegionChangeEnd: onRegionChangeEnd, requestFocus: requestFocus, consumeFocus: consumeFocus
+  } as any
 })
