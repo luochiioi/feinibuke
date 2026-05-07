@@ -22,7 +22,8 @@ function readQueue(): QueueItem[] {
     const raw = uni.getStorageSync(KEY_SYNC_QUEUE)
     if (raw == null) return []
     if (typeof raw === 'string' && (raw as string).length > 0) {
-      return (JSON.parse as (s: string) => QueueItem[])(raw as string)
+      const parsed = JSON.parse(raw as string)
+      return (parsed as any) as QueueItem[]
     }
     if (Array.isArray(raw)) return raw as QueueItem[]
     return []
@@ -167,10 +168,12 @@ export async function syncMarkers(): Promise<Marker[]> {
   // Merge cloud markers
   for (const raw of cloudData) {
     const jsonStr = JSON.stringify(raw)
-    const cloudMarker = JSON.parse<Marker>(jsonStr)
+    const cloudMarker = JSON.parse(jsonStr) as Marker
+    if (cloudMarker == null) continue
+
     const local = merged.get(cloudMarker.id)
 
-    if (!local) {
+    if (local == null) {
       // New cloud marker not in local: add it
       merged.set(cloudMarker.id, cloudMarker)
     } else {
@@ -178,19 +181,17 @@ export async function syncMarkers(): Promise<Marker[]> {
       // Cloud checkin data takes priority (checkedBy from other users)
       if (cloudMarker.checked) {
         local.checked = true
-        // Merge checkedBy entries from cloud (multi-user support)
-        // Keep local checkin time if it exists
-        if (!local.checkedAt) local.checkedAt = now
+        if (local.checkedAt == null) local.checkedAt = now
       }
       // Preserve local photoPath if it exists
-      if (local.photoPath && !cloudMarker.photoPath) {
-        // keep local
+      if (local.photoPath != null && cloudMarker.photoPath == null) {
+        // keep local photoPath
       }
-      if (cloudMarker.photoPath) {
+      if (cloudMarker.photoPath != null) {
         local.photoPath = cloudMarker.photoPath
       }
       // Update metadata
-      if (cloudMarker.checkinCount && (cloudMarker as any).checkinCount > 0) {
+      if ((cloudMarker as any).checkinCount > 0) {
         (local as any).checkinCount = (cloudMarker as any).checkinCount
       }
     }
