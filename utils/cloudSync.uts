@@ -22,7 +22,7 @@ function readQueue(): QueueItem[] {
     const raw = uni.getStorageSync(KEY_SYNC_QUEUE)
     if (raw == null) return []
     if (typeof raw === 'string' && (raw as string).length > 0) {
-      return JSON.parse<QueueItem[]>(raw as string)
+      return (JSON.parse as (s: string) => QueueItem[])(raw as string)
     }
     if (Array.isArray(raw)) return raw as QueueItem[]
     return []
@@ -80,7 +80,9 @@ export function pendingCount(): number {
 // ===== Flush with backoff =====
 
 function delay(ms: number): Promise<void> {
-  return new Promise(resolve => setTimeout(resolve, ms))
+  return new Promise((resolve: (value: void) => void) => {
+    setTimeout((): void => { resolve() }, ms)
+  })
 }
 
 export async function flushSyncQueue(): Promise<number> {

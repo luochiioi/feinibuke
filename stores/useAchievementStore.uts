@@ -1,4 +1,4 @@
-import { defineStore } from 'pinia'
+import { defineStore } from './pinia-shim'
 import { computed } from 'vue'
 import type { Achievement } from '@/types/achievement'
 import { useMarkerStore } from './useMarkerStore'

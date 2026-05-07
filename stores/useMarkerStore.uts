@@ -1,4 +1,4 @@
-import { defineStore } from 'pinia'
+import { defineStore } from './pinia-shim'
 import { ref, computed } from 'vue'
 import type { Marker, NewMarkerInput } from '@/types/marker'
 import { loadMarkers, saveMarkers } from '@/utils/storage'

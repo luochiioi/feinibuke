@@ -1,4 +1,4 @@
-import { defineStore } from 'pinia'
+import { defineStore } from './pinia-shim'
 import { ref, computed } from 'vue'
 import type { LocationData, AccuracyLevel } from '@/types/location'
 import { calculateDistance as haversine } from '@/utils/coordinate'
