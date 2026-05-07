@@ -38,7 +38,7 @@
 
 <script setup lang="uts">
 import { ref, computed, onShow } from 'vue'
-import { markers, checkedMarkers, displayMarkers, totalCount, doneCount, loadFromStorage as loadMarkers, deleteMarker, findById } from '@/stores/useMarkerStore'
+import { markers, checkedMarkers, totalCount, doneCount, loadFromStorage as loadMarkers, deleteMarker, findById } from '@/stores/useMarkerStore'
 import { completedTaskCount, totalTaskCount, loadFromStorage as loadTasks } from '@/stores/useTaskStore'
 import { achievements, unlockedCount } from '@/stores/useAchievementStore'
 import { requestFocus } from '@/stores/useMapStore'
@@ -59,7 +59,7 @@ const filteredMarkers = computed(() => {
   return markers.value
 })
 
-const miniMarkers = computed(() => displayMarkers.value.slice(0, 20))
+const miniMarkers = computed(() => markers.value.slice(0, 20))
 const miniLat = computed(() => { if (markers.value.length > 0) return markers.value[0].latitude; return 39.9163 })
 const miniLng = computed(() => { if (markers.value.length > 0) return markers.value[0].longitude; return 116.3972 })
 const miniScale = ref<number>(4)

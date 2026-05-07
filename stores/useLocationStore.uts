@@ -21,26 +21,32 @@ export const accuracyText = computed<string>(() => {
   return `${m}m 精度差`
 })
 
-export function applyLocation(res: UTSJSONObject): void {
-  const acc: number = (res["accuracy"] as number) ?? 0
+// Native API callbacks pass typed objects — use .prop access, not UTSJSONObject
+export function applyLocation(res: any): void {
+  const acc: number = (res.accuracy as number) ?? 0
   accuracy.value = acc
   if (acc > 150) return
   currentLocation.value = {
-    latitude: res["latitude"] as number,
-    longitude: res["longitude"] as number, accuracy: acc
+    latitude: res.latitude as number,
+    longitude: res.longitude as number,
+    accuracy: acc
   }
 }
+
 export function startTracking(): void {
   isTracking.value = true
   uni.startLocationUpdate({
     type: 'gcj02', success: (): void => {},
-    fail: (): void => { uni.getLocation({
-      type: 'gcj02', isHighAccuracy: true, highAccuracyExpireTime: 6000,
-      success: (res: any): void => { applyLocation(res as UTSJSONObject) }
-    })}
+    fail: (): void => {
+      uni.getLocation({
+        type: 'gcj02', isHighAccuracy: true, highAccuracyExpireTime: 6000,
+        success: (res: any): void => { applyLocation(res) }
+      })
+    }
   })
-  uni.onLocationChange((res: any): void => { applyLocation(res as UTSJSONObject) })
+  uni.onLocationChange((res: any): void => { applyLocation(res) })
 }
+
 export function stopTracking(): void { isTracking.value = false; uni.offLocationChange(); uni.stopLocationUpdate({}) }
 
 export function pollLocationOnce(): Promise<LocationData> {
@@ -48,25 +54,32 @@ export function pollLocationOnce(): Promise<LocationData> {
     uni.getLocation({
       type: 'gcj02', isHighAccuracy: true, highAccuracyExpireTime: 6000,
       success: (res: any): void => {
-        const r = res as UTSJSONObject
-        const loc: LocationData = { latitude: r["latitude"] as number, longitude: r["longitude"] as number, accuracy: (r["accuracy"] as number) ?? 0 }
+        const loc: LocationData = {
+          latitude: res.latitude as number,
+          longitude: res.longitude as number,
+          accuracy: (res.accuracy as number) ?? 0
+        }
         accuracy.value = loc.accuracy; currentLocation.value = loc; resolve(loc)
       },
       fail: (err: any): void => { reject(err) }
     })
   })
 }
+
 export function startPolling(intervalMs: number): void {
-  pollTimerId = setInterval((): void => {
+  const poll = (): void => {
     uni.getLocation({
       type: 'gcj02', isHighAccuracy: true, highAccuracyExpireTime: 6000,
-      success: (res: any): void => { applyLocation(res as UTSJSONObject) }
+      success: (res: any): void => { applyLocation(res) }
     })
-  }, intervalMs) as any as number
+  }
+  pollTimerId = setInterval(poll, intervalMs) as any as number
 }
+
 export function stopPolling(): void { if (pollTimerId != 0) { clearInterval(pollTimerId); pollTimerId = 0 } }
+
 export function distanceTo(lat: number, lng: number): number | null {
   const loc = currentLocation.value
   if (loc == null) return null
-  return haversine((loc as LocationData).latitude, (loc as LocationData).longitude, lat, lng)
+  return haversine(loc.latitude, loc.longitude, lat, lng)
 }

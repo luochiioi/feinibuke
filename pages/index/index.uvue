@@ -13,7 +13,7 @@
       </view>
     </view>
 
-    <map id="mainMap" class="map-component" :latitude="latitude" :longitude="longitude" :scale="scale" :markers="displayMarkers" show-location coord-type="gcj02" @markertap="onMarkerTap" @longpress="onMapLongPress" @regionchange="onRegionChange">
+    <map id="mainMap" class="map-component" :latitude="latitude" :longitude="longitude" :scale="scale" :markers="markers" show-location coord-type="gcj02" @markertap="onMarkerTap" @longpress="onMapLongPress" @regionchange="onRegionChange">
       <cover-view class="map-tools">
         <cover-view class="tool-btn task-btn" @click="goTasks">
           <cover-view class="tool-label">T</cover-view>
@@ -64,7 +64,7 @@
 
 <script setup lang="uts">
 import { ref, computed, onShow, onHide } from 'vue'
-import { loadFromStorage as loadMarkers, deleteMarker, findById, displayMarkers, doneCount, totalCount } from '@/stores/useMarkerStore'
+import { loadFromStorage as loadMarkers, deleteMarker, findById, markers, doneCount, totalCount } from '@/stores/useMarkerStore'
 import { currentLocation, accuracyLevel, accuracyText, startTracking, stopTracking, distanceTo } from '@/stores/useLocationStore'
 import { latitude, longitude, scale, activeMarker, setActiveMarker, zoomIn, zoomOut, moveToLocation, onRegionChangeEnd, mapCenterLat, mapCenterLng, requestFocus, consumeFocus } from '@/stores/useMapStore'
 import { loadFromStorage as loadTasks } from '@/stores/useTaskStore'
@@ -94,25 +94,18 @@ onShow((): void => {
 })
 onHide((): void => { stopTracking() })
 
-function onMarkerTap(e: UTSJSONObject): void {
-  const detail = e["detail"] as UTSJSONObject
-  const m = findById(detail["markerId"] as number)
+function onMarkerTap(e: any): void {
+  const detail = e.detail as any
+  const m = findById(detail.markerId as number)
   if (m != null) setActiveMarker(m)
 }
-function onMapLongPress(e: UTSJSONObject): void {
-  const detail = e["detail"] as UTSJSONObject
-  uni.navigateTo({ url: `/pages/add-marker/add-marker?centerLat=${detail["latitude"] as number}&centerLng=${detail["longitude"] as number}&currentLat=${currentLocation.value?.latitude ?? ''}&currentLng=${currentLocation.value?.longitude ?? ''}` })
+function onMapLongPress(e: any): void {
+  const detail = e.detail as any
+  uni.navigateTo({ url: `/pages/add-marker/add-marker?centerLat=${detail.latitude as number}&centerLng=${detail.longitude as number}&currentLat=${currentLocation.value?.latitude ?? ''}&currentLng=${currentLocation.value?.longitude ?? ''}` })
 }
 function onRegionChange(e: any): void {
-  const evt = e as UTSJSONObject
-  if ((evt["type"] as string) === 'end') {
-    const dt = evt["detail"] as UTSJSONObject
-    if (dt != null) {
-      const cl = dt["centerLocation"] as UTSJSONObject
-      if (cl != null) {
-        onRegionChangeEnd(cl["latitude"] as number, cl["longitude"] as number)
-      }
-    }
+  if (e.type === 'end' && e.detail != null && e.detail.centerLocation != null) {
+    onRegionChangeEnd(e.detail.centerLocation.latitude as number, e.detail.centerLocation.longitude as number)
   }
 }
 function goAddMarker(): void {
