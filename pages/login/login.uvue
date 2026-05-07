@@ -10,22 +10,22 @@
         <text class="subtitle">地图打卡</text>
 
         <view class="input-group">
-          <input class="custom-input" v-model="userName" placeholder="请输入用户名�? placeholder-class="placeholder-style" />
+          <input class="custom-input" v-model="userName" placeholder="请输入用户名称" placeholder-class="placeholder-style" />
         </view>
 
         <view class="input-group">
-          <input class="custom-input" v-model="userPassword" type="password" placeholder="请输入用户密�? placeholder-class="placeholder-style" />
+          <input class="custom-input" v-model="userPassword" type="password" placeholder="请输入用户密码" placeholder-class="placeholder-style" />
         </view>
 
         <view class="input-group captcha-group">
           <input class="custom-input" v-model="captcha" placeholder="请输入验证码" placeholder-class="placeholder-style" />
-          <text class="get-captcha-btn" @click="getCaptcha">获取验证�?/text>
+          <text class="get-captcha-btn" @click="getCaptcha">获取验证码</text>
         </view>
 
         <button class="confirm-btn" hover-class="btn-hover" @click="comfirm">立即登录</button>
 
         <view class="links-group">
-          <text class="signUp-text" @click="signUp">还没有账号？点此注册新账�?/text>
+          <text class="signUp-text" @click="signUp">还没有账号？点此注册新账号</text>
         </view>
       </view>
     </view>
@@ -52,12 +52,12 @@
 
       async comfirm() {
         if (this.code === '') {
-          uni.showToast({ title: '请先获取验证�?, icon: 'none' })
+          uni.showToast({ title: '请先获取验证码', icon: 'none' })
           return
         }
 
         if (parseInt(this.captcha) !== parseInt(this.code)) {
-          uni.showToast({ title: '验证码错�?, icon: 'none' })
+          uni.showToast({ title: '验证码错误', icon: 'none' })
           return
         }
 
@@ -121,7 +121,6 @@
   display: flex;
   flex-direction: column;
   background: linear-gradient(180deg, #e8f8e8 0%, #f0faf0 40%, #e8f8e8 100%);
-  min-height: 800px;
   position: relative;
 }
 
