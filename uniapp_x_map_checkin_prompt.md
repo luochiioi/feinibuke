@@ -1788,11 +1788,20 @@ page {
 
 ---
 
-### 11.5 UTS 编译避坑指南
+### 11.5 UTS 编译 + 运行时避坑指南（必读）
 
-> **配套文件**：`UTS_COMPILE_PITFALLS.md`（文件位置：`map_new/UTS_COMPILE_PITFALLS.md`）
-> 该文件记录了 Phase 1 实战中全部 20+ 条编译错误的根因与解决方案，覆盖 CSS/UTS 语法/组件架构三大类。
-> **后续所有 .uvue/.uts 文件编写前必须查阅该文档**，避免重复踩坑。
+> **配套文件**：`UTS_COMPILE_PITFALLS.md`（完整版，30+ 条规则，含运行时层）
+>
+> **黄金法则（5 条）**：
+> 1. `UTSJSONObject["prop"]` 用于 JSON 数据；**原生 SDK 回调用 `.prop`**（cast 到 UTSJSONObject → 运行时 `ClassCastException`）
+> 2. 直接 `export const/function`（不用 Pinia/defineStore）
+> 3. 内联对象 → `const v: T = {...}` 先声明再传入
+> 4. 模板中只用本地变量/函数（导入的需本地 wrapper/alias）
+> 5. Write 工具写文件（PS Set-Content 截断 UTF-8）
+>
+> **何时 `.prop` vs `["prop"]`？** 见 `UTS_COMPILE_PITFALLS.md` 第四章对照表。
+>
+> **后续所有 .uvue/.uts 文件编写前必须查阅该文档。**
 
 ---
 
