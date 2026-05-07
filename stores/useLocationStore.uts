@@ -101,10 +101,11 @@ export const useLocationStore = defineStore('location', () => {
   }
 
   function distanceTo(lat: number, lng: number): number | null {
-    if (currentLocation.value == null) return null
+    const loc = currentLocation.value
+    if (loc == null) return null
     return haversine(
-      currentLocation.value.latitude,
-      currentLocation.value.longitude,
+      (loc as LocationData).latitude,
+      (loc as LocationData).longitude,
       lat, lng
     )
   }
