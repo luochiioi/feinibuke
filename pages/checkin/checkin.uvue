@@ -1,6 +1,5 @@
 <template>
   <view class="checkin-page">
-    <!-- Header -->
     <view class="header">
       <text class="marker-title">{{ markerTitle }}</text>
       <text class="marker-coord" v-if="marker">
@@ -8,7 +7,6 @@
       </text>
     </view>
 
-    <!-- Distance & GPS info -->
     <view class="gps-section">
       <view class="gps-card" :class="withinRange ? 'in-range' : 'out-range'">
         <text class="gps-label">{{ withinRange ? '在打卡范围内' : '距离过远' }}</text>
@@ -17,7 +15,6 @@
       </view>
     </view>
 
-    <!-- Photo picker -->
     <view class="photo-section">
       <view class="photo-preview" @click="choosePhoto">
         <image v-if="photoPath" :src="photoPath" class="photo-image" />
@@ -26,32 +23,18 @@
           <text class="photo-hint">点击拍照或选择照片</text>
         </view>
       </view>
-      <text class="compress-hint" v-if="isCompressing">压缩�?..</text>
+      <text class="compress-hint" v-if="isCompressing">压缩中...</text>
     </view>
 
-    <!-- Note input -->
     <view class="note-section">
-      <text class="note-label">打卡备注（选填�?/text>
-      <textarea
-        class="note-input"
-        v-model="note"
-        placeholder="记录此刻的心�?.."
-        placeholder-class="note-placeholder"
-        maxlength="200"
-      />
+      <text class="note-label">打卡备注（选填）</text>
+      <textarea class="note-input" v-model="note" placeholder="记录此刻的心情..." placeholder-class="note-placeholder" maxlength="200" />
       <text class="note-count">{{ note.length }}/200</text>
     </view>
 
-    <!-- Submit button -->
     <view class="submit-section">
-      <button
-        class="submit-btn"
-        :class="{ disabled: !canSubmit }"
-        :disabled="!canSubmit"
-        hover-class="btn-hover"
-        @click="submitCheckIn"
-      >
-        {{ isSubmitting ? '打卡�?..' : '确认打卡' }}
+      <button class="submit-btn" :class="{ disabled: !canSubmit }" :disabled="!canSubmit" hover-class="btn-hover" @click="submitCheckIn">
+        {{ isSubmitting ? '打卡中...' : '确认打卡' }}
       </button>
     </view>
   </view>
@@ -120,7 +103,6 @@ async function choosePhoto(): Promise<void> {
         sourceType: sourceType,
         success: async (imgRes: any) => {
           let path: string = imgRes.tempFilePaths[0] as string
-
           const fileInfo = await getFileInfoAsync(path)
           if (fileInfo.size > 1024 * 1024) {
             isCompressing.value = true
@@ -136,11 +118,9 @@ async function choosePhoto(): Promise<void> {
 
 async function submitCheckIn(): Promise<void> {
   if (!withinRange.value || !marker.value) return
-
   isSubmitting.value = true
 
   try {
-    // Upload photo to cloud if available
     if (photoPath.value) {
       try {
         const fs = uni.getFileSystemManager()
@@ -157,7 +137,6 @@ async function submitCheckIn(): Promise<void> {
       }
     }
 
-    // Cloud checkin
     try {
       const markerApi = uniCloud.importObject('marker-center')
       const checkinRes = await markerApi.checkin({
@@ -185,14 +164,13 @@ async function submitCheckIn(): Promise<void> {
       })
     }
 
-    // Local update (optimistic)
     await markerStore.doCheckIn(markerId.value, photoPath.value, note.value || null)
     const completed = taskStore.checkTaskCompletion(marker.value)
 
-    uni.showToast({ title: '打卡成功�?, icon: 'success' })
+    uni.showToast({ title: '打卡成功！', icon: 'success' })
     if (completed && completed.length > 0) {
       setTimeout(() => {
-        uni.showToast({ title: `完成任务�?{completed[0].name}`, icon: 'none' })
+        uni.showToast({ title: `完成任务：${completed[0].name}`, icon: 'none' })
       }, 1000)
     }
     setTimeout(() => uni.navigateBack(), 1500)
@@ -219,7 +197,6 @@ function compressImageAsync(path: string): Promise<string> {
 .checkin-page {
   flex: 1;
   background-color: #f5f7f5;
-  min-height: 800px;
 }
 
 .header {

@@ -1,10 +1,9 @@
 <template>
   <scroll-view class="tasks-page" scroll-y>
-    <!-- Hero panel -->
     <view class="hero">
       <view class="hero-stat">
         <text class="hero-value">{{ markerStore.doneCount }}/{{ markerStore.totalCount }}</text>
-        <text class="hero-label">已打�?/text>
+        <text class="hero-label">已打卡</text>
       </view>
       <view class="hero-stat">
         <text class="hero-value">{{ taskStore.completedTaskCount }}/{{ taskStore.totalTaskCount }}</text>
@@ -16,7 +15,6 @@
       </view>
     </view>
 
-    <!-- Achievement badges -->
     <view class="section-header">
       <text class="section-title">成就徽章</text>
     </view>
@@ -26,40 +24,23 @@
       </view>
     </scroll-view>
 
-    <!-- Mini footprint map -->
     <view class="section-header">
       <text class="section-title">足迹地图</text>
     </view>
     <view class="mini-map-container">
-      <map
-        class="mini-map"
-        :latitude="miniLat"
-        :longitude="miniLng"
-        :scale="miniScale"
-        :markers="miniMarkers"
-        :enable-scroll="false"
-        :enable-zoom="false"
-      />
+      <map class="mini-map" :latitude="miniLat" :longitude="miniLng" :scale="miniScale" :markers="miniMarkers" :enable-scroll="false" :enable-zoom="false" />
     </view>
 
-    <!-- Filter bar -->
     <view class="filter-bar">
-      <view
-        v-for="f in filters"
-        :key="f.key"
-        class="filter-chip"
-        :class="{ active: activeFilter === f.key }"
-        @click="activeFilter = f.key"
-      >
-        <text>{{ f.label }}</text>
+      <view v-for="f in filters" :key="f.key" class="filter-chip" :class="{ active: activeFilter === f.key }" @click="activeFilter = f.key">
+        <text class="filter-chip-text">{{ f.label }}</text>
       </view>
     </view>
 
-    <!-- Marker list -->
     <view class="marker-list">
       <view v-if="filteredMarkers.length === 0" class="empty-state">
         <text class="empty-icon">📍</text>
-        <text class="empty-text">暂无打卡�?/text>
+        <text class="empty-text">暂无打卡点</text>
       </view>
       <view v-for="item in filteredMarkers" :key="item.id" class="spot-card">
         <view class="spot-status-dot" :class="item.checked ? 'done' : 'pending'"></view>
@@ -75,7 +56,6 @@
       </view>
     </view>
 
-    <!-- Bottom spacer -->
     <view style="height: 40rpx;"></view>
   </scroll-view>
 </template>
@@ -100,11 +80,10 @@ const activeFilter = ref<FilterMode>('all')
 
 const filters = [
   { key: 'all' as FilterMode, label: '全部' },
-  { key: 'pending' as FilterMode, label: '待打�? },
-  { key: 'done' as FilterMode, label: '已打�? }
+  { key: 'pending' as FilterMode, label: '待打卡' },
+  { key: 'done' as FilterMode, label: '已打卡' }
 ]
 
-// Link tasks to markers for display
 const markersWithTasks = computed(() =>
   markerStore.markers.map(m => {
     const linkedTask = taskStore.tasks.find(
@@ -120,7 +99,6 @@ const filteredMarkers = computed(() => {
   return markersWithTasks.value
 })
 
-// Mini map
 const miniMarkers = computed(() =>
   markerStore.displayMarkers.slice(0, 20)
 )
@@ -150,7 +128,7 @@ function focusOnMap(marker: Marker): void {
 function deleteSpot(item: Marker): void {
   uni.showModal({
     title: '确认删除',
-    content: `确定要删�?${item.title}"吗？`,
+    content: `确定要删除"${item.title}"吗？`,
     success: (res: any) => {
       if (res.confirm) {
         markerStore.deleteMarker(item.id)
@@ -164,16 +142,13 @@ function deleteSpot(item: Marker): void {
 .tasks-page {
   flex: 1;
   background-color: #f5f7f5;
-  min-height: 800px;
 }
 
-/* Hero */
 .hero {
   display: flex;
   flex-direction: row;
   padding: 32rpx;
   background: linear-gradient(135deg, #2ecc71, #27ae60);
-  
 }
 
 .hero-stat {
@@ -194,7 +169,6 @@ function deleteSpot(item: Marker): void {
   color: rgba(255, 255, 255, 0.8);
 }
 
-/* Section */
 .section-header {
   padding: 32rpx 32rpx 16rpx;
 }
@@ -205,7 +179,6 @@ function deleteSpot(item: Marker): void {
   color: #1a1a1a;
 }
 
-/* Badges */
 .badge-scroll {
   padding: 0 32rpx;
 }
@@ -216,7 +189,6 @@ function deleteSpot(item: Marker): void {
   padding-bottom: 16rpx;
 }
 
-/* Mini map */
 .mini-map-container {
   margin: 0 32rpx;
   height: 280rpx;
@@ -230,7 +202,6 @@ function deleteSpot(item: Marker): void {
   height: 100%;
 }
 
-/* Filter */
 .filter-bar {
   display: flex;
   flex-direction: row;
@@ -245,17 +216,27 @@ function deleteSpot(item: Marker): void {
   display: flex;
   align-items: center;
   justify-content: center;
+  margin-right: 16rpx;
 }
 
+.filter-chip:last-child {
+  margin-right: 0;
+}
 
+.filter-chip-text {
+  font-size: 26rpx;
+  color: #888888;
+}
 
 .filter-chip.active {
   background-color: #2ecc71;
 }
 
+.filter-chip.active .filter-chip-text {
+  color: #ffffff;
+  font-weight: 500;
+}
 
-
-/* Marker list */
 .marker-list {
   padding: 0 32rpx;
   display: flex;
@@ -286,6 +267,7 @@ function deleteSpot(item: Marker): void {
   background-color: #ffffff;
   border-radius: 16rpx;
   padding: 24rpx;
+  margin-bottom: 12rpx;
 }
 
 .spot-status-dot {
@@ -295,18 +277,14 @@ function deleteSpot(item: Marker): void {
   flex-shrink: 0;
 }
 
-.spot-status-dot.done {
-  background-color: #2ecc71;
-}
-
-.spot-status-dot.pending {
-  background-color: #f39c12;
-}
+.spot-status-dot.done { background-color: #2ecc71; }
+.spot-status-dot.pending { background-color: #f39c12; }
 
 .spot-info {
   flex: 1;
   display: flex;
   flex-direction: column;
+  margin-left: 16rpx;
 }
 
 .spot-name {
@@ -333,6 +311,7 @@ function deleteSpot(item: Marker): void {
 .action-link {
   font-size: 26rpx;
   color: #2ecc71;
+  margin-left: 20rpx;
 }
 
 .action-link.danger {

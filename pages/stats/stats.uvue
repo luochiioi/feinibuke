@@ -1,14 +1,12 @@
 <template>
   <scroll-view class="stats-page" scroll-y>
-    <!-- Hero panel -->
     <view class="hero-panel">
       <text class="hero-tag">TRIP INSIGHTS</text>
       <text class="hero-rate">{{ markerStore.completionRate }}%</text>
-      <text class="hero-sub">{{ markerStore.doneCount }} / {{ markerStore.totalCount }} 已完�?/text>
+      <text class="hero-sub">{{ markerStore.doneCount }} / {{ markerStore.totalCount }} 已完成</text>
       <ProgressBar :value="markerStore.completionRate" color="#ffffff" :height="10" :showLabel="false" />
     </view>
 
-    <!-- Stats grid -->
     <view class="stats-grid">
       <view class="stat-card">
         <text class="stat-value">{{ markerStore.totalCount }}</text>
@@ -16,19 +14,18 @@
       </view>
       <view class="stat-card">
         <text class="stat-value done">{{ markerStore.doneCount }}</text>
-        <text class="stat-label">已打�?/text>
+        <text class="stat-label">已打卡</text>
       </view>
       <view class="stat-card">
         <text class="stat-value pending">{{ markerStore.pendingMarkers.length }}</text>
-        <text class="stat-label">待打�?/text>
+        <text class="stat-label">待打卡</text>
       </view>
       <view class="stat-card">
         <text class="stat-value">{{ markerStore.completionRate }}%</text>
-        <text class="stat-label">完成�?/text>
+        <text class="stat-label">完成率</text>
       </view>
     </view>
 
-    <!-- Task stats -->
     <view class="section-header">
       <text class="section-title">任务进度</text>
     </view>
@@ -40,7 +37,6 @@
       <ProgressBar :value="taskStore.totalTaskCount > 0 ? Math.round(taskStore.completedTaskCount / taskStore.totalTaskCount * 100) : 0" />
     </view>
 
-    <!-- Achievement stats -->
     <view class="section-header">
       <text class="section-title">成就进度</text>
     </view>
@@ -52,14 +48,13 @@
       <ProgressBar :value="Math.round(achievementStore.unlockedCount / 7 * 100)" color="#f39c12" />
     </view>
 
-    <!-- Checkin timeline -->
     <view class="section-header">
       <text class="section-title">打卡记录</text>
     </view>
     <view class="timeline">
       <view v-if="markerStore.checkedMarkers.length === 0" class="empty-state">
         <text class="empty-icon">🏃</text>
-        <text class="empty-text">还没有打卡记录，快去地图上探索吧�?/text>
+        <text class="empty-text">还没有打卡记录，快去地图上探索吧！</text>
       </view>
       <view v-for="m in markerStore.checkedMarkers" :key="m.id" class="timeline-item">
         <view class="timeline-dot"></view>
@@ -99,10 +94,8 @@ onShow((): void => {
 .stats-page {
   flex: 1;
   background-color: #f5f7f5;
-  min-height: 800px;
 }
 
-/* Hero */
 .hero-panel {
   background: linear-gradient(135deg, #17352f, #1a4a3a);
   padding: 48rpx 32rpx 40rpx;
@@ -128,7 +121,6 @@ onShow((): void => {
   color: rgba(255, 255, 255, 0.7);
 }
 
-/* Stats grid */
 .stats-grid {
   display: flex;
   flex-direction: row;
@@ -164,7 +156,6 @@ onShow((): void => {
   color: #999999;
 }
 
-/* Section */
 .section-header {
   padding: 16rpx 32rpx 8rpx;
 }
@@ -200,7 +191,6 @@ onShow((): void => {
   color: #333333;
 }
 
-/* Timeline */
 .timeline {
   padding: 16rpx 32rpx;
   position: relative;

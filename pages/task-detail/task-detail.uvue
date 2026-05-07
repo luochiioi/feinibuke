@@ -1,27 +1,23 @@
 <template>
   <scroll-view class="detail-page" scroll-y>
     <view v-if="task" class="content">
-      <!-- Task hero -->
       <view class="task-hero" :class="task.status === 'completed' ? 'done' : 'pending'">
-        <text class="task-status-icon">{{ task.status === 'completed' ? '�? : '�? }}</text>
+        <text class="task-status-icon">{{ task.status === 'completed' ? 'OK' : '...' }}</text>
         <text class="task-name">{{ task.name }}</text>
         <text class="task-desc">{{ task.description }}</text>
-        <text class="task-reward">🎁 {{ task.reward }}</text>
+        <text class="task-reward">{{ task.reward }}</text>
       </view>
 
-      <!-- Linked marker -->
       <view class="section">
-        <text class="section-title">关联打卡�?/text>
+        <text class="section-title">关联打卡点</text>
         <view class="linked-marker" v-if="linkedMarker">
           <view class="marker-status-dot" :class="linkedMarker.checked ? 'done' : 'pending'"></view>
           <view class="marker-info">
             <text class="marker-title">{{ linkedMarker.title }}</text>
-            <text class="marker-coords">
-              {{ linkedMarker.latitude.toFixed(4) }}, {{ linkedMarker.longitude.toFixed(4) }}
-            </text>
+            <text class="marker-coords">{{ linkedMarker.latitude.toFixed(4) }}, {{ linkedMarker.longitude.toFixed(4) }}</text>
           </view>
           <view class="marker-action">
-            <text class="go-btn" @click="goToMarker">前往打卡</text>
+            <text class="go-btn" @click="goToMarker">前往</text>
           </view>
         </view>
         <view v-else class="not-found">
@@ -29,13 +25,12 @@
         </view>
       </view>
 
-      <!-- Status info -->
       <view class="section">
-        <text class="section-title">状�?/text>
+        <text class="section-title">状态</text>
         <view class="info-row">
-          <text class="info-label">任务状�?/text>
+          <text class="info-label">任务状态</text>
           <text class="info-value" :class="task.status === 'completed' ? 'done' : 'pending'">
-            {{ task.status === 'completed' ? '已完�? : '待完�? }}
+            {{ task.status === 'completed' ? '已完成' : '待完成' }}
           </text>
         </view>
         <view class="info-row" v-if="task.completedAt">
@@ -46,8 +41,8 @@
     </view>
 
     <view v-else class="empty">
-      <text class="empty-icon">📋</text>
-      <text class="empty-text">任务不存�?/text>
+      <text class="empty-icon">?</text>
+      <text class="empty-text">任务不存在</text>
     </view>
   </scroll-view>
 </template>
@@ -77,7 +72,6 @@ onShow((): void => {
   const currentPage = pages[pages.length - 1] as any
   const query = currentPage?.$page?.options ?? {}
   taskId.value = query.id ?? ''
-
   taskStore.loadFromStorage()
   markerStore.loadFromStorage()
 })
@@ -93,14 +87,12 @@ function goToMarker(): void {
 .detail-page {
   flex: 1;
   background-color: #f5f7f5;
-  min-height: 800px;
 }
 
 .content {
   padding: 0;
 }
 
-/* Task hero */
 .task-hero {
   padding: 48rpx 32rpx;
   display: flex;
@@ -139,7 +131,6 @@ function goToMarker(): void {
   margin-top: 8rpx;
 }
 
-/* Sections */
 .section {
   padding: 24rpx 32rpx;
   background-color: #ffffff;
@@ -153,7 +144,6 @@ function goToMarker(): void {
   margin-bottom: 16rpx;
 }
 
-/* Linked marker */
 .linked-marker {
   display: flex;
   flex-direction: row;
@@ -176,6 +166,7 @@ function goToMarker(): void {
   flex: 1;
   display: flex;
   flex-direction: column;
+  margin-left: 16rpx;
 }
 
 .marker-title {
@@ -202,9 +193,11 @@ function goToMarker(): void {
   padding: 20rpx;
 }
 
+.not-found text {
+  font-size: 26rpx;
+  color: #999999;
+}
 
-
-/* Info rows */
 .info-row {
   display: flex;
   flex-direction: row;
@@ -233,7 +226,6 @@ function goToMarker(): void {
   font-weight: 500;
 }
 
-/* Empty */
 .empty {
   display: flex;
   flex-direction: column;
