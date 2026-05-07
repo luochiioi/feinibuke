@@ -120,28 +120,40 @@ java.lang.ClassCastException:
 
 **为什么更早发现不了**:Phase 1.5 修 `loadMarkers` 之前,markers 装的是 UTSJSONObject(假 cast),插件碰巧能消化。Phase 1.5 让 markers 真正 typed 之后,反而被插件拒收。**修了一个 bug 暴露了下一层 bug**,这是 Phase 1.5 链式发现的延续。
 
-**解法 — 边界上转成 UTSJSONObject[]**:
+**❌ 失败的中间方案 — 边界上转成 UTSJSONObject[]**(已废弃):
+```ts
+export const displayMarkers = computed<UTSJSONObject[]>(() => { ... })  // ❌ 仍 ClassCastException
+```
+真机 logcat 反馈:`io.dcloud.uts.UTSJSONObject cannot be cast to ...Marker`。
+**插件 setMarkers 内部对每一项都做 `as Marker` 强转,UTSJSONObject 也不放过。** 所以这条路彻底走不通。
+
+**✅ 终极解法 — 直接构造 SDK 自己的 `Marker[]`**:
 ```ts
 // stores/useMarkerStore.uts
-export const displayMarkers = computed<UTSJSONObject[]>(() => {
-  const result: UTSJSONObject[] = []
+// 重命名为 CheckinMarker 之后,本文件内 `Marker` 唯一指向 SDK 的
+// uts.sdk.modules.DCloudUniMapTencent.Marker(uniapp x 自动注入,无需 import)
+export const displayMarkers = computed<Marker[]>(() => {
+  const result: Marker[] = []
   markers.value.forEach(m => {
-    const mm = {} as UTSJSONObject
-    mm["id"] = m.id
-    mm["latitude"] = m.latitude
-    mm["longitude"] = m.longitude
-    mm["title"] = m.title
-    mm["iconPath"] = m.iconPath
-    mm["width"] = m.width
-    mm["height"] = m.height
-    result.push(mm)
+    result.push({
+      id: m.id, latitude: m.latitude, longitude: m.longitude,
+      title: m.title, iconPath: m.iconPath, width: m.width, height: m.height
+    } as Marker)  // ← 直接断言 SDK Marker,字面量构造
   })
   return result
 })
 ```
 
-模板:`<map :markers="displayMarkers" />`(不再用 `markers`)。
-应用内部逻辑(findById、filter、m.checked)继续用 typed `markers`——业务态留在自己的 namespace 里。
+参考:`uni_modules/uni-openLocation/pages/openLocation/openLocation.uvue` 同款写法
+(`{ id, latitude, longitude, iconPath, width, height } as Marker`)。
+
+模板:`<map :markers="displayMarkers" />`。每个 `<map>` 实例都得通过这条边界,
+**不要直接绑 `markers.value` 或它的 `.slice()` ——那是 `CheckinMarker[]`**,
+Vue 包装一层后类名变成 `CheckinMarkerReactiveObject`,仍被插件 cast 拒。
+缩略地图等场景需要单独导出 SDK Marker 版本的 computed(本仓库的 `miniMapMarkers`)。
+
+应用内部逻辑(findById、filter、m.checked)继续用 typed `markers: CheckinMarker[]`
+——业务态留在自己的 namespace 里。
 
 **通用规则**:
 1. **app 的 type 名不要和已知 SDK type 重合**(Marker/Task/User/Location 等通用名优先重命名为 `CheckinMarker` / `AppTask` / `AppUser` / `LocationData`)
@@ -164,7 +176,14 @@ export const displayMarkers = computed<UTSJSONObject[]>(() => {
 - `pages/index/index.uvue`、`pages/tasks/tasks.uvue`
 
 `uni_modules/uni-openLocation/...` 是第三方插件示例,使用的是 SDK 自己的 `Marker`(不同 namespace),不动。
-模板侧仍保留 `displayMarkers: UTSJSONObject[]` 边界,`<map :markers="displayMarkers">`。`CheckinMarker` 仅出现在业务态,SDK `Marker` 仅出现在边界,二者再无重名。
+
+**修复执行记录(2026-05-07,补丁 #2)**: UTSJSONObject 边界方案被真机 logcat 证伪
+(`UTSJSONObject cannot be cast to ...Marker`)。改为直接构造 SDK `Marker[]`:
+- `displayMarkers: Marker[]`(SDK 原生),用 `{...} as Marker` 字面量构造
+- 新增 `miniMapMarkers = displayMarkers.value.slice(0, 20)` 给 tasks.uvue 缩略地图用,
+  替换原本直接绑 `markers.value.slice()` 的写法(后者 = 被拒的 CheckinMarkerReactiveObject)
+- **教训**:UTSJSONObject 不是万能兜底。某些 SDK(腾讯地图)对 prop 做强类型断言,
+  只能给它正主。重命名让出名字 → 用名字构造 → 才闭环。
 
 ---
 

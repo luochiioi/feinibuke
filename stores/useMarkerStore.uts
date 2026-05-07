@@ -15,34 +15,35 @@ export const completionRate = computed(() =>
   totalCount.value === 0 ? 0 : Math.round((doneCount.value / totalCount.value) * 100)
 )
 
-// displayMarkers — 把 app 的 typed CheckinMarker[] 转成腾讯地图插件期待的 UTSJSONObject[]。
+// displayMarkers — 把 app 的 typed CheckinMarker[] 构造成腾讯地图插件期待的 Marker[]。
 //
-// 历史 logcat（2026-05-07，方案 A 重命名前）：
-//   java.lang.ClassCastException:
-//     uni.UNIC0495C1.Marker cannot be cast to uts.sdk.modules.DCloudUniMapTencent.Marker
-//
-// 当时 app 类型也叫 Marker，与插件 uts.sdk.modules.DCloudUniMapTencent.Marker 同名但
-// 是两个 Kotlin 类。插件 setMarkers 把入参逐个 cast 到自己的 Marker 类，cast 失败 →
-// ClassCastException → Vue watcher 反复抛 → ANR。
-//
-// 方案 A 修复：把 app 类型重命名为 CheckinMarker，彻底消除同名冲突。
-// 边界仍然走 UTSJSONObject[]（仅输出腾讯 Marker 文档定义的字段：
-// id/latitude/longitude/title/iconPath/width/height），插件可直接消化。
-export const displayMarkers = computed<UTSJSONObject[]>(() => {
-  const result: UTSJSONObject[] = []
+// 演进史（2026-05-07）：
+//   1) 一开始 app 自己的类型也叫 Marker → 与 SDK 同名冲突 → ClassCastException
+//   2) 重命名为 CheckinMarker 后，边界改 UTSJSONObject[] 兜底 → 仍然 ClassCastException
+//      （插件 setMarkers 即使收到 UTSJSONObject 也强行 `as Marker` 拒掉）
+//   3) 最终方案：直接构造 SDK 自己的 Marker[]。重命名让 `Marker` 这个名字在本文件内
+//      唯一指向 uts.sdk.modules.DCloudUniMapTencent.Marker（uniapp x 自动注入），
+//      用 `{ ... } as Marker` 字面量构造即可，参考 uni_modules/uni-openLocation
+//      的 openLocation.uvue 同款写法。
+export const displayMarkers = computed<Marker[]>(() => {
+  const result: Marker[] = []
   markers.value.forEach(m => {
-    const mm = {} as UTSJSONObject
-    mm["id"] = m.id
-    mm["latitude"] = m.latitude
-    mm["longitude"] = m.longitude
-    mm["title"] = m.title
-    mm["iconPath"] = m.iconPath
-    mm["width"] = m.width
-    mm["height"] = m.height
-    result.push(mm)
+    result.push({
+      id: m.id,
+      latitude: m.latitude,
+      longitude: m.longitude,
+      title: m.title,
+      iconPath: m.iconPath,
+      width: m.width,
+      height: m.height
+    } as Marker)
   })
   return result
 })
+
+// miniMapMarkers — tasks.uvue 顶部缩略地图用，限制 20 个，节省渲染开销。
+// 同样是 SDK 原生 Marker[]，避免 CheckinMarkerReactiveObject 被插件拒。
+export const miniMapMarkers = computed<Marker[]>(() => displayMarkers.value.slice(0, 20))
 
 export async function loadFromStorage(): Promise<void> {
   isLoading.value = true

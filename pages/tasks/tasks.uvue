@@ -13,7 +13,7 @@
     </scroll-view>
     <view class="section-header"><text class="section-title">足迹地图</text></view>
     <view class="mini-map-container">
-      <map class="mini-map" :latitude="miniLat" :longitude="miniLng" :scale="miniScale" :markers="miniMarkers" :enable-scroll="false" :enable-zoom="false" />
+      <map class="mini-map" :latitude="miniLat" :longitude="miniLng" :scale="miniScale" :markers="miniMapMarkers" :enable-scroll="false" :enable-zoom="false" />
     </view>
     <view class="filter-bar">
       <view v-for="f in filters" :key="f.key" class="filter-chip" :class="{ active: activeFilter === f.key }" @click="setFilter(f.key)">
@@ -38,7 +38,7 @@
 
 <script setup lang="uts">
 import { ref, computed, onShow } from 'vue'
-import { markers, checkedMarkers, totalCount, doneCount, loadFromStorage as loadMarkers, deleteMarker, findById } from '@/stores/useMarkerStore'
+import { markers, checkedMarkers, totalCount, doneCount, loadFromStorage as loadMarkers, deleteMarker, findById, miniMapMarkers } from '@/stores/useMarkerStore'
 import { completedTaskCount, totalTaskCount, loadFromStorage as loadTasks } from '@/stores/useTaskStore'
 import { achievements, unlockedCount } from '@/stores/useAchievementStore'
 import { requestFocus } from '@/stores/useMapStore'
@@ -59,7 +59,6 @@ const filteredMarkers = computed(() => {
   return markers.value
 })
 
-const miniMarkers = computed(() => markers.value.slice(0, 20))
 const miniLat = computed(() => { if (markers.value.length > 0) return markers.value[0].latitude; return 39.9163 })
 const miniLng = computed(() => { if (markers.value.length > 0) return markers.value[0].longitude; return 116.3972 })
 const miniScale = ref<number>(4)
