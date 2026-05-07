@@ -60,10 +60,10 @@ const filteredMarkers = computed(() => {
 })
 
 // miniMapMarkers — 缩略地图绑定，构造 SDK 原生 Marker[]，限制 20 个。
-// 同 pages/index/index.uvue：只能放 .uvue 文件里，避免 UTS .uts 文件中 Marker
-// 名字解析歧义（error17）。详见 UTS_COMPILE_PITFALLS §F。
-const miniMapMarkers = computed<Marker[]>((): Marker[] => {
-  const result: Marker[] = []
+// 关键：全部使用 `as` cast 形式，不使用 `: Marker[]` 类型注解，避免 error17。
+// 详见 pages/index/index.uvue 顶部注释 + UTS_COMPILE_PITFALLS §F。
+const miniMapMarkers = computed(() => {
+  const result = [] as Marker[]
   const slice = markers.value.slice(0, 20)
   slice.forEach((m: CheckinMarker) => {
     result.push({

@@ -200,9 +200,32 @@ namespace —— `result: Marker[]` 解析到 `uni.UNIC0495C1.Marker`(app 命名
 (SDK 真身)。两种 Marker 在 Kotlin 名义类型下是不同的类,`result.push(... as Marker)`
 触发参数类型不匹配。
 
-`.uvue` 文件不会有这个问题——上下文里 `Marker` 名字解析一致,始终是 SDK Marker。
-原因可能是 .uvue 模板里 `<map :markers>` 强制给 `Marker` 唯一绑定,而 .uts 文件
-没有这个锚点,SDK 自动注入和 app 命名空间合成 alias 都可见。
+**⚠️ `.uvue` 文件并不能完全规避**: 实测 `.uvue` 文件里 `computed<Marker[]>` 或
+`const result: Marker[] = []` 这种**类型注解**位置仍会把 `Marker` 解析到
+`uni.UNIC0495C1.Marker`(app 合成 alias),而同文件里 `} as Marker` cast 解析到
+SDK 真身,触发同样的 error17。.uvue 优势仅限于"宿主 `<map>` 锚定 SDK Marker",
+但脚本里独立的注解位置仍是歧义的。
+
+**真正的规避手段:不要在 SDK 类型上写"类型注解",全用 `as` cast**
+
+对照 `uni_modules/uni-openLocation/pages/openLocation/openLocation.uvue` 同款写法:
+```ts
+const markers = ref([] as Marker[])              // ✅ cast,不是 : Marker[]
+markers.value = [{ ... } as Marker] as Marker[]  // ✅ 双 cast
+```
+
+我们最终采用的版本(也 work):
+```ts
+const displayMarkers = computed(() => {           // ❌ 别写 computed<Marker[]>
+  const result = [] as Marker[]                   // ✅ cast,不是 : Marker[] = []
+  markers.value.forEach((m: CheckinMarker) => {   // CheckinMarker 是我们自己的,不冲突
+    result.push({ ... } as Marker)                // ✅ as 同一边
+  })
+  return result
+})
+```
+
+口诀: **SDK 类型只写在 `as` 后面,绝不写在冒号 `:` 后面或 `<>` 泛型参数里。**
 
 **最终落点**:
 - `stores/useMarkerStore.uts` **不导出** `displayMarkers` / `miniMapMarkers`,

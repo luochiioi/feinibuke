@@ -73,11 +73,14 @@ function ensureMapCtx(): MapContext | null {
 }
 
 // displayMarkers — 把 app 的 typed CheckinMarker[] 构造为 SDK 原生 Marker[]。
-// 必须放在 .uvue 文件里（不能放 .uts 里），原因见 UTS_COMPILE_PITFALLS §F：
-// .uts 文件中 `Marker` 名字在类型注解 / as 转换两处会被解析到不同 namespace，
-// 触发 error17 编译错误。.uvue 上下文里 Marker 解析始终一致到 SDK Marker。
-const displayMarkers = computed<Marker[]>((): Marker[] => {
-  const result: Marker[] = []
+// 关键：全部使用 `as` cast 形式，不使用 `: Marker[]` 类型注解。
+// 原因见 UTS_COMPILE_PITFALLS §F：UTS 编译器在类型注解位置把 `Marker` 解析到
+// 应用合成的 `uni.UNIC0495C1.Marker`，而 `as Marker` cast 解析到 SDK 的
+// `uts.sdk.modules.DCloudUniMapTencent.Marker`，两处不一致触发 error17。
+// 按 uni_modules/uni-openLocation/pages/openLocation/openLocation.uvue 同款写法
+// （全 cast，无注解）规避。
+const displayMarkers = computed(() => {
+  const result = [] as Marker[]
   markers.value.forEach((m: CheckinMarker) => {
     result.push({
       id: m.id,
