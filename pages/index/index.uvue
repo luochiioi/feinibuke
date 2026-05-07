@@ -13,7 +13,7 @@
       </view>
     </view>
 
-    <map id="mainMap" class="map-component" :latitude="latitude" :longitude="longitude" :scale="scale" :markers="displayMarkers" show-location coord-type="gcj02" @markertap="onMarkerTap" @longpress="onMapLongPress" @regionchange="onRegionChange">
+    <map id="mainMap" class="map-component" :latitude="latitude" :longitude="longitude" :scale="scale" show-location coord-type="gcj02" @markertap="onMarkerTap" @longpress="onMapLongPress" @regionchange="onRegionChange">
       <cover-view class="floating-add-btn" @click="goAddMarker">
         <cover-view class="add-icon">+</cover-view>
         <cover-view class="add-label">在此新增</cover-view>
@@ -72,22 +72,17 @@ function ensureMapCtx(): MapContext | null {
   return uni.createMapContext('mainMap')
 }
 
-// displayMarkers — 把 app 的 typed CheckinMarker[] 构造为 SDK 原生 Marker[]。
-// 关键：全部使用 `as` cast 形式，不使用 `: Marker[]` 类型注解。
-// 原因见 UTS_COMPILE_PITFALLS §F：UTS 编译器在类型注解位置把 `Marker` 解析到
-// 应用合成的 `uni.UNIC0495C1.Marker`，而 `as Marker` cast 解析到 SDK 的
-// `uts.sdk.modules.DCloudUniMapTencent.Marker`，两处不一致触发 error17。
-// 按 uni_modules/uni-openLocation/pages/openLocation/openLocation.uvue 同款写法
-// （全 cast，无注解）规避。
-const displayMarkers = computed(() => markers.value.map((m: CheckinMarker) => ({
-  id: m.id,
-  latitude: m.latitude,
-  longitude: m.longitude,
-  title: m.title,
-  iconPath: m.iconPath,
-  width: m.width,
-  height: m.height
-} as Marker)))
+// TODO(下一会话 P1): 重新接入 :markers 绑定。
+// 本会话尝试了 4 种写法都失败，全部触发 UTS 编译器 error17 / Return type mismatch:
+//   - UTSJSONObject[] 边界（编译过 / 运行时 ClassCastException）
+//   - .uts store 内 computed<Marker[]>（编译 error17）
+//   - .uvue computed<Marker[]> + : Marker[] 注解（编译 error17）
+//   - .uvue 单 cast `.map(m => ({...} as Marker))`（编译 error17 反向版）
+// 详见 UTS_COMPILE_PITFALLS §F。
+// 暂时不绑 :markers,先保证 app 能编译能启动。下一会话换路:
+//   方案 1: imperative API,通过 MapContext.addMarker / setMarkers 主动调用
+//   方案 2: 模板字面量 `<map :markers="[{...}]">` 直接写死(动态化用 v-if 切换)
+//   方案 3: 把 displayMarkers 写在第三方插件的 .uvue 文件 namespace 里(同 openLocation)
 
 const dist = computed(() => {
   const m = activeMarker.value

@@ -1846,6 +1846,36 @@ page {
 > **理由**：腾讯地图、uniCloud、uni-id 等 SDK 各自定义同名类型，在 UTS Kotlin 名义类型下会触发 ClassCastException，且 Vue reactive 包装一层后包装类（`MarkerReactiveObject`）仍被拒。一旦撞名只能重命名，治标的边界转换都无效。
 >
 > **执行状态（2026-05-07）**：`Marker → CheckinMarker` 已在 app 全量落地（types/stores/utils/pages 共 10 文件）。后续若新增打卡点类型，**直接用 `CheckinMarker`，不要再起名 `Marker`**；其他通用名（Task/User/Region/Event 等）按表执行。
+>
+> ---
+>
+> **🔥 `<map :markers>` 反向推导陷阱（2026-05-07 5 轮失败后定，必读）**
+>
+> 本会话尝试用 SDK 原生 `Marker[]` 给 `<map :markers>` 喂数据，5 种写法全部失败：
+>
+> | 写法 | 编译 | 运行 |
+> |------|------|------|
+> | typed `Marker[]`（与 SDK 同名） | ✅ | ❌ ClassCastException |
+> | `displayMarkers: UTSJSONObject[]` 兜底 | ✅ | ❌ UTSJSONObject 也被 setMarkers 强转拒 |
+> | `.uts` store 内构造 SDK Marker[] | ❌ error17 | — |
+> | `.uvue` 内 `: Marker[]` 注解 + cast | ❌ error17 | — |
+> | `.uvue` 内单 cast `.map(m => ({...} as Marker))` | ❌ Return type mismatch | — |
+>
+> **核心结论**：`<map :markers>` 模板绑定会**反向推导**回脚本侧 computed 的返回类型，
+> 期望的是 app 命名空间合成的 `uni.UNIC0495C1.Marker[]` typealias，而 cast 出来
+> 的是 SDK 真身 `uts.sdk.modules.DCloudUniMapTencent.Marker`。Kotlin 名义类型
+> 系统下两者不等价，无论怎么写 cast 都对不上。
+>
+> **新功能开发期间，禁止用 `<map :markers="reactiveX">` 这种 reactive prop 形式**，
+> 直到下面的可行方案至少一种被验证：
+>
+> 1. **imperative `MapContext` API**：用 `uni.createMapContext('mapId').addMarker({...}, {success, fail})` 命令式调用，绕开 prop 反向推导。
+> 2. **模板字面量直写**：`<map :markers="[{id:1, latitude:..., ...} as Marker]">` 直接在模板里写字面量，模板上下文里 prop 期望类型与表达式直接匹配，不走反向推导。
+> 3. **借壳第三方 .uvue 命名空间**：把 markers 构造放到 `uni_modules/your-plugin/pages/x.uvue` 里，那里命名空间隔离，SDK Marker 唯一可见（参考 `uni-openLocation`）。
+>
+> **现状（2026-05-07）**：`pages/index/index.uvue` 和 `pages/tasks/tasks.uvue`
+> 的 `<map>` 已**临时移除 `:markers` 绑定**，地图能渲染但看不到打卡点。
+> P1 任务：选定上面任一方案恢复打卡点显示。详见 `UTS_COMPILE_PITFALLS.md §F`。
 
 ---
 

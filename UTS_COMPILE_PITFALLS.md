@@ -107,7 +107,7 @@ return arr ?? []
 
 ---
 
-### F. SDK 类型重名碰撞 — typed `Marker[]` 不能直接传给 `<map :markers>` ✅ 已修复(方案 A 重命名,2026-05-07)
+### F. SDK 类型重名碰撞 — `<map :markers>` 反向推导导致 error17 ⚠️ 未解决(2026-05-07,5 轮失败)
 
 **真机 logcat(2026-05-07,导致空白页 + ANR 卡死)**:
 ```
@@ -238,6 +238,77 @@ const displayMarkers = computed(() => {           // ❌ 别写 computed<Marker[
 > SDK boundary computed 必须写在 `.uvue` 里,不能写在 `.uts` store 里。
 > store 只暴露业务态(typed CheckinMarker[]),SDK shape 转换在页面边界完成。
 > 这等同于"DTO at the boundary"模式 —— 业务态和外部接口态在不同文件分层。
+
+---
+
+**修复执行记录(2026-05-07,补丁 #4 — 仍然失败)**:
+
+按补丁 #3 的口诀"SDK 类型只写在 as 后面"改完后,把 `displayMarkers` 写成
+单 cast 形式 `markers.value.map((m) => ({...} as Marker))`,期望让 `.map()`
+推断结果数组类型为 SDK Marker[]。结果编译器报新错误:
+
+```
+Return type mismatch: expected 'uni.UNIC0495C1.Marker',
+                     actual   'uts.sdk.modules.DCloudUniMapTencent.Marker'.
+at pages/index/index.uvue:90:5  } as Marker)))
+```
+
+**新发现 — 模板反向推导**:
+`<map :markers="displayMarkers" />` 模板绑定会**把 prop 期待类型反向推导回脚本侧
+computed 的返回类型**。腾讯地图插件的 `<map>` 组件 `:markers` prop 在 app 命名空间
+里被合成为 `uni.UNIC0495C1.Marker[]`(typealias),编译器拿这个去校验我们 computed
+的返回值,而我们 `as Marker` cast 出来的是 SDK 真身 `uts.sdk.modules.DCloudUniMapTencent.Marker`,
+两者在 Kotlin 名义类型下不等价 → return type mismatch。
+
+**所以补丁 #2/#3 的"`as Marker`"路线在脚本侧根本无法满足模板的反向推导**。
+
+---
+
+**本会话尝试 5 种写法,全部失败**:
+
+| 编号 | 形式 | 编译 | 运行 |
+|------|------|------|------|
+| 1 | `Marker[]` (与 SDK 同名) | ✅ | ❌ ClassCastException(我们的 Marker → SDK Marker 失败) |
+| 2 | 重命名 `CheckinMarker` + `displayMarkers: UTSJSONObject[]` | ✅ | ❌ ClassCastException(UTSJSONObject → SDK Marker 仍失败) |
+| 3 | `.uts store` 内 `computed<Marker[]>` 构造 SDK Marker | ❌ error17 | — |
+| 4 | `.uvue` 内 `: Marker[]` 注解 + `as Marker` cast | ❌ error17 | — |
+| 5 | `.uvue` 内单 cast `.map(m => ({...} as Marker))` | ❌ Return type mismatch | — |
+
+**核心结论**:
+> 在 `<map :markers>` reactive prop 路径上,UTS 5.07 编译器对 SDK Marker 的
+> 名义类型识别**无法被 cast 路径满足**。脚本侧任何形式构造 SDK `Marker[]`
+> 都会和模板反向推导出来的"app namespace 合成 alias"对不上。
+> 这是 UTS 编译器/uniapp x 类型系统的实际限制,不是我们写法的问题。
+
+---
+
+**未来会话 P1 候选方案**(本会话已暂停 `<map :markers>` 绑定,先保证 app 编译启动):
+
+1. **imperative API**: 改用 `MapContext.addMarker(marker, callback)` 命令式调用,
+   绕开 reactive prop 类型检查通道。需研究 SDK 是否暴露 setMarkers 方法以及参数签名。
+
+2. **模板字面量**: `<map :markers="[{id:1, ...} as Marker]">` 直接在模板字面量里写,
+   编译期可能不走反向推导(因为模板字面量自己就是表达式上下文,prop 期望类型直接锚定)。
+   动态化用 `v-if` 切换不同模板;或者用 `<map-marker>` 子组件迭代(如果 SDK 支持)。
+
+3. **uniapp x 升级**: 留意 5.07 后续版本是否修复 error17 在反向推导路径的 bug。
+
+4. **uni-openLocation 借壳**: 把 displayMarkers 写在第三方 `.uvue` 文件的 namespace 里
+   (类似 `uni_modules/uni-openLocation/pages/openLocation.uvue`),那里命名空间隔离
+   不同,SDK Marker 唯一可见。但代价是把业务页面拆到 uni_modules 下,工程结构难看。
+
+5. **跳过腾讯地图,改用其他 map 实现**: 高德/百度/原生 web map iframe,代价是失去
+   uniapp 提供的统一封装。
+
+---
+
+**不建议尝试的死路**(已被本会话证伪):
+- ❌ `Marker[]` 类型注解(任何位置)
+- ❌ `computed<Marker[]>(...)` 显式泛型
+- ❌ `result: Marker[] = []` 变量类型注解
+- ❌ `[] as Marker[]` cast(单独使用 — 与内部元素 cast 解析到不同 namespace)
+- ❌ `UTSJSONObject[]` 边界(运行时被 setMarkers 强转拒)
+- ❌ `.map(m => ({...} as Marker))` 单 cast(模板反向推导仍报 mismatch)
 
 ---
 

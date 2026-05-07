@@ -13,7 +13,7 @@
     </scroll-view>
     <view class="section-header"><text class="section-title">足迹地图</text></view>
     <view class="mini-map-container">
-      <map class="mini-map" :latitude="miniLat" :longitude="miniLng" :scale="miniScale" :markers="miniMapMarkers" :enable-scroll="false" :enable-zoom="false" />
+      <map class="mini-map" :latitude="miniLat" :longitude="miniLng" :scale="miniScale" :enable-scroll="false" :enable-zoom="false" />
     </view>
     <view class="filter-bar">
       <view v-for="f in filters" :key="f.key" class="filter-chip" :class="{ active: activeFilter === f.key }" @click="setFilter(f.key)">
@@ -59,18 +59,8 @@ const filteredMarkers = computed(() => {
   return markers.value
 })
 
-// miniMapMarkers — 缩略地图绑定，构造 SDK 原生 Marker[]，限制 20 个。
-// 关键：全部使用 `as` cast 形式，不使用 `: Marker[]` 类型注解，避免 error17。
-// 详见 pages/index/index.uvue 顶部注释 + UTS_COMPILE_PITFALLS §F。
-const miniMapMarkers = computed(() => markers.value.slice(0, 20).map((m: CheckinMarker) => ({
-  id: m.id,
-  latitude: m.latitude,
-  longitude: m.longitude,
-  title: m.title,
-  iconPath: m.iconPath,
-  width: m.width,
-  height: m.height
-} as Marker)))
+// TODO(下一会话 P1): 同 pages/index/index.uvue,缩略地图的 miniMapMarkers 暂时
+// 不绑 :markers,等 P1 解决 SDK Marker 边界后再恢复。详见 UTS_COMPILE_PITFALLS §F。
 
 const miniLat = computed(() => { if (markers.value.length > 0) return markers.value[0].latitude; return 39.9163 })
 const miniLng = computed(() => { if (markers.value.length > 0) return markers.value[0].longitude; return 116.3972 })
