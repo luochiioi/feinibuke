@@ -1,8 +1,11 @@
-import { defineStore } from './pinia-shim'
 import { ref } from 'vue'
 import type { Marker } from '@/types/marker'
 
-export const useMapStore = defineStore('map', () => {
+let instance: any = null
+
+export function useMapStore(): any {
+  if (instance != null) return instance
+
   const latitude = ref<number>(39.9163)
   const longitude = ref<number>(116.3972)
   const scale = ref<number>(12)
@@ -50,7 +53,7 @@ export const useMapStore = defineStore('map', () => {
     return m
   }
 
-  return {
+  instance = {
     latitude: latitude, longitude: longitude, scale: scale, activeMarker: activeMarker,
     mapCenterLat: mapCenterLat, mapCenterLng: mapCenterLng, mapContext: mapContext, focusTarget: focusTarget,
     setActiveMarker: (m: Marker | null): void => { setActiveMarker(m) },
@@ -61,4 +64,5 @@ export const useMapStore = defineStore('map', () => {
     requestFocus: (m: Marker): void => { requestFocus(m) },
     consumeFocus: (): Marker | null => { return consumeFocus() }
   }
-})
+  return instance
+}

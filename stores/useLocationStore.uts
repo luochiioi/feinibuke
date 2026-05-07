@@ -1,9 +1,12 @@
-import { defineStore } from './pinia-shim'
 import { ref, computed } from 'vue'
 import type { LocationData, AccuracyLevel } from '@/types/location'
 import { calculateDistance as haversine } from '@/utils/coordinate'
 
-export const useLocationStore = defineStore('location', () => {
+let instance: any = null
+
+export function useLocationStore(): any {
+  if (instance != null) return instance
+
   const currentLocation = ref<LocationData | null>(null)
   const accuracy = ref<number>(0)
   const isTracking = ref<boolean>(false)
@@ -110,7 +113,7 @@ export const useLocationStore = defineStore('location', () => {
     )
   }
 
-  return {
+  instance = {
     currentLocation: currentLocation, accuracy: accuracy, isTracking: isTracking,
     accuracyLevel: accuracyLevel, accuracyText: accuracyText,
     startTracking: (): void => { startTracking() },
@@ -121,4 +124,5 @@ export const useLocationStore = defineStore('location', () => {
     stopPolling: (): void => { stopPolling() },
     distanceTo: (lat: number, lng: number): number | null => { return distanceTo(lat, lng) }
   }
-})
+  return instance
+}

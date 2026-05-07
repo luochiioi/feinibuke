@@ -1,11 +1,14 @@
-import { defineStore } from './pinia-shim'
 import { ref, computed } from 'vue'
 import type { Marker, NewMarkerInput } from '@/types/marker'
 import { loadMarkers, saveMarkers } from '@/utils/storage'
 import { getDefaultMarkers } from '@/utils/defaults'
 import { syncMarkers } from '@/utils/cloudSync'
 
-export const useMarkerStore = defineStore('markers', () => {
+let instance: any = null
+
+export function useMarkerStore(): any {
+  if (instance != null) return instance
+
   const markers = ref<Marker[]>([])
   const isLoading = ref<boolean>(false)
 
@@ -99,7 +102,7 @@ export const useMarkerStore = defineStore('markers', () => {
     return merged.length
   }
 
-  return {
+  instance = {
     markers: markers,
     isLoading: isLoading,
     checkedMarkers: checkedMarkers,
@@ -108,13 +111,14 @@ export const useMarkerStore = defineStore('markers', () => {
     doneCount: doneCount,
     completionRate: completionRate,
     displayMarkers: displayMarkers,
-    loadFromStorage: (): void => { loadFromStorage() },
-    persist: (): void => { persist() },
-    addMarker: (input: NewMarkerInput): void => { addMarker(input) },
-    doCheckIn: (markerId: number, photoPath: string | null, note: string | null): void => { doCheckIn(markerId, photoPath, note) },
-    deleteMarker: (markerId: number): void => { deleteMarker(markerId) },
-    findById: (id: number): Marker | null => { return findById(id) },
-    findByTitle: (title: string): Marker | null => { return findByTitle(title) },
-    syncFromCloud: (): void => { syncFromCloud() }
+    loadFromStorage: loadFromStorage,
+    persist: persist,
+    addMarker: addMarker,
+    doCheckIn: doCheckIn,
+    deleteMarker: deleteMarker,
+    findById: findById,
+    findByTitle: findByTitle,
+    syncFromCloud: syncFromCloud
   }
-})
+  return instance
+}

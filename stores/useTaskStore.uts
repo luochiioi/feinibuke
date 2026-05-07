@@ -1,4 +1,3 @@
-import { defineStore } from './pinia-shim'
 import { ref, computed } from 'vue'
 import type { Task, Reward } from '@/types/task'
 import type { Marker } from '@/types/marker'
@@ -6,7 +5,11 @@ import { getDefaultTasks } from '@/utils/defaults'
 import { loadTasks, saveTasks, loadUserTasks, saveUserTasks, loadRewards, saveRewards } from '@/utils/storage'
 import type { UserTaskProgress } from '@/utils/storage'
 
-export const useTaskStore = defineStore('tasks', () => {
+let instance: any = null
+
+export function useTaskStore(): any {
+  if (instance != null) return instance
+
   const tasks = ref<Task[]>([])
   const userTasks = ref<Map<string, UserTaskProgress>>(new Map())
   const rewards = ref<Reward[]>([])
@@ -59,7 +62,7 @@ export const useTaskStore = defineStore('tasks', () => {
         taskName: task.name,
         reward: task.reward,
         earnedAt: task.completedAt
-      } as Reward
+      } as any as Reward
       rewards.value.push(reward)
       completed.push(task)
     })
@@ -72,7 +75,7 @@ export const useTaskStore = defineStore('tasks', () => {
     return found ?? null
   }
 
-  return {
+  instance = {
     tasks: tasks,
     userTasks: userTasks,
     rewards: rewards,
@@ -83,4 +86,5 @@ export const useTaskStore = defineStore('tasks', () => {
     checkTaskCompletion: (marker: Marker): Task[] => { return checkTaskCompletion(marker) },
     findTaskById: (id: string): Task | null => { return findTaskById(id) }
   }
-})
+  return instance
+}

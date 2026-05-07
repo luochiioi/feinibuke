@@ -1,11 +1,14 @@
-import { defineStore } from './pinia-shim'
 import { computed } from 'vue'
 import type { Achievement } from '@/types/achievement'
 import type { Marker } from '@/types/marker'
 import { useMarkerStore } from './useMarkerStore'
 import { useTaskStore } from './useTaskStore'
 
-export const useAchievementStore = defineStore('achievements', () => {
+let instance: any = null
+
+export function useAchievementStore(): any {
+  if (instance != null) return instance
+
   function getAchievements(): Achievement[] {
     const markerStore = useMarkerStore()
     const taskStore = useTaskStore()
@@ -31,8 +34,9 @@ export const useAchievementStore = defineStore('achievements', () => {
   const achievements = computed(() => getAchievements())
   const unlockedCount = computed(() => achievements.value.filter((a: Achievement): boolean => { return a.unlocked }).length)
 
-  return {
+  instance = {
     achievements: achievements,
     unlockedCount: unlockedCount
   }
-})
+  return instance
+}
