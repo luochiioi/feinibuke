@@ -67,24 +67,35 @@
   const emit = defineEmits(['markertap', 'longpress', 'regionchange'])
 
   // renderedMarkers — convert plain MarkerInput[] into SDK Marker[].
-  // Critical form: computed has no generic param, callback has no return-type
-  // annotation, type flows only through cast. This is the only form known
-  // to compile (see UTS_COMPILE_PITFALLS section F failure table).
-  const renderedMarkers = computed(() => props.markersData.map((m: MarkerInput) => ({
-    id: m.id,
-    latitude: m.latitude,
-    longitude: m.longitude,
-    title: m.title,
-    iconPath: m.iconPath,
-    width: m.width,
-    height: m.height
-  } as SdkMarker)))
+  //
+  // Code-shape rules (each one fixed a real compile error in earlier rounds):
+  //  - Use explicit `return {...}` body, NOT arrow-shorthand `=> ({...})`.
+  //    UTS parses `=> ({` as `Function -> block` rather than object literal,
+  //    yielding `UTSArray<Unit>` mismatch.
+  //  - SdkMarker only appears after `as`, never in `: T` annotations or `<T>`.
+  //  - No intermediate typed array variables (no `let result: SdkMarker[] = []`).
+  const renderedMarkers = computed(() => {
+    return props.markersData.map((m: MarkerInput) => {
+      return {
+        id: m.id,
+        latitude: m.latitude,
+        longitude: m.longitude,
+        title: m.title,
+        iconPath: m.iconPath,
+        width: m.width,
+        height: m.height
+      } as SdkMarker
+    })
+  })
 
   function onMarkerTap(e: UniMapMarkerTapEvent): void {
     emit('markertap', e)
   }
 
-  function onLongPress(e: UniMapLongpressEvent): void {
+  // longpress / regionchange use `any` — UTS 5.07 doesn't auto-import a
+  // UniMapLongpressEvent type, and we only forward via emit, never access
+  // fields here. `any` is safe in pure pass-through (PITFALLS section G).
+  function onLongPress(e: any): void {
     emit('longpress', e)
   }
 
