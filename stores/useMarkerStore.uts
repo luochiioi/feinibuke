@@ -19,17 +19,13 @@ export const useMarkerStore = defineStore('markers', () => {
 
   const displayMarkers = computed(() =>
     markers.value.map(m => {
-      const base: Record<string, any> = { ...m }
+      const jsonStr = JSON.stringify(m)
+      const base = JSON.parse(jsonStr) as UTSJSONObject
       if (m.checked) {
-        base.label = {
-          content: '✓',
-          color: '#34c759',
-          fontSize: 13,
-          borderRadius: 10,
-          bgColor: '#e6f9ed',
-          padding: 4
-        }
-        base.iconPath = '/static/marker_checked.png'
+        const labelStr = '{"content":"✓","color":"#34c759","fontSize":13,"borderRadius":10,"bgColor":"#e6f9ed","padding":4}'
+        const labelObj = JSON.parse(labelStr) as UTSJSONObject
+        base["label"] = labelObj
+        base["iconPath"] = '/static/marker_checked.png'
       }
       return base
     })

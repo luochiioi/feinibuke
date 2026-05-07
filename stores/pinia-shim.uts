@@ -4,9 +4,9 @@
 type StoreSetup = () => Record<string, any> | Map<string, any>
 
 export function defineStore(_id: string, setup: StoreSetup): () => any {
-  let instance: any = null
+  let instance: any = undefined
   return (): any => {
-    if (instance != null) return instance
+    if (instance != undefined) return instance
     instance = setup()
     return instance
   }
