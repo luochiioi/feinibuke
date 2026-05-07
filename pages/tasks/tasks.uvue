@@ -16,7 +16,7 @@
       <map class="mini-map" :latitude="miniLat" :longitude="miniLng" :scale="miniScale" :markers="miniMarkers" :enable-scroll="false" :enable-zoom="false" />
     </view>
     <view class="filter-bar">
-      <view v-for="f in filters" :key="f.key" class="filter-chip" :class="{ active: activeFilter === f.key }" @click="activeFilter = f.key">
+      <view v-for="f in filters" :key="f.key" class="filter-chip" :class="{ active: activeFilter === f.key }" @click="setFilter(f.key)">
         <text class="filter-chip-text">{{ f.label }}</text>
       </view>
     </view>
@@ -66,11 +66,15 @@ const miniScale = ref<number>(4)
 
 onShow((): void => { loadMarkers(); loadTasks() })
 
+function setFilter(key: FilterMode): void { activeFilter.value = key }
 function goFocus(item: Marker): void { requestFocus(item); uni.navigateBack() }
 function doDelete(item: Marker): void {
   uni.showModal({
     title: '确认删除', content: `确定要删除"${item.title}"吗？`,
-    success: (res: any): void => { if (res.confirm) deleteMarker(item.id) }
+    success: (res: any): void => {
+      const r = res as UTSJSONObject
+      if ((r["confirm"] as boolean) == true) { deleteMarker(item.id) }
+    }
   })
 }
 </script>
