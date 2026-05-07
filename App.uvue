@@ -4,11 +4,12 @@
   import { clearUserInfo } from '@/user/index.uts'
   import { flushSyncQueue, syncMarkers, pendingCount } from '@/utils/cloudSync'
 
-  async function verifyLogin(): Promise<void> {
+  async function doVerifyAndSync(): Promise<void> {
     try {
       const userApi = uniCloud.importObject('user-center')
       await userApi.checkToken()
       console.log('Token 验证通过')
+      syncMarkers()
     } catch (e) {
       console.log('Token 验证失败', e)
     }
@@ -37,22 +38,6 @@
 
     checkSystemTheme()
 
-    // #ifdef APP
-    if (process.env.NODE_ENV !== 'development') {
-      uni.getPrivacySetting({
-        success(privacyRes) {
-          if (privacyRes.needAuthorization) {
-            console.log('需要隐私授权（隐私页留待后续会话补全）')
-          }
-        },
-        fail(err) {
-          console.log('getPrivacySetting fail', err)
-        }
-      })
-    }
-    // #endif
-
-    // Token 检查
     const token = uni.getStorageSync('uni_id_token') as string | null
     const tokenExpired = uni.getStorageSync('uni_id_token_expired')
 
@@ -65,9 +50,7 @@
       clearUserInfo()
       return
     }
-    verifyLogin().then((_: void): void => {
-      syncMarkers().catch((_: any): void => {})
-    })
+    doVerifyAndSync()
   })
 
   onShow((_res: OnShowOptions) => {
@@ -76,11 +59,7 @@
     const count = pendingCount()
     if (count > 0) {
       console.log('Flushing', count, 'pending sync items...')
-      flushSyncQueue().then((flushed: number): void => {
-        if (flushed > 0) {
-          syncMarkers().catch((_: any): void => {})
-        }
-      }).catch((_: any): void => {})
+      flushSyncQueue()
     }
   })
 

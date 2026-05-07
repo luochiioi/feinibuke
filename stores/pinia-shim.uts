@@ -1,17 +1,13 @@
 // Minimal Pinia-compatible defineStore shim for uniapp x
 // Replaces `import { defineStore } from 'pinia'` with this local implementation
 
-type StoreSetup = () => Record<string, any>
-type StoreFactory = () => Record<string, any>
+type StoreSetup = () => Record<string, any> | Map<string, any>
 
-const storeInstances: Record<string, any> = {}
-
-export function defineStore(id: string, setup: StoreSetup): StoreFactory {
-  return (): Record<string, any> => {
-    const cached = storeInstances[id]
-    if (cached != null) return cached
-    const instance = setup()
-    storeInstances[id] = instance
+export function defineStore(_id: string, setup: StoreSetup): () => any {
+  let instance: any = null
+  return (): any => {
+    if (instance != null) return instance
+    instance = setup()
     return instance
   }
 }
