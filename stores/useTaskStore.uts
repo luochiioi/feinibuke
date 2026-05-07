@@ -23,8 +23,14 @@ export const useTaskStore = defineStore('tasks', () => {
     const ut = loadUserTasks()
     tasks.value = stored.map(t => {
       const progress = ut.get(t.id)
-      if (progress && progress.status === 'completed') {
-        return { ...t, status: 'completed' as const, completedAt: progress.completedAt }
+      if (progress != null) {
+        if (progress.status === 'completed') {
+          const jsonStr = JSON.stringify(t)
+          const updated = JSON.parse(jsonStr) as UTSJSONObject
+          updated["status"] = 'completed'
+          updated["completedAt"] = progress.completedAt
+          return updated as any as Task
+        }
       }
       return t
     })
@@ -46,14 +52,14 @@ export const useTaskStore = defineStore('tasks', () => {
       if (!match) return
       task.status = 'completed'
       task.completedAt = Date.now()
-      userTasks.value.set(task.id, { status: 'completed', completedAt: task.completedAt } as UserTaskProgress)
-      const reward: Reward = {
+      userTasks.value.set(task.id, { status: 'completed', completedAt: task.completedAt } as any as UserTaskProgress)
+      const reward = {
         id: `reward_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
         taskId: task.id,
         taskName: task.name,
         reward: task.reward,
         earnedAt: task.completedAt
-      }
+      } as any as Reward
       rewards.value.push(reward)
       completed.push(task)
     })
