@@ -142,7 +142,7 @@ async function submitCheckIn(): Promise<void> {
       const checkinRes = await markerApi.checkin({
         markerId: markerId.value,
         photoCloudURL: cloudURL.value,
-        note: note.value || null,
+        note: note.value != '' ? note.value : null,
         latitude: locationStore.currentLocation?.latitude,
         longitude: locationStore.currentLocation?.longitude
       }) as UTSJSONObject
@@ -158,13 +158,13 @@ async function submitCheckIn(): Promise<void> {
       enqueueAction('checkin', {
         markerId: markerId.value,
         photoCloudURL: cloudURL.value,
-        note: note.value || null,
+        note: note.value != '' ? note.value : null,
         latitude: locationStore.currentLocation?.latitude,
         longitude: locationStore.currentLocation?.longitude
       })
     }
 
-    await markerStore.doCheckIn(markerId.value, photoPath.value, note.value || null)
+    await markerStore.doCheckIn(markerId.value, photoPath.value, note.value != '' ? note.value : null)
     const completed = taskStore.checkTaskCompletion(marker.value)
 
     uni.showToast({ title: '打卡成功！', icon: 'success' })
