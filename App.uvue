@@ -4,6 +4,16 @@
   import { clearUserInfo } from '@/user/index.uts'
   import { flushSyncQueue, syncMarkers, pendingCount } from '@/utils/cloudSync'
 
+  async function verifyLogin(): Promise<void> {
+    try {
+      const userApi = uniCloud.importObject('user-center')
+      await userApi.checkToken()
+      console.log('Token 验证通过')
+    } catch (e) {
+      console.log('Token 验证失败', e)
+    }
+  }
+
   onLaunch((res: OnLaunchOptions) => {
     console.log('App Launch', res.path)
 
@@ -66,27 +76,17 @@
     const count = pendingCount()
     if (count > 0) {
       console.log('Flushing', count, 'pending sync items...')
-      flushSyncQueue().then((flushed) => {
+      flushSyncQueue().then((flushed: number): void => {
         if (flushed > 0) {
-          syncMarkers().catch(() => {})
+          syncMarkers().catch((_: any): void => {})
         }
-      }).catch(() => {})
+      }).catch((_: any): void => {})
     }
   })
 
   onHide(() => {
     console.log('App Hide')
   })
-
-  async function verifyLogin(): Promise<void> {
-    try {
-      const userApi = uniCloud.importObject('user-center')
-      await userApi.checkToken()
-      console.log('Token 验证通过')
-    } catch (e) {
-      console.log('Token 验证失败', e)
-    }
-  }
 </script>
 
 <style>
