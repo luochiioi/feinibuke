@@ -1,9 +1,8 @@
 // Compatibility wrappers — bridge direct module exports to old useXxxStore() API
-// Pages use these instead of importing individual refs/functions
 
 import * as M from './useMarkerStore'
 import * as L from './useLocationStore'
-import * as Map from './useMapStore'
+import * as MapModule from './useMapStore'
 import * as T from './useTaskStore'
 import * as A from './useAchievementStore'
 
@@ -13,35 +12,50 @@ export function useMarkerStore(): any {
     checkedMarkers: M.checkedMarkers, pendingMarkers: M.pendingMarkers,
     totalCount: M.totalCount, doneCount: M.doneCount, completionRate: M.completionRate,
     displayMarkers: M.displayMarkers,
-    loadFromStorage: M.loadFromStorage, persist: M.persist,
-    addMarker: M.addMarker, doCheckIn: M.doCheckIn, deleteMarker: M.deleteMarker,
-    findById: M.findById, findByTitle: M.findByTitle, syncFromCloud: M.syncFromCloud
+    loadFromStorage: (): void => { M.loadFromStorage() },
+    persist: (): void => { M.persist() },
+    addMarker: (input: any): void => { M.addMarker(input) },
+    doCheckIn: (markerId: number, photoPath: string | null, note: string | null): void => { M.doCheckIn(markerId, photoPath, note) },
+    deleteMarker: (markerId: number): void => { M.deleteMarker(markerId) },
+    findById: (id: number): any => { return M.findById(id) },
+    findByTitle: (title: string): any => { return M.findByTitle(title) },
+    syncFromCloud: (): void => { M.syncFromCloud() }
   }
 }
 export function useLocationStore(): any {
   return {
     currentLocation: L.currentLocation, accuracy: L.accuracy, isTracking: L.isTracking,
     accuracyLevel: L.accuracyLevel, accuracyText: L.accuracyText,
-    startTracking: L.startTracking, stopTracking: L.stopTracking, applyLocation: L.applyLocation,
-    pollLocationOnce: L.pollLocationOnce, startPolling: L.startPolling, stopPolling: L.stopPolling,
-    distanceTo: L.distanceTo
+    startTracking: (): void => { L.startTracking() },
+    stopTracking: (): void => { L.stopTracking() },
+    applyLocation: (res: any): void => { L.applyLocation(res) },
+    pollLocationOnce: (): any => { return L.pollLocationOnce() },
+    startPolling: (intervalMs: number): void => { L.startPolling(intervalMs) },
+    stopPolling: (): void => { L.stopPolling() },
+    distanceTo: (lat: number, lng: number): any => { return L.distanceTo(lat, lng) }
   }
 }
 export function useMapStore(): any {
   return {
-    latitude: Map.latitude, longitude: Map.longitude, scale: Map.scale, activeMarker: Map.activeMarker,
-    mapCenterLat: Map.mapCenterLat, mapCenterLng: Map.mapCenterLng, mapContext: Map.mapContext, focusTarget: Map.focusTarget,
-    setActiveMarker: Map.setActiveMarker, zoomIn: Map.zoomIn, zoomOut: Map.zoomOut,
-    moveToLocation: Map.moveToLocation, onRegionChangeEnd: Map.onRegionChangeEnd,
-    requestFocus: Map.requestFocus, consumeFocus: Map.consumeFocus
+    latitude: MapModule.latitude, longitude: MapModule.longitude, scale: MapModule.scale, activeMarker: MapModule.activeMarker,
+    mapCenterLat: MapModule.mapCenterLat, mapCenterLng: MapModule.mapCenterLng, mapContext: MapModule.mapContext, focusTarget: MapModule.focusTarget,
+    setActiveMarker: (m: any): void => { MapModule.setActiveMarker(m) },
+    zoomIn: (): void => { MapModule.zoomIn() },
+    zoomOut: (): void => { MapModule.zoomOut() },
+    moveToLocation: (lat: number, lng: number, s: number): void => { MapModule.moveToLocation(lat, lng, s) },
+    onRegionChangeEnd: (lat: number, lng: number): void => { MapModule.onRegionChangeEnd(lat, lng) },
+    requestFocus: (m: any): void => { MapModule.requestFocus(m) },
+    consumeFocus: (): any => { return MapModule.consumeFocus() }
   }
 }
 export function useTaskStore(): any {
   return {
     tasks: T.tasks, userTasks: T.userTasks, rewards: T.rewards,
     completedTaskCount: T.completedTaskCount, totalTaskCount: T.totalTaskCount,
-    loadFromStorage: T.loadFromStorage, persist: T.persist,
-    checkTaskCompletion: T.checkTaskCompletion, findTaskById: T.findTaskById
+    loadFromStorage: (): void => { T.loadFromStorage() },
+    persist: (): void => { T.persist() },
+    checkTaskCompletion: (marker: any): any => { return T.checkTaskCompletion(marker) },
+    findTaskById: (id: string): any => { return T.findTaskById(id) }
   }
 }
 export function useAchievementStore(): any {

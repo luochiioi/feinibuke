@@ -40,7 +40,7 @@ export async function loadFromStorage(): Promise<void> {
   isLoading.value = false
 }
 
-function persist(): void {
+export function persist(): void {
   saveMarkers(markers.value)
 }
 
