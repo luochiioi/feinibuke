@@ -1,10 +1,11 @@
 import { ref } from 'vue'
 import type { Marker } from '@/types/marker'
 
-let instance: UTSJSONObject | null = null
+let _inited: boolean = false
+let instance: any = {}
 
 export function useMapStore(): any {
-  if (instance != null) return instance
+  if (_inited) return instance
 
   const latitude = ref<number>(39.9163)
   const longitude = ref<number>(116.3972)
@@ -53,6 +54,7 @@ export function useMapStore(): any {
     return m
   }
 
+  _inited = true
   instance = {
     latitude: latitude, longitude: longitude, scale: scale, activeMarker: activeMarker,
     mapCenterLat: mapCenterLat, mapCenterLng: mapCenterLng, mapContext: mapContext, focusTarget: focusTarget,

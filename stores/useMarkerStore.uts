@@ -4,10 +4,11 @@ import { loadMarkers, saveMarkers } from '@/utils/storage'
 import { getDefaultMarkers } from '@/utils/defaults'
 import { syncMarkers } from '@/utils/cloudSync'
 
-let instance: UTSJSONObject | null = null
+let _inited: boolean = false
+let instance: any = {}
 
 export function useMarkerStore(): any {
-  if (instance != null) return instance
+  if (_inited) return instance
 
   const markers = ref<Marker[]>([])
   const isLoading = ref<boolean>(false)
@@ -102,6 +103,7 @@ export function useMarkerStore(): any {
     return merged.length
   }
 
+  _inited = true
   instance = {
     markers: markers,
     isLoading: isLoading,

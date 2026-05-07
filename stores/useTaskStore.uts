@@ -5,10 +5,11 @@ import { getDefaultTasks } from '@/utils/defaults'
 import { loadTasks, saveTasks, loadUserTasks, saveUserTasks, loadRewards, saveRewards } from '@/utils/storage'
 import type { UserTaskProgress } from '@/utils/storage'
 
-let instance: UTSJSONObject | null = null
+let _inited: boolean = false
+let instance: any = {}
 
 export function useTaskStore(): any {
-  if (instance != null) return instance
+  if (_inited) return instance
 
   const tasks = ref<Task[]>([])
   const userTasks = ref<Map<string, UserTaskProgress>>(new Map())
@@ -75,6 +76,7 @@ export function useTaskStore(): any {
     return found ?? null
   }
 
+  _inited = true
   instance = {
     tasks: tasks,
     userTasks: userTasks,
