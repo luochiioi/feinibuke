@@ -97,10 +97,7 @@
 
 <script setup lang="uts">
 import { ref, computed, onShow, onHide } from 'vue'
-import { useMarkerStore } from '@/stores/useMarkerStore'
-import { useLocationStore } from '@/stores/useLocationStore'
-import { useMapStore } from '@/stores/useMapStore'
-import { useTaskStore } from '@/stores/useTaskStore'
+import { useMarkerStore } from '@/stores/compat'
 import { formatDateTime, formatDistance } from '@/utils/format'
 import type { Marker } from '@/types/marker'
 

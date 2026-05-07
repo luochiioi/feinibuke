@@ -49,9 +49,7 @@
 
 <script setup lang="uts">
 import { ref, computed, onShow } from 'vue'
-import { useTaskStore } from '@/stores/useTaskStore'
-import { useMarkerStore } from '@/stores/useMarkerStore'
-import { useMapStore } from '@/stores/useMapStore'
+import { useMarkerStore } from '@/stores/compat'
 import { formatDateTime } from '@/utils/format'
 
 const taskStore = useTaskStore()
@@ -69,8 +67,9 @@ const linkedMarker = computed(() => {
 
 onShow((): void => {
   const pages = getCurrentPages()
-  const currentPage = pages[pages.length - 1] as any
-  const query = currentPage?.$page?.options ?? {}
+  const currentPage = pages[pages.length - 1] as UTSJSONObject
+  const pg = currentPage["$page"] as UTSJSONObject
+  const query = pg != null ? pg["options"] as UTSJSONObject : {}
   taskId.value = query.id ?? ''
   taskStore.loadFromStorage()
   markerStore.loadFromStorage()

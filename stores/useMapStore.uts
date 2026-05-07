@@ -1,70 +1,26 @@
 import { ref } from 'vue'
 import type { Marker } from '@/types/marker'
 
-let _inited: boolean = false
-let instance: any = {}
+export const latitude = ref<number>(39.9163)
+export const longitude = ref<number>(116.3972)
+export const scale = ref<number>(12)
+export const activeMarker = ref<Marker | null>(null)
+export const mapCenterLat = ref<number>(39.9163)
+export const mapCenterLng = ref<number>(116.3972)
+export const mapContext = ref<UTSJSONObject | null>(null)
+export const focusTarget = ref<Marker | null>(null)
 
-export function useMapStore(): any {
-  if (_inited) return instance
-
-  const latitude = ref<number>(39.9163)
-  const longitude = ref<number>(116.3972)
-  const scale = ref<number>(12)
-  const activeMarker = ref<Marker | null>(null)
-  const mapCenterLat = ref<number>(39.9163)
-  const mapCenterLng = ref<number>(116.3972)
-  const mapContext = ref<UTSJSONObject | null>(null)
-  const focusTarget = ref<Marker | null>(null)
-
-  function setActiveMarker(m: Marker | null): void {
-    activeMarker.value = m
-    if (m != null) {
-      const mm = m as Marker
-      latitude.value = mm.latitude
-      longitude.value = mm.longitude
-    }
-  }
-
-  function zoomIn(): void {
-    if (scale.value < 20) scale.value++
-  }
-
-  function zoomOut(): void {
-    if (scale.value > 3) scale.value--
-  }
-
-  function moveToLocation(lat: number, lng: number, targetScale: number = 16): void {
-    latitude.value = lat
-    longitude.value = lng
-    scale.value = targetScale
-  }
-
-  function onRegionChangeEnd(centerLat: number, centerLng: number): void {
-    mapCenterLat.value = centerLat
-    mapCenterLng.value = centerLng
-  }
-
-  function requestFocus(marker: Marker): void {
-    focusTarget.value = marker
-  }
-
-  function consumeFocus(): Marker | null {
-    const m = focusTarget.value
-    focusTarget.value = null
-    return m
-  }
-
-  _inited = true
-  instance = {
-    latitude: latitude, longitude: longitude, scale: scale, activeMarker: activeMarker,
-    mapCenterLat: mapCenterLat, mapCenterLng: mapCenterLng, mapContext: mapContext, focusTarget: focusTarget,
-    setActiveMarker: (m: Marker | null): void => { setActiveMarker(m) },
-    zoomIn: (): void => { zoomIn() },
-    zoomOut: (): void => { zoomOut() },
-    moveToLocation: (lat: number, lng: number, s: number): void => { moveToLocation(lat, lng, s) },
-    onRegionChangeEnd: (lat: number, lng: number): void => { onRegionChangeEnd(lat, lng) },
-    requestFocus: (m: Marker): void => { requestFocus(m) },
-    consumeFocus: (): Marker | null => { return consumeFocus() }
-  }
-  return instance
+export function setActiveMarker(m: Marker | null): void {
+  activeMarker.value = m
+  if (m != null) { const mm = m as Marker; latitude.value = mm.latitude; longitude.value = mm.longitude }
 }
+export function zoomIn(): void { if (scale.value < 20) scale.value++ }
+export function zoomOut(): void { if (scale.value > 3) scale.value-- }
+export function moveToLocation(lat: number, lng: number, targetScale: number = 16): void {
+  latitude.value = lat; longitude.value = lng; scale.value = targetScale
+}
+export function onRegionChangeEnd(centerLat: number, centerLng: number): void {
+  mapCenterLat.value = centerLat; mapCenterLng.value = centerLng
+}
+export function requestFocus(marker: Marker): void { focusTarget.value = marker }
+export function consumeFocus(): Marker | null { const m = focusTarget.value; focusTarget.value = null; return m }

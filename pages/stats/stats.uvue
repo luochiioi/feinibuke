@@ -74,9 +74,7 @@
 
 <script setup lang="uts">
 import { onShow } from 'vue'
-import { useMarkerStore } from '@/stores/useMarkerStore'
-import { useTaskStore } from '@/stores/useTaskStore'
-import { useAchievementStore } from '@/stores/useAchievementStore'
+import { useMarkerStore } from '@/stores/compat'
 import { formatDateTime } from '@/utils/format'
 import ProgressBar from '@/components/ProgressBar.uvue'
 

@@ -41,8 +41,7 @@
 
 <script setup lang="uts">
 import { ref, onShow } from 'vue'
-import { useMarkerStore } from '@/stores/useMarkerStore'
-import { useLocationStore } from '@/stores/useLocationStore'
+import { useMarkerStore } from '@/stores/compat'
 import { enqueueAction } from '@/utils/cloudSync'
 
 const markerStore = useMarkerStore()
@@ -62,8 +61,9 @@ let currentLngFromMap = ''
 
 function getQuery(): Record<string, string> {
   const pages = getCurrentPages()
-  const currentPage = pages[pages.length - 1] as any
-  return currentPage?.$page?.options ?? {}
+  const currentPage = pages[pages.length - 1] as UTSJSONObject
+  const pg = currentPage["$page"] as UTSJSONObject
+    return pg != null ? pg["options"] as UTSJSONObject : {}
 }
 
 onShow((): void => {

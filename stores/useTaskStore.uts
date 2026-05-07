@@ -5,88 +5,41 @@ import { getDefaultTasks } from '@/utils/defaults'
 import { loadTasks, saveTasks, loadUserTasks, saveUserTasks, loadRewards, saveRewards } from '@/utils/storage'
 import type { UserTaskProgress } from '@/utils/storage'
 
-let _inited: boolean = false
-let instance: any = {}
+export const tasks = ref<Task[]>([])
+export const userTasks = ref<Map<string, UserTaskProgress>>(new Map())
+export const rewards = ref<Reward[]>([])
+export const completedTaskCount = computed(() => tasks.value.filter(t => t.status === 'completed').length)
+export const totalTaskCount = computed(() => tasks.value.length)
 
-export function useTaskStore(): any {
-  if (_inited) return instance
-
-  const tasks = ref<Task[]>([])
-  const userTasks = ref<Map<string, UserTaskProgress>>(new Map())
-  const rewards = ref<Reward[]>([])
-
-  const completedTaskCount = computed(() => tasks.value.filter(t => t.status === 'completed').length)
-  const totalTaskCount = computed(() => tasks.value.length)
-
-  function loadFromStorage(): void {
-    let stored = loadTasks()
-    if (stored.length === 0) {
-      stored = getDefaultTasks()
-      saveTasks(stored)
+export function loadFromStorage(): void {
+  let stored = loadTasks()
+  if (stored.length === 0) { stored = getDefaultTasks(); saveTasks(stored) }
+  const ut = loadUserTasks()
+  tasks.value = stored.map(t => {
+    const progress = ut.get(t.id)
+    if (progress != null && progress.status === 'completed') {
+      const jsonStr = JSON.stringify(t); const updated = JSON.parse(jsonStr) as UTSJSONObject
+      updated["status"] = 'completed'; updated["completedAt"] = progress.completedAt
+      return updated as any as Task
     }
-    const ut = loadUserTasks()
-    tasks.value = stored.map(t => {
-      const progress = ut.get(t.id)
-      if (progress != null) {
-        if (progress.status === 'completed') {
-          const jsonStr = JSON.stringify(t)
-          const updated = JSON.parse(jsonStr) as UTSJSONObject
-          updated["status"] = 'completed'
-          updated["completedAt"] = progress.completedAt
-          return updated as any as Task
-        }
-      }
-      return t
-    })
-    userTasks.value = ut
-    rewards.value = loadRewards()
-  }
-
-  function persist(): void {
-    saveTasks(tasks.value)
-    saveUserTasks(userTasks.value)
-    saveRewards(rewards.value)
-  }
-
-  function checkTaskCompletion(marker: Marker): Task[] {
-    const completed: Task[] = []
-    tasks.value.forEach(task => {
-      if (task.status === 'completed') return
-      const match = task.targetMarkerId === marker.id || task.targetTitle === marker.title
-      if (!match) return
-      task.status = 'completed'
-      task.completedAt = Date.now()
-      userTasks.value.set(task.id, { status: 'completed', completedAt: task.completedAt } as any as UserTaskProgress)
-      const reward = {
-        id: `reward_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
-        taskId: task.id,
-        taskName: task.name,
-        reward: task.reward,
-        earnedAt: task.completedAt
-      } as any as Reward
-      rewards.value.push(reward)
-      completed.push(task)
-    })
-    if (completed.length > 0) persist()
-    return completed
-  }
-
-  function findTaskById(id: string): Task | null {
-    const found = tasks.value.find(t => t.id === id)
-    return found ?? null
-  }
-
-  _inited = true
-  instance = {
-    tasks: tasks,
-    userTasks: userTasks,
-    rewards: rewards,
-    completedTaskCount: completedTaskCount,
-    totalTaskCount: totalTaskCount,
-    loadFromStorage: (): void => { loadFromStorage() },
-    persist: (): void => { persist() },
-    checkTaskCompletion: (marker: Marker): Task[] => { return checkTaskCompletion(marker) },
-    findTaskById: (id: string): Task | null => { return findTaskById(id) }
-  }
-  return instance
+    return t
+  })
+  userTasks.value = ut; rewards.value = loadRewards()
 }
+export function persist(): void { saveTasks(tasks.value); saveUserTasks(userTasks.value); saveRewards(rewards.value) }
+
+export function checkTaskCompletion(marker: Marker): Task[] {
+  const completed: Task[] = []
+  tasks.value.forEach(task => {
+    if (task.status === 'completed') return
+    if (!(task.targetMarkerId === marker.id || task.targetTitle === marker.title)) return
+    task.status = 'completed'; task.completedAt = Date.now()
+    userTasks.value.set(task.id, { status: 'completed', completedAt: task.completedAt } as any as UserTaskProgress)
+    rewards.value.push({ id: `reward_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`, taskId: task.id, taskName: task.name, reward: task.reward, earnedAt: task.completedAt } as any as Reward)
+    completed.push(task)
+  })
+  if (completed.length > 0) persist()
+  return completed
+}
+
+export function findTaskById(id: string): Task | null { const found = tasks.value.find(t => t.id === id); return found ?? null }

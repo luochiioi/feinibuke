@@ -62,10 +62,7 @@
 
 <script setup lang="uts">
 import { ref, computed, onShow } from 'vue'
-import { useMarkerStore } from '@/stores/useMarkerStore'
-import { useTaskStore } from '@/stores/useTaskStore'
-import { useAchievementStore } from '@/stores/useAchievementStore'
-import { useMapStore } from '@/stores/useMapStore'
+import { useMarkerStore } from '@/stores/compat'
 import { formatDateTime } from '@/utils/format'
 import type { Marker } from '@/types/marker'
 import type { FilterMode } from '@/types/app'

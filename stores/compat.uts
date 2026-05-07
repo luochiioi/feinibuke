@@ -1,0 +1,51 @@
+// Compatibility wrappers — bridge direct module exports to old useXxxStore() API
+// Pages use these instead of importing individual refs/functions
+
+import * as M from './useMarkerStore'
+import * as L from './useLocationStore'
+import * as Map from './useMapStore'
+import * as T from './useTaskStore'
+import * as A from './useAchievementStore'
+
+export function useMarkerStore(): any {
+  return {
+    markers: M.markers, isLoading: M.isLoading,
+    checkedMarkers: M.checkedMarkers, pendingMarkers: M.pendingMarkers,
+    totalCount: M.totalCount, doneCount: M.doneCount, completionRate: M.completionRate,
+    displayMarkers: M.displayMarkers,
+    loadFromStorage: M.loadFromStorage, persist: M.persist,
+    addMarker: M.addMarker, doCheckIn: M.doCheckIn, deleteMarker: M.deleteMarker,
+    findById: M.findById, findByTitle: M.findByTitle, syncFromCloud: M.syncFromCloud
+  }
+}
+export function useLocationStore(): any {
+  return {
+    currentLocation: L.currentLocation, accuracy: L.accuracy, isTracking: L.isTracking,
+    accuracyLevel: L.accuracyLevel, accuracyText: L.accuracyText,
+    startTracking: L.startTracking, stopTracking: L.stopTracking, applyLocation: L.applyLocation,
+    pollLocationOnce: L.pollLocationOnce, startPolling: L.startPolling, stopPolling: L.stopPolling,
+    distanceTo: L.distanceTo
+  }
+}
+export function useMapStore(): any {
+  return {
+    latitude: Map.latitude, longitude: Map.longitude, scale: Map.scale, activeMarker: Map.activeMarker,
+    mapCenterLat: Map.mapCenterLat, mapCenterLng: Map.mapCenterLng, mapContext: Map.mapContext, focusTarget: Map.focusTarget,
+    setActiveMarker: Map.setActiveMarker, zoomIn: Map.zoomIn, zoomOut: Map.zoomOut,
+    moveToLocation: Map.moveToLocation, onRegionChangeEnd: Map.onRegionChangeEnd,
+    requestFocus: Map.requestFocus, consumeFocus: Map.consumeFocus
+  }
+}
+export function useTaskStore(): any {
+  return {
+    tasks: T.tasks, userTasks: T.userTasks, rewards: T.rewards,
+    completedTaskCount: T.completedTaskCount, totalTaskCount: T.totalTaskCount,
+    loadFromStorage: T.loadFromStorage, persist: T.persist,
+    checkTaskCompletion: T.checkTaskCompletion, findTaskById: T.findTaskById
+  }
+}
+export function useAchievementStore(): any {
+  return {
+    achievements: A.achievements, unlockedCount: A.unlockedCount
+  }
+}
