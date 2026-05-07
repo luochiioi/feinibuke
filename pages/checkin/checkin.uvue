@@ -77,7 +77,7 @@ onShow((): void => {
   const pg = currentPage["$page"] as UTSJSONObject
   const query = pg != null ? pg["options"] as UTSJSONObject : {} as UTSJSONObject
   markerId.value = parseInt((query["id"] as string) ?? '0')
-  markerTitle.value = decodeURIComponent((query["title"] as string) ?? '')
+  markerTitle.value = decodeURIComponent((query["title"] as string) ?? '') as string
   startPolling(5000)
 })
 
@@ -85,16 +85,19 @@ onHide((): void => {
   stopPolling()
 })
 
-async function choosePhoto(): Promise<void> {
+function choosePhoto(): void {
   uni.showActionSheet({
     itemList: ['拍照', '从相册选择'],
-    success: async (res: any) => {
-      const sourceType = res.tapIndex === 0 ? ['camera'] : ['album']
+    success: (res: any): void => {
+      const r = res as UTSJSONObject
+      const tapIdx = r["tapIndex"] as number
+      const sourceType: string[] = tapIdx === 0 ? ['camera'] : ['album']
       uni.chooseImage({
         count: 1, sizeType: ['compressed'], sourceType: sourceType,
-        success: async (imgRes: any) => {
-          const path: string = imgRes.tempFilePaths[0] as string
-          photoPath.value = path
+        success: (imgRes: any): void => {
+          const ir = imgRes as UTSJSONObject
+          const paths = ir["tempFilePaths"] as any
+          photoPath.value = paths[0] as string
         }
       })
     }
