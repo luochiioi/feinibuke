@@ -10,7 +10,7 @@
         <view class="accuracy-badge" :class="'accuracy-' + locationStore.accuracyLevel">
           <text class="accuracy-text">{{ locationStore.accuracyText }}</text>
         </view>
-        <text class="stats">{{ markerStore.doneCount }}/{{ markerStore.totalCount }} 已打�?/text>
+        <text class="stats">{{ markerStore.doneCount }}/{{ markerStore.totalCount }} 已打卡</text>
       </view>
     </view>
 
@@ -37,7 +37,7 @@
           <cover-view class="tool-label">+</cover-view>
         </cover-view>
         <cover-view class="tool-btn zoom-out" @click="mapStore.zoomOut()">
-          <cover-view class="tool-label">�?/cover-view>
+          <cover-view class="tool-label">-</cover-view>
         </cover-view>
         <cover-view class="tool-btn locate-btn" @click="locateCurrent">
           <cover-view class="tool-label">📍</cover-view>
@@ -54,7 +54,7 @@
       <cover-view class="bottom-sheet" v-if="mapStore.activeMarker">
         <cover-view class="sheet-header">
           <cover-view class="sheet-title">{{ mapStore.activeMarker.title }}</cover-view>
-          <cover-view class="sheet-close" @click="mapStore.setActiveMarker(null)">�?/cover-view>
+          <cover-view class="sheet-close" @click="mapStore.setActiveMarker(null)">X</cover-view>
         </cover-view>
         <cover-view class="sheet-body">
           <template v-if="mapStore.activeMarker.checked">
@@ -78,7 +78,7 @@
               </cover-view>
             </cover-view>
             <cover-view class="sheet-row">
-              <text class="status-pending">未打�?/text>
+              <text class="status-pending">未打minus_sign_placeholder/text>
             </cover-view>
             <cover-view class="sheet-actions">
               <cover-view class="action-btn primary" @click="goToCheckIn(mapStore.activeMarker!)" v-if="canCheckIn">
@@ -196,7 +196,7 @@ function deleteCurrentMarker(): void {
   if (!mapStore.activeMarker) return
   uni.showModal({
     title: '确认删除',
-    content: `确定要删�?${mapStore.activeMarker.title}"吗？`,
+    content: `确定要删除${mapStore.activeMarker.title}"吗？`,
     success: (res: any) => {
       if (res.confirm) {
         markerStore.deleteMarker(mapStore.activeMarker!.id)
