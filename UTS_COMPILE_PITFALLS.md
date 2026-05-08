@@ -809,3 +809,32 @@ cloudMarker.checkedBy[0].photoCloudURL  // ← 安全
 - 本地种子打卡点可能还没有云端 `tourism_markers` 文档，`marker-center.checkin` 会返回“打卡点不存在”。P1 阶段不再把这个云端错误提示给用户；本地存在的 marker 继续完成打卡，云端同步问题留到“种子点云端初始化/修复脚本”处理。
 - `tasks.uvue` 信息架构改为 `任务 / 成就 / 地点` 三段。成就用网格，不再和地点列表堆在同一段，也减少横向滚动依赖。
 - `deleteMarker()` 先尝试调用 `marker-center.delete({_id})`，无权限或云端不存在时记录日志但不阻塞本地删除。
+
+---
+
+## 十一、P3 后台管理与种子同步（2026-05-09）
+
+本轮主要改云对象与 `uni-admin` Vue 后台，不直接触碰 App 端 UTS 页面，但仍沿用前面几条边界原则：云端返回的嵌套对象到 App 端仍必须用 `JSON.parse<T>()`；App 原生回调仍禁止假转 `UTSJSONObject`；后台管理能力必须放在管理员云对象里，不能复用公开接口做写操作。
+
+### 11.1 种子点同步落点
+
+- 默认 8 个本地点已在 `uniCloud-aliyun/cloudfunctions/admin-center/marker-service.js` 中维护为 `DEFAULT_SEED_MARKERS`，与 `utils/defaults.uts` 的 id/title/经纬度保持一致。
+- `admin-center.syncDefaultMarkers()` 按 `id` 幂等同步到 `tourism_markers`：不存在则新增完整云端文档；已存在则只更新名称、经纬度、本地图标路径和尺寸，不重置 `checkedBy` / `checkinCount` / `createdAt`。
+- 种子点 `createdBy` 固定为 `system`，`iconPath` 固定为 `/static/marker_default.png`，避免腾讯地图插件加载远程 URL 的静默不渲染问题。
+
+### 11.2 后台接口安全约定
+
+- `admin-center._before()` 会先校验 uni-id token，再检查 `uni-id-users` 当前用户是否具备管理员身份；兼容 `role: 'admin'`、`role: ['admin']`、`permission: ['admin']`。
+- 后台新增/编辑统一走 `sanitizeMarkerCreate()` / `sanitizeMarkerUpdate()` 白名单，只允许写入名称、经纬度、图标和尺寸。`checkedBy`、`checkinCount`、`createdBy`、`createdAt` 等受保护字段会被忽略或由服务端生成。
+- `uni-admin/pages/markers/index.vue` 已改为调用 `admin-center.getMarkers/createMarker/updateMarker/deleteMarker/syncDefaultMarkers`，不再用公开的 `marker-center.getAll()` 做后台管理。
+- `uni-admin/pages/checkins/index.vue` 使用 `admin-center.getCheckins()` 查看全局记录，或通过 `admin_checkins_marker_id` storage 从打卡点页跳转到 `getMarkerCheckins()` 查看单点记录。
+
+### 11.3 本轮验证命令
+
+```bash
+node --test uniCloud-aliyun/cloudfunctions/admin-center/marker-service.test.js
+node --check uniCloud-aliyun/cloudfunctions/admin-center/index.obj.js
+node --check uniCloud-aliyun/cloudfunctions/admin-center/marker-service.js
+```
+
+这些命令只能证明云端 helper 行为和 JS 语法正确；uniCloud 部署、管理员 token、`uni-admin` 页面真实联调仍需在 HBuilderX/关联服务空间中验证。

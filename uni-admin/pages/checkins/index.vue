@@ -1,32 +1,46 @@
 <template>
   <view class="checkins-page">
-    <!-- Search -->
-    <view class="search-bar">
-      <input class="search-input" v-model="searchQuery" placeholder="搜索打卡点名称..." @input="doSearch" />
+    <view v-if="selectedMarkerId" class="filter-card">
+      <view>
+        <text class="filter-title">当前打卡点：{{ selectedMarkerTitle || markerInfo.title || selectedMarkerId }}</text>
+        <text class="filter-meta">共 {{ total }} 条打卡记录</text>
+      </view>
+      <text class="clear-filter" @click="clearMarkerFilter">查看全部</text>
     </view>
 
-    <!-- List -->
-    <view v-if="list.length === 0" class="empty">暂无打卡记录</view>
-    <view v-for="m in list" :key="m._id" class="record-card">
-      <view class="record-header">
-        <text class="record-title">{{ m.title }}</text>
-        <text class="record-count">{{ m.checkinCount || 0 }} 人次</text>
-      </view>
-      <text class="record-coords">{{ (m.latitude||0).toFixed(6) }}, {{ (m.longitude||0).toFixed(6) }}</text>
+    <view v-else class="search-bar">
+      <input class="search-input" v-model="searchQuery" placeholder="搜索打卡点名称..." confirm-type="search" @confirm="reload" />
+      <button class="btn-search" @click="reload">搜索</button>
+    </view>
 
-      <view v-if="m.checkedBy && m.checkedBy.length" class="entries">
-        <view v-for="(e, j) in m.checkedBy" :key="j" class="entry">
-          <image v-if="e.photoCloudURL" :src="e.photoCloudURL" class="entry-photo" mode="aspectFill" @click="previewPhoto(e.photoCloudURL)" />
-          <view class="entry-info">
-            <text class="entry-user">{{ e.userId }}</text>
-            <text class="entry-time">{{ formatTime(e.checkedAt) }}</text>
-            <text v-if="e.note" class="entry-note">{{ e.note }}</text>
-          </view>
+    <view v-if="list.length === 0" class="empty">暂无打卡记录</view>
+    <view v-for="record in list" :key="record.markerDocId + '-' + record.userId + '-' + record.checkedAt" class="record-card">
+      <view class="record-header">
+        <view>
+          <text class="record-title">{{ record.markerTitle }}</text>
+          <text class="record-coords">{{ formatCoord(record.latitude) }}, {{ formatCoord(record.longitude) }}</text>
+        </view>
+        <text class="record-time">{{ formatTime(record.checkedAt) }}</text>
+      </view>
+
+      <view class="entry">
+        <image
+          v-if="record.photoCloudURL"
+          :src="record.photoCloudURL"
+          class="entry-photo"
+          mode="aspectFill"
+          @click="previewPhoto(record.photoCloudURL)"
+        />
+        <view class="entry-info">
+          <text class="entry-user">打卡人：{{ record.userId || '--' }}</text>
+          <text class="entry-time">打卡时间：{{ formatTime(record.checkedAt) }}</text>
+          <text v-if="record.photoCloudURL" class="entry-url">照片 URL：{{ record.photoCloudURL }}</text>
+          <text v-if="record.note" class="entry-note">备注：{{ record.note }}</text>
+          <text v-else class="entry-note muted">备注：--</text>
         </view>
       </view>
     </view>
 
-    <!-- Load more -->
     <view v-if="hasMore" class="load-more" @click="fetchData">
       <text>加载更多</text>
     </view>
@@ -39,33 +53,65 @@ import { ref, onShow } from 'vue'
 const list = ref([])
 const searchQuery = ref('')
 const hasMore = ref(false)
+const selectedMarkerId = ref(null)
+const selectedMarkerTitle = ref('')
+const markerInfo = ref({})
+const total = ref(0)
 let offset = 0
 const limit = 20
 const api = uniCloud.importObject('admin-center')
 
-onShow(() => { offset = 0; fetchData() })
+onShow(() => {
+  const storedMarkerId = uni.getStorageSync('admin_checkins_marker_id')
+  const storedTitle = uni.getStorageSync('admin_checkins_marker_title')
+  selectedMarkerId.value = storedMarkerId || null
+  selectedMarkerTitle.value = storedTitle || ''
+  reload()
+})
+
+function reload() {
+  offset = 0
+  list.value = []
+  total.value = 0
+  fetchData()
+}
 
 async function fetchData() {
   try {
-    const res = await api.getCheckins({ offset, limit })
+    const res = selectedMarkerId.value
+      ? await api.getMarkerCheckins({ markerId: selectedMarkerId.value, offset, limit })
+      : await api.getCheckins({ offset, limit, keyword: searchQuery.value })
     if (res.errCode === 0) {
-      if (offset === 0) list.value = res.data
-      else list.value = [...list.value, ...res.data]
-      hasMore = res.data.length >= limit
+      const data = res.data || {}
+      const records = data.list || []
+      list.value = offset === 0 ? records : [...list.value, ...records]
+      total.value = data.total || list.value.length
+      markerInfo.value = data.marker || {}
+      hasMore.value = list.value.length < total.value
       offset += limit
     }
-  } catch (e) { console.error(e) }
+  } catch (e) {
+    console.error(e)
+  }
 }
 
-function doSearch() {
-  offset = 0
-  fetchData()
+function clearMarkerFilter() {
+  uni.removeStorageSync('admin_checkins_marker_id')
+  uni.removeStorageSync('admin_checkins_marker_title')
+  selectedMarkerId.value = null
+  selectedMarkerTitle.value = ''
+  markerInfo.value = {}
+  reload()
+}
+
+function formatCoord(v) {
+  return v == null ? '--' : Number(v).toFixed(6)
 }
 
 function formatTime(ts) {
   if (!ts) return '--'
   const d = new Date(ts)
-  const pad = n => n < 10 ? '0' + n : n
+  const pad = n => n < 10 ? '0' + n : '' + n
   return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`
 }
 
@@ -77,13 +123,56 @@ function previewPhoto(url) {
 <style>
 .checkins-page { padding: 24rpx; }
 
-.search-bar { margin-bottom: 16rpx; }
+.filter-card {
+  background: #ecf9f1;
+  border-radius: 14rpx;
+  padding: 20rpx;
+  margin-bottom: 16rpx;
+  display: flex;
+  justify-content: space-between;
+  gap: 16rpx;
+}
+
+.filter-title {
+  font-size: 28rpx;
+  font-weight: 600;
+  color: #1f7a45;
+}
+
+.filter-meta {
+  display: block;
+  font-size: 22rpx;
+  color: #609c77;
+  margin-top: 6rpx;
+}
+
+.clear-filter {
+  font-size: 24rpx;
+  color: #1677ff;
+  white-space: nowrap;
+}
+
+.search-bar {
+  display: flex;
+  gap: 12rpx;
+  margin-bottom: 16rpx;
+}
 
 .search-input {
+  flex: 1;
   background: #fff;
   border-radius: 12rpx;
   padding: 16rpx 20rpx;
   font-size: 28rpx;
+}
+
+.btn-search {
+  background: #2ecc71;
+  color: #fff;
+  font-size: 24rpx;
+  padding: 8rpx 24rpx;
+  border-radius: 8rpx;
+  border: none;
 }
 
 .record-card {
@@ -96,18 +185,21 @@ function previewPhoto(url) {
 .record-header {
   display: flex;
   justify-content: space-between;
-  align-items: center;
+  gap: 16rpx;
+  margin-bottom: 12rpx;
 }
 
 .record-title {
+  display: block;
   font-size: 30rpx;
   font-weight: 500;
   color: #333;
 }
 
-.record-count {
-  font-size: 24rpx;
+.record-time {
+  font-size: 22rpx;
   color: #2ecc71;
+  white-space: nowrap;
 }
 
 .record-coords {
@@ -116,20 +208,16 @@ function previewPhoto(url) {
   font-family: monospace;
 }
 
-.entries {
-  margin-top: 12rpx;
-}
-
 .entry {
   display: flex;
-  padding: 12rpx 0;
+  padding-top: 12rpx;
   border-top: 1rpx solid #f5f5f5;
   gap: 12rpx;
 }
 
 .entry-photo {
-  width: 80rpx;
-  height: 80rpx;
+  width: 96rpx;
+  height: 96rpx;
   border-radius: 8rpx;
   background: #f0f0f0;
   flex-shrink: 0;
@@ -144,7 +232,9 @@ function previewPhoto(url) {
 
 .entry-user { font-size: 26rpx; color: #333; }
 .entry-time { font-size: 22rpx; color: #aaa; }
+.entry-url { font-size: 22rpx; color: #1677ff; word-break: break-all; }
 .entry-note { font-size: 24rpx; color: #666; margin-top: 4rpx; }
+.entry-note.muted { color: #aaa; }
 
 .empty { text-align: center; color: #999; padding: 80rpx 0; font-size: 26rpx; }
 .load-more { text-align: center; padding: 24rpx; color: #2ecc71; font-size: 26rpx; }

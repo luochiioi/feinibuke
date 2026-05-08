@@ -27,16 +27,14 @@
         <text class="section-action" @click="goToCheckins">查看全部 →</text>
       </view>
       <view v-if="checkins.length === 0" class="empty">暂无打卡记录</view>
-      <view v-for="(m, i) in checkins" :key="i" class="checkin-item">
+      <view v-for="(record, i) in checkins" :key="i" class="checkin-item">
         <view class="checkin-header">
-          <text class="checkin-title">{{ m.title }}</text>
-          <text class="checkin-count">{{ (m.checkinCount || 0) }} 人次</text>
+          <text class="checkin-title">{{ record.markerTitle }}</text>
+          <text class="checkin-count">{{ formatTime(record.checkedAt) }}</text>
         </view>
-        <view v-if="m.checkedBy && m.checkedBy.length" class="checked-list">
-          <view v-for="(entry, j) in m.checkedBy" :key="j" class="checked-entry">
-            <text class="entry-user">用户: {{ entry.userId }}</text>
-            <text class="entry-time">{{ formatTime(entry.checkedAt) }}</text>
-          </view>
+        <view class="checked-entry">
+          <text class="entry-user">用户: {{ record.userId }}</text>
+          <text class="entry-time">{{ record.note || '无备注' }}</text>
         </view>
       </view>
     </view>
@@ -61,7 +59,7 @@ onShow(async () => {
     if (res.errCode === 0) dashboard.value = res.data
 
     const cres = await api.getCheckins({ offset: 0, limit: 10 })
-    if (cres.errCode === 0) checkins.value = cres.data
+    if (cres.errCode === 0) checkins.value = (cres.data && cres.data.list) || []
   } catch (e) {
     console.error('Dashboard load failed', e)
   }

@@ -2943,6 +2943,14 @@ P2 主链路已真机验收通过（详见 `UTS_COMPILE_PITFALLS.md §九`）：
    - 必做前置：把默认 8 个本地种子点初始化到 `tourism_markers`，否则 App 本地可打卡但云端 `marker-center.checkin` 会找不到文档。
    - 建议拆成两步：先做 `admin-center` 云对象和初始化脚本，再做 uni-admin 页面。
 
+   **2026-05-09 已落地（P3 后台第一轮）**：
+   - `admin-center` 新增 `getMarkers`、`getMarkerCheckins`、`createMarker`、`syncDefaultMarkers`，并收紧 `updateMarker` / `deleteMarker` / `batchImport` 只走管理员鉴权。
+   - 默认 8 个种子点抽到 `uniCloud-aliyun/cloudfunctions/admin-center/marker-service.js`，`syncDefaultMarkers()` 按数字 `id` 幂等写入 `tourism_markers`。新增文档会带 `createdBy: 'system'`、`checkedBy: []`、`checkinCount: 0`、本地图标路径和尺寸；已存在文档只修复基础点位字段，不清空打卡记录。
+   - `uni-admin/pages/markers/index.vue` 改走 `admin-center.getMarkers`，支持搜索、列表、创建者/创建时间/打卡人数展示、新增、编辑、删除、批量导入、同步默认点，以及跳转查看单点记录。
+   - `uni-admin/pages/checkins/index.vue` 改为记录视图，展示打卡人、打卡时间、照片 URL/预览、备注；可查看全局记录，也可从打卡点页通过 `admin_checkins_marker_id` storage 查看某个点的记录。
+   - `uni-admin/pages/dashboard/index.vue` 适配 `admin-center.getCheckins()` 的记录列表返回结构。
+   - 本轮新增测试：`node --test uniCloud-aliyun/cloudfunctions/admin-center/marker-service.test.js`，覆盖种子点数量/id、云端种子文档形状、创建/编辑白名单、打卡记录展开排序。
+
 2. **iconPath 远程 URL → 本地路径统一化**（中优先级）
    - 现象：云端 `tourism_markers` 部分文档 `iconPath` 是 `https://img.icons8.com/color/48/marker.png`（远程 URL），腾讯地图插件偶发不渲染（PITFALLS §F #7）
    - 修复：客户端 `add-marker` 提交前强制把 iconPath 改成 `/static/marker_default.png`；并写一次性脚本/云函数更新历史数据
