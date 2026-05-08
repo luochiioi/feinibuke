@@ -31,7 +31,7 @@
         <view class="timeline-dot"></view>
         <view class="timeline-content">
           <text class="timeline-title">{{ m.title }}</text>
-          <text class="timeline-time" v-if="m.checkedAt != null">{{ '' + m.checkedAt }}</text>
+          <text class="timeline-time" v-if="m.checkedAt != null">{{ fmtTime(m.checkedAt!!) }}</text>
         </view>
       </view>
     </view>
@@ -47,6 +47,11 @@ import { formatDateTime } from '@/utils/format'
 import ProgressBar from '@/components/ProgressBar.uvue'
 
 onShow((): void => { loadMarkers(); loadTasks() })
+
+// UTS 5.07：模板不能直接调 import 的独立函数，wrap 进 setup 作用域
+function fmtTime(ts: number): string {
+  return formatDateTime(ts)
+}
 </script>
 
 <style>

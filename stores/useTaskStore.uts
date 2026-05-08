@@ -8,8 +8,10 @@ import type { UserTaskProgress } from '@/utils/storage'
 export const tasks = ref<Task[]>([])
 export const userTasks = ref<Map<string, UserTaskProgress>>(new Map())
 export const rewards = ref<Reward[]>([])
-export const completedTaskCount = computed(() => tasks.value.filter(t => t.status === 'completed').length)
-export const totalTaskCount = computed(() => tasks.value.length)
+export const pendingTaskDetailId = ref<string>('')
+export const pendingTaskDetailSnapshot = ref<Task | null>(null)
+export const completedTaskCount = computed((): number => tasks.value.filter((t: Task): boolean => t.status === 'completed').length)
+export const totalTaskCount = computed((): number => tasks.value.length)
 
 export function loadFromStorage(): void {
   let stored = loadTasks()
@@ -62,3 +64,13 @@ export function checkTaskCompletion(marker: CheckinMarker): Task[] {
 }
 
 export function findTaskById(id: string): Task | null { const found = tasks.value.find(t => t.id === id); return found ?? null }
+
+export function requestTaskDetail(id: string): void {
+  pendingTaskDetailId.value = id
+  uni.setStorageSync('pending_task_detail_id', id)
+  const task = findTaskById(id)
+  if (task != null) {
+    pendingTaskDetailSnapshot.value = task
+    uni.setStorageSync('pending_task_detail_snapshot', JSON.stringify(task))
+  }
+}

@@ -33,6 +33,7 @@ module.exports = {
     const res = await col.add({
       id: now,
       title, latitude, longitude,
+      iconPath: '/static/marker_default.png',
       checked: false,
       checkinCount: 0,
       checkedBy: [],

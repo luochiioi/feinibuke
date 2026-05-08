@@ -14,7 +14,7 @@
     </view>
 
     <view class="auth-chip" :class="isLoggedIn ? 'auth-chip-on' : 'auth-chip-off'" @click="goAuth">
-      <text class="auth-chip-text">{{ authLabel }}</text>
+      <text :class="isLoggedIn ? 'auth-chip-text auth-chip-text-on' : 'auth-chip-text auth-chip-text-off'">{{ authLabel }}</text>
     </view>
 
     <checkin-map
@@ -37,16 +37,48 @@
 
     <view class="marker-panel" v-if="activeMarker != null">
       <view class="panel-header">
+        <view class="status-pill" :class="activeMarker!!.checked ? 'pill-done' : 'pill-pending'">
+          <text class="status-pill-text">{{ activeMarker!!.checked ? '已打卡' : '未打卡' }}</text>
+        </view>
         <text class="panel-title">{{ activeMarker!!.title }}</text>
         <view class="panel-close" @click="closeSheet">
-          <text class="panel-close-text">X</text>
+          <text class="panel-close-text">×</text>
         </view>
       </view>
-      <text class="panel-status" v-if="activeMarker!!.checked">已打卡</text>
-      <text class="panel-distance" v-if="activeMarker!!.checked == false && dist != null">
-        距离：{{ (dist as number).toFixed(0) }}m
-      </text>
-      <text class="panel-status status-pending" v-if="activeMarker!!.checked == false">未打卡</text>
+
+      <view class="panel-meta">
+        <text class="meta-coord">{{ activeMarker!!.latitude.toFixed(4) }}, {{ activeMarker!!.longitude.toFixed(4) }}</text>
+        <text class="meta-distance" v-if="activeMarker!!.checked == false && dist != null">距离 {{ (dist as number).toFixed(0) }}m</text>
+      </view>
+
+      <view class="panel-stats">
+        <view class="stat-pill">
+          <text class="stat-pill-text">{{ checkinCountText }}</text>
+        </view>
+        <view class="stat-pill stat-pill-owner" v-if="isOwner">
+          <text class="stat-pill-text">由我创建</text>
+        </view>
+      </view>
+
+      <view class="my-checkin" v-if="myCheckin != null">
+        <text class="section-label">我的打卡</text>
+        <image v-if="myCheckin!!.photoCloudURL != null" :src="myCheckin!!.photoCloudURL!!" class="my-photo" mode="aspectFill" />
+        <text class="my-note" v-if="myCheckin!!.note != null">{{ myCheckin!!.note }}</text>
+        <text class="my-time">{{ fmtTime(myCheckin!!.checkedAt) }}</text>
+      </view>
+
+      <view class="other-checkins" v-if="otherCheckinsWithPhoto.length > 0">
+        <text class="section-label">他人足迹（{{ otherCheckins.length }}）</text>
+        <scroll-view scroll-x class="other-scroll" :show-scrollbar="false">
+          <view class="other-list">
+            <view v-for="e in otherCheckinsWithPhoto" :key="e.userId + '_' + e.checkedAt" class="other-card">
+              <image :src="e.photoCloudURL!!" class="other-photo" mode="aspectFill" />
+              <text class="other-time">{{ fmtTime(e.checkedAt) }}</text>
+            </view>
+          </view>
+        </scroll-view>
+      </view>
+
       <view class="panel-actions">
         <view class="panel-btn panel-btn-primary" v-if="activeMarker!!.checked == false && canCheckIn" @click="doCheckin">
           <text class="panel-btn-text light">打卡</text>
@@ -54,7 +86,7 @@
         <view class="panel-btn panel-btn-ghost" v-if="activeMarker!!.checked == false && canCheckIn == false">
           <text class="panel-btn-text muted">未进入范围</text>
         </view>
-        <view class="panel-btn panel-btn-danger" @click="doDelete">
+        <view class="panel-btn panel-btn-danger" v-if="isOwner" @click="doDelete">
           <text class="panel-btn-text danger">删除</text>
         </view>
       </view>
@@ -84,11 +116,16 @@ import { accuracyLevel, accuracyText, currentLocation, distanceTo, getEffectiveC
 import { activeMarker, consumeFocus, latitude, longitude, mapCenterLat, mapCenterLng, moveToLocation, onRegionChangeEnd, scale, setActiveMarker, zoomIn, zoomOut } from '@/stores/useMapStore'
 import { loadFromStorage as loadTasks } from '@/stores/useTaskStore'
 import { state as userState, clearUserInfo } from '@/user/index.uts'
-import type { CheckinMarker } from '@/types/marker'
+import type { CheckinMarker, CheckinEntry } from '@/types/marker'
+import { formatDateTime } from '@/utils/format'
 
 const isLoggedIn = computed((): boolean => userState.userInfo != null)
 const authLabel = computed((): string => {
-  return userState.userInfo != null ? userState.userInfo!!.userName : '登录'
+  if (userState.userInfo == null) return '登录'
+  const name = userState.userInfo!!.userName
+  if (name.length > 0) return name
+  const id = userState.userInfo!!.userId
+  return id.length > 0 ? id : '已登录'
 })
 
 function goAuth(): void {
@@ -101,6 +138,11 @@ function goAuth(): void {
     success: (res: ShowActionSheetSuccess): void => {
       if (res.tapIndex == 0) {
         clearUserInfo()
+        // clearUserInfo 已清掉 storage 里的业务数据；这里立刻重 load
+        // reactive ref，UI 就不会再显示上一个账号的 markers / tasks
+        loadMarkers()
+        loadTasks()
+        setActiveMarker(null)
         uni.showToast({ title: '已退出登录', icon: 'none' })
       }
     }
@@ -151,6 +193,55 @@ const effectiveRadius = computed((): number => {
 const canCheckIn = computed((): boolean => {
   return dist.value != null && dist.value <= effectiveRadius.value
 })
+
+// 详情面板：自己/他人打卡 + 创建者判定
+const myCheckin = computed((): CheckinEntry | null => {
+  const m = activeMarker.value
+  if (m == null) return null
+  const list = m.checkedBy
+  if (list == null) return null
+  const u = userState.userInfo
+  if (u == null) return null
+  const myId = u!!.userId
+  const found = list.find((e: CheckinEntry): boolean => e.userId === myId)
+  return found ?? null
+})
+
+const otherCheckins = computed((): CheckinEntry[] => {
+  const m = activeMarker.value
+  if (m == null) return [] as CheckinEntry[]
+  const list = m.checkedBy
+  if (list == null) return [] as CheckinEntry[]
+  const u = userState.userInfo
+  if (u == null) return list
+  const myId = u!!.userId
+  return list.filter((e: CheckinEntry): boolean => e.userId !== myId)
+})
+
+const otherCheckinsWithPhoto = computed((): CheckinEntry[] => {
+  return otherCheckins.value.filter((e: CheckinEntry): boolean => e.photoCloudURL != null)
+})
+
+const isOwner = computed((): boolean => {
+  const m = activeMarker.value
+  const u = userState.userInfo
+  if (m == null || u == null) return false
+  return m.createdBy != null && m.createdBy === u!!.userId
+})
+
+const checkinCountText = computed((): string => {
+  const m = activeMarker.value
+  if (m == null) return ''
+  const c = m.checkinCount
+  if (c == null || c === 0) return '还未有人打卡'
+  return '已被 ' + c + ' 人打卡'
+})
+
+// UTS 5.07 限制：模板里直接调用 import 进来的独立函数会报 "找不到名称 invoke"。
+// 把 formatDateTime 包成 setup 作用域的本地函数，模板 resolver 才能识别。
+function fmtTime(ts: number): string {
+  return formatDateTime(ts)
+}
 
 onShow((): void => {
   loadMarkers()
@@ -211,10 +302,23 @@ function goAddMarker(): void {
 function doCheckin(): void {
   const marker = activeMarker.value
   if (marker == null) return
+  if (userState.userInfo == null) {
+    uni.showActionSheet({
+      itemList: ['去登录'],
+      success: (res: ShowActionSheetSuccess): void => {
+        if (res.tapIndex == 0) uni.navigateTo({ url: '/pages/login/login' })
+      }
+    })
+    return
+  }
   // checkin.uvue 通过 onLoad(options) 读 url 参数，不要再走 Storage（5.07 真机崩溃过 cast UTSJSONObject）
   // 模板字符串里 number 必须先 .toString() 转，否则 union 类型会被 UTS 编译误报（参见 PITFALLS §C）
   const idStr = marker.id.toString()
   const titleStr = encodeURIComponent(marker.title)
+  uni.setStorageSync('pending_checkin_marker_id', idStr)
+  uni.setStorageSync('pending_checkin_marker_title', marker.title)
+  uni.setStorageSync('pending_checkin_preflight_at', Date.now())
+  uni.setStorageSync('pending_checkin_preflight_distance', dist.value ?? -1)
   uni.navigateTo({
     url: `/pages/checkin/checkin?id=${idStr}&title=${titleStr}`
   })
@@ -261,17 +365,20 @@ function goLocate(): void {
 function doDelete(): void {
   const marker = activeMarker.value
   if (marker == null) return
-  uni.showModal({
-    title: '确认删除',
-    content: `确定要删除"${marker.title}"吗？`,
-    success: (res: any): void => {
-      const result = res as UTSJSONObject
-      if ((result['confirm'] as boolean) == true) {
-        deleteMarker(marker.id)
-        setActiveMarker(null)
+  uni.showActionSheet({
+    itemList: ['删除打卡点'],
+    success: (res: ShowActionSheetSuccess): void => {
+      if (res.tapIndex == 0) {
+        doDeleteMarker(marker.id)
       }
     }
   })
+}
+
+async function doDeleteMarker(markerId: number): Promise<void> {
+  await deleteMarker(markerId)
+  setActiveMarker(null)
+  uni.showToast({ title: '已删除', icon: 'none' })
 }
 </script>
 
@@ -283,8 +390,8 @@ function doDelete(): void {
 .auth-chip-on { background-color: #2ecc71; }
 .auth-chip-off { background-color: #ffffff; border: 2rpx solid #2ecc71; }
 .auth-chip-text { font-size: 24rpx; font-weight: 500; }
-.auth-chip-on .auth-chip-text { color: #ffffff; }
-.auth-chip-off .auth-chip-text { color: #2ecc71; }
+.auth-chip-text-on { color: #ffffff; }
+.auth-chip-text-off { color: #2ecc71; }
 .loc-row { display: flex; flex-direction: row; align-items: center; justify-content: space-between; }
 .coordinate { font-size: 22rpx; color: #666666; font-family: monospace; }
 .accuracy-badge { padding: 6rpx 20rpx; border-radius: 20rpx; }
@@ -329,26 +436,35 @@ function doDelete(): void {
 .add-label { margin-top: 8rpx; font-size: 22rpx; color: #2ecc71; background-color: rgba(255,255,255,0.9); padding: 4rpx 16rpx; border-radius: 12rpx; }
 .marker-panel {
   position: absolute;
-  left: 24rpx;
-  right: 24rpx;
+  left: 20rpx;
+  right: 20rpx;
   bottom: 144rpx;
   z-index: 30;
   background-color: #ffffff;
-  border-radius: 28rpx;
+  border-radius: 32rpx;
   padding: 28rpx;
-  box-shadow: 0 12rpx 36rpx rgba(0,0,0,0.14);
+  box-shadow: 0 16rpx 48rpx rgba(0,0,0,0.18);
   display: flex;
   flex-direction: column;
+  max-height: 880rpx;
 }
 .panel-header {
   display: flex;
   flex-direction: row;
   align-items: center;
-  justify-content: space-between;
 }
+.status-pill {
+  padding: 6rpx 18rpx;
+  border-radius: 20rpx;
+  margin-right: 16rpx;
+}
+.pill-done { background-color: #e6f9ed; }
+.pill-pending { background-color: #fff5e0; }
+.status-pill-text { font-size: 22rpx; font-weight: 500; }
+.pill-done .status-pill-text { color: #27ae60; }
+.pill-pending .status-pill-text { color: #f39c12; }
 .panel-title {
   flex: 1;
-  margin-right: 16rpx;
   font-size: 34rpx;
   font-weight: bold;
   color: #1a1a1a;
@@ -361,25 +477,104 @@ function doDelete(): void {
   display: flex;
   align-items: center;
   justify-content: center;
+  margin-left: 16rpx;
 }
 .panel-close-text {
-  font-size: 26rpx;
+  font-size: 32rpx;
   color: #7f8c8d;
   font-weight: 600;
+  line-height: 32rpx;
 }
-.panel-status {
-  margin-top: 18rpx;
-  font-size: 28rpx;
-  color: #333333;
+.panel-meta {
+  margin-top: 16rpx;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
 }
-.status-pending {
-  color: #f39c12;
+.meta-coord {
+  font-size: 22rpx;
+  color: #999999;
+  font-family: monospace;
+  flex: 1;
+}
+.meta-distance {
+  font-size: 24rpx;
+  color: #2ecc71;
   font-weight: 500;
 }
-.panel-distance {
-  margin-top: 12rpx;
+.panel-stats {
+  margin-top: 16rpx;
+  display: flex;
+  flex-direction: row;
+}
+.stat-pill {
+  padding: 8rpx 20rpx;
+  border-radius: 20rpx;
+  background-color: #f4f6f8;
+  margin-right: 12rpx;
+}
+.stat-pill-owner { background-color: #e3f2fd; }
+.stat-pill-text { font-size: 22rpx; color: #555555; }
+.stat-pill-owner .stat-pill-text { color: #1e88e5; font-weight: 500; }
+.section-label {
+  font-size: 24rpx;
+  color: #7f8c8d;
+  margin-bottom: 12rpx;
+  font-weight: 500;
+}
+.my-checkin {
+  margin-top: 24rpx;
+  padding: 20rpx;
+  background-color: #f8faf9;
+  border-radius: 20rpx;
+  display: flex;
+  flex-direction: column;
+}
+.my-photo {
+  width: 100%;
+  height: 320rpx;
+  border-radius: 16rpx;
+  background-color: #e8ece8;
+}
+.my-note {
+  margin-top: 14rpx;
   font-size: 26rpx;
-  color: #666666;
+  color: #333333;
+  line-height: 38rpx;
+}
+.my-time {
+  margin-top: 8rpx;
+  font-size: 22rpx;
+  color: #aaaaaa;
+}
+.other-checkins {
+  margin-top: 24rpx;
+}
+.other-scroll {
+  width: 100%;
+}
+.other-list {
+  display: flex;
+  flex-direction: row;
+  padding-bottom: 4rpx;
+}
+.other-card {
+  width: 200rpx;
+  margin-right: 16rpx;
+  display: flex;
+  flex-direction: column;
+}
+.other-card:last-child { margin-right: 0; }
+.other-photo {
+  width: 200rpx;
+  height: 200rpx;
+  border-radius: 16rpx;
+  background-color: #e8ece8;
+}
+.other-time {
+  margin-top: 8rpx;
+  font-size: 20rpx;
+  color: #999999;
 }
 .panel-actions {
   margin-top: 24rpx;

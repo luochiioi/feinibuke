@@ -1,23 +1,51 @@
 <template>
-  <scroll-view class="tasks-page" scroll-y>
+  <scroll-view class="tasks-page" scroll-y direction="vertical" :show-scrollbar="false">
     <view class="hero">
       <view class="hero-stat"><text class="hero-value">{{ doneCount }}/{{ totalCount }}</text><text class="hero-label">已打卡</text></view>
       <view class="hero-stat"><text class="hero-value">{{ completedTaskCount }}/{{ totalTaskCount }}</text><text class="hero-label">任务完成</text></view>
       <view class="hero-stat"><text class="hero-value">{{ unlockedCount }}/7</text><text class="hero-label">成就解锁</text></view>
     </view>
-    <view class="section-header"><text class="section-title">成就徽章</text></view>
-    <scroll-view scroll-x class="badge-scroll" :show-scrollbar="false">
-      <view class="badge-list">
-        <BadgeCard v-for="a in achievements" :key="a.id" :achievement="a" />
+
+    <view class="section-tabs">
+      <view :class="activeSection === 'tasks' ? 'section-tab section-tab-active' : 'section-tab'" @click="showTasks">
+        <text :class="activeSection === 'tasks' ? 'section-tab-text section-tab-text-active' : 'section-tab-text'">任务</text>
       </view>
-    </scroll-view>
-    <view class="section-header"><text class="section-title">任务列表</text></view>
-    <view class="task-list-section">
-      <view v-if="tasks.length === 0" class="empty-state">
+      <view :class="activeSection === 'badges' ? 'section-tab section-tab-active' : 'section-tab'" @click="showBadges">
+        <text :class="activeSection === 'badges' ? 'section-tab-text section-tab-text-active' : 'section-tab-text'">成就</text>
+      </view>
+      <view :class="activeSection === 'spots' ? 'section-tab section-tab-active' : 'section-tab'" @click="showSpots">
+        <text :class="activeSection === 'spots' ? 'section-tab-text section-tab-text-active' : 'section-tab-text'">地点</text>
+      </view>
+    </view>
+
+    <view v-if="activeSection === 'badges'" class="badge-section">
+      <view class="section-header"><text class="section-title">成就徽章</text></view>
+      <view class="badge-grid">
+        <view v-for="a in achievements" :key="a.id" class="badge-item">
+          <BadgeCard :achievement="a" />
+        </view>
+      </view>
+    </view>
+
+    <view v-if="activeSection === 'spots'" class="filter-bar">
+      <view :class="activeFilter === 'all' ? 'filter-chip filter-chip-active' : 'filter-chip'" @click="setFilterAll">
+        <text :class="activeFilter === 'all' ? 'filter-chip-text filter-chip-text-active' : 'filter-chip-text'">全部 {{ markers.length }}</text>
+      </view>
+      <view :class="activeFilter === 'pending' ? 'filter-chip filter-chip-active' : 'filter-chip'" @click="setFilterPending">
+        <text :class="activeFilter === 'pending' ? 'filter-chip-text filter-chip-text-active' : 'filter-chip-text'">待打卡 {{ pendingMarkers.length }}</text>
+      </view>
+      <view :class="activeFilter === 'done' ? 'filter-chip filter-chip-active' : 'filter-chip'" @click="setFilterDone">
+        <text :class="activeFilter === 'done' ? 'filter-chip-text filter-chip-text-active' : 'filter-chip-text'">已打卡 {{ checkedMarkers.length }}</text>
+      </view>
+    </view>
+
+    <view v-if="activeSection === 'tasks'" class="task-list-section">
+      <view class="section-header"><text class="section-title">任务列表</text></view>
+      <view v-if="filteredTasks.length === 0" class="empty-state">
         <text class="empty-icon">L</text><text class="empty-text">暂无任务</text>
       </view>
-      <view v-for="t in tasks" :key="t.id" class="task-item" :class="t.status === 'completed' ? 'task-done' : 'task-pending'" @click="goTaskDetail(t)">
-        <view class="task-status-dot" :class="t.status === 'completed' ? 'done' : 'pending'"></view>
+      <view v-for="t in filteredTasks" :key="t.id" class="task-item" :class="isTaskDone(t) ? 'task-done' : 'task-pending'" @click="goTaskDetail(t)">
+        <view class="task-status-dot" :class="isTaskDone(t) ? 'done' : 'pending'"></view>
         <view class="task-info">
           <text class="task-name">{{ t.name }}</text>
           <text class="task-reward">奖励：{{ t.reward }}</text>
@@ -26,16 +54,7 @@
       </view>
     </view>
 
-    <view class="section-header"><text class="section-title">足迹地图</text></view>
-    <view class="mini-map-container">
-      <checkin-map class="mini-map" map-id="tasksMiniMap" :latitude="miniLat" :longitude="miniLng" :scale="miniScale" :show-location="false" :markers-json="miniMarkersJson" />
-    </view>
-    <view class="filter-bar">
-      <view v-for="f in filters" :key="f.key" class="filter-chip" :class="{ active: activeFilter === f.key }" @click="setFilter(f.key)">
-        <text class="filter-chip-text">{{ f.label }}</text>
-      </view>
-    </view>
-    <view class="marker-list">
+    <view v-if="activeSection === 'spots'" class="marker-list">
       <view v-if="filteredMarkers.length === 0" class="empty-state">
         <text class="empty-icon">L</text><text class="empty-text">暂无打卡点</text>
       </view>
@@ -48,13 +67,20 @@
         </view>
       </view>
     </view>
+
+    <view v-if="activeSection === 'spots'" class="map-section">
+      <view class="section-header"><text class="section-title">足迹地图</text></view>
+      <view class="mini-map-container">
+        <checkin-map class="mini-map" map-id="tasksMiniMap" :latitude="miniLat" :longitude="miniLng" :scale="miniScale" :show-location="false" :markers-json="miniMarkersJson" />
+      </view>
+    </view>
   </scroll-view>
 </template>
 
 <script setup lang="uts">
 import { ref, computed, onShow } from 'vue'
-import { markers, checkedMarkers, totalCount, doneCount, loadFromStorage as loadMarkers, deleteMarker, findById } from '@/stores/useMarkerStore'
-import { tasks, completedTaskCount, totalTaskCount, loadFromStorage as loadTasks } from '@/stores/useTaskStore'
+import { markers, checkedMarkers, pendingMarkers, totalCount, doneCount, loadFromStorage as loadMarkers, deleteMarker, findById, findByTitle } from '@/stores/useMarkerStore'
+import { tasks, completedTaskCount, totalTaskCount, loadFromStorage as loadTasks, requestTaskDetail } from '@/stores/useTaskStore'
 import { achievements, unlockedCount } from '@/stores/useAchievementStore'
 import { requestFocus } from '@/stores/useMapStore'
 import type { CheckinMarker } from '@/types/marker'
@@ -64,20 +90,30 @@ import BadgeCard from '@/components/BadgeCard.uvue'
 import CheckinMap from '@/uni_modules/checkin-map/components/checkin-map/checkin-map.uvue'
 
 function goTaskDetail(t: Task): void {
+  requestTaskDetail(t.id)
   uni.navigateTo({ url: `/pages/task-detail/task-detail?id=${t.id}` })
 }
 
 const activeFilter = ref<FilterMode>('all')
-const filters = [
-  { key: 'all' as FilterMode, label: '全部' },
-  { key: 'pending' as FilterMode, label: '待打卡' },
-  { key: 'done' as FilterMode, label: '已打卡' }
-]
-
-const filteredMarkers = computed(() => {
-  if (activeFilter.value === 'pending') return checkedMarkers.value
+const activeSection = ref<string>('tasks')
+const filteredMarkers = computed((): CheckinMarker[] => {
+  if (activeFilter.value === 'pending') return pendingMarkers.value
   if (activeFilter.value === 'done') return checkedMarkers.value
   return markers.value
+})
+
+function isTaskDone(t: Task): boolean {
+  if (t.status === 'completed') return true
+  const byId = findById(t.targetMarkerId)
+  if (byId != null) return byId.checked
+  const byTitle = findByTitle(t.targetTitle)
+  return byTitle != null && byTitle.checked
+}
+
+const filteredTasks = computed((): Task[] => {
+  if (activeFilter.value === 'pending') return tasks.value.filter((t: Task): boolean => !isTaskDone(t))
+  if (activeFilter.value === 'done') return tasks.value.filter((t: Task): boolean => isTaskDone(t))
+  return tasks.value
 })
 
 // TODO(下一会话 P1): 同 pages/index/index.uvue,缩略地图的 miniMapMarkers 暂时
@@ -109,43 +145,61 @@ const miniMarkersJson = computed((): string => {
   return JSON.stringify(arr)
 })
 
-const miniLat = computed(() => { if (markers.value.length > 0) return markers.value[0].latitude; return 39.9163 })
-const miniLng = computed(() => { if (markers.value.length > 0) return markers.value[0].longitude; return 116.3972 })
+const miniLat = computed((): number => { if (markers.value.length > 0) return markers.value[0].latitude; return 39.9163 })
+const miniLng = computed((): number => { if (markers.value.length > 0) return markers.value[0].longitude; return 116.3972 })
 const miniScale = ref<number>(4)
 
 onShow((): void => { loadMarkers(); loadTasks() })
 
-function setFilter(key: any | null): void { if (key != null) activeFilter.value = key as FilterMode }
+function setFilterAll(): void { activeFilter.value = 'all' }
+function setFilterPending(): void { activeFilter.value = 'pending' }
+function setFilterDone(): void { activeFilter.value = 'done' }
+function showTasks(): void { activeSection.value = 'tasks' }
+function showBadges(): void { activeSection.value = 'badges' }
+function showSpots(): void { activeSection.value = 'spots' }
 function goFocus(item: CheckinMarker): void { requestFocus(item); uni.navigateBack() }
 function doDelete(item: CheckinMarker): void {
-  uni.showModal({
-    title: '确认删除', content: `确定要删除"${item.title}"吗？`,
-    success: (res: any): void => {
-      const r = res as UTSJSONObject
-      if ((r["confirm"] as boolean) == true) { deleteMarker(item.id) }
+  uni.showActionSheet({
+    itemList: ['删除打卡点'],
+    success: (res: ShowActionSheetSuccess): void => {
+      if (res.tapIndex == 0) {
+        doDeleteMarker(item.id)
+      }
     }
   })
+}
+
+async function doDeleteMarker(markerId: number): Promise<void> {
+  await deleteMarker(markerId)
+  uni.showToast({ title: '已删除', icon: 'none' })
 }
 </script>
 
 <style>
-.tasks-page { flex: 1; background-color: #f5f7f5; }
+.tasks-page { flex: 1; width: 750rpx; background-color: #f5f7f5; }
 .hero { display: flex; flex-direction: row; padding: 32rpx; background: linear-gradient(135deg, #2ecc71, #27ae60); }
 .hero-stat { flex: 1; display: flex; flex-direction: column; align-items: center; }
 .hero-value { font-size: 40rpx; font-weight: bold; color: #ffffff; }
 .hero-label { font-size: 22rpx; color: rgba(255,255,255,0.8); }
 .section-header { padding: 32rpx 32rpx 16rpx; }
 .section-title { font-size: 30rpx; font-weight: bold; color: #1a1a1a; }
-.badge-scroll { padding: 0 32rpx; }
-.badge-list { display: flex; flex-direction: row; padding-bottom: 16rpx; }
+.section-tabs { display: flex; flex-direction: row; padding: 24rpx 32rpx 4rpx; background-color: #f5f7f5; }
+.section-tab { flex: 1; height: 72rpx; border-radius: 36rpx; background-color: #e8ece8; display: flex; align-items: center; justify-content: center; margin-right: 16rpx; }
+.section-tab:last-child { margin-right: 0; }
+.section-tab-active { background-color: #1f8f5f; }
+.section-tab-text { font-size: 28rpx; color: #65736a; font-weight: 500; }
+.section-tab-text-active { color: #ffffff; }
+.badge-section { padding-bottom: 32rpx; }
+.badge-grid { display: flex; flex-direction: row; flex-wrap: wrap; padding: 0 32rpx; }
+.badge-item { width: 206rpx; margin-right: 16rpx; margin-bottom: 16rpx; flex-shrink: 0; }
 .mini-map-container { margin: 0 32rpx; height: 280rpx; border-radius: 16rpx; overflow: hidden; background-color: #e8ece8; }
 .mini-map { width: 100%; height: 100%; }
-.filter-bar { display: flex; flex-direction: row; padding: 24rpx 32rpx; }
+.filter-bar { display: flex; flex-direction: row; padding: 20rpx 32rpx; background-color: #f5f7f5; }
 .filter-chip { flex: 1; height: 64rpx; border-radius: 32rpx; background-color: #e8ece8; display: flex; align-items: center; justify-content: center; margin-right: 16rpx; }
 .filter-chip:last-child { margin-right: 0; }
 .filter-chip-text { font-size: 26rpx; color: #888888; }
-.filter-chip.active { background-color: #2ecc71; }
-.filter-chip.active .filter-chip-text { color: #ffffff; font-weight: 500; }
+.filter-chip-active { background-color: #2ecc71; }
+.filter-chip-text-active { color: #ffffff; font-weight: 500; }
 .marker-list { padding: 0 32rpx; display: flex; flex-direction: column; }
 .empty-state { display: flex; flex-direction: column; align-items: center; padding: 80rpx 0; }
 .empty-icon { font-size: 64rpx; }

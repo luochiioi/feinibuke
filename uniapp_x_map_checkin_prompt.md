@@ -2903,13 +2903,30 @@ const cloudURL = uploadData["cloudURL"] as string
 
 ### 15.0 Phase 1 当前真实状态（2026-05-08，**P1 + P2 真机闭环 ✅**）
 
-P1 主链路已真机验收通过：
+P1 主链路已基本打通，但 2026-05-09 真机复测发现仍有收尾问题，当前按“先修 P1，不开新大功能”的策略处理。
+
+已稳定的部分：
 - ✅ 地图 marker 图标显示（uni_modules 子组件方案落地，详见 `UTS_COMPILE_PITFALLS.md §F` 终极方案）
 - ✅ 打卡点详情面板距离/精度展示同步 GPS 状态
 - ✅ 跳转打卡页（`?id=...&title=...` URL 参数 + `onLoad((options))` 接收）
 - ✅ checkin 页范围判断与详情面板一致（共用 `getEffectiveCheckinRadius()`）
-- ✅ actionSheet + chooseImage 拍照/相册选图（typed 回调 `ShowActionSheetSuccess` / `ChooseImageSuccess`）
 - ✅ 提交打卡后 marker 图标切换 checked，tasks 页面同步任务/成就
+
+2026-05-09 已补的收尾约定：
+- ✅ tasks 页面改为外层 `view` + 内层纵向 `scroll-view`，避免 Android 真机整页不滚动
+- ✅ tasks 页面回到与 stats 页一致的单根纵向 `scroll-view`，并显式设置 `direction="vertical"`
+- ✅ tasks 页面筛选 chips 改为三个显式按钮，不再用 `v-for` + 联合类型参数；筛选同时作用于任务列表和打卡点列表
+- ✅ tasks 页面迷你地图下移到列表后，避免原生 map 吃掉首屏滑动手势
+- ✅ 成就徽章横滑区显式设置内容宽度和 item 外包层，避免 flex 内容被压回视口
+- ✅ 成就徽章横滑同时写 `scroll-x` 与 `direction="horizontal"`，贴近 uni-app x 真机滚动约定
+- ✅ tasks 页面信息架构调整为 `任务 / 成就 / 地点` 三段；成就改网格展示，地点页单独承载打卡点筛选和迷你地图
+- ✅ task-detail 增加 `pendingTaskDetailId` 共享 ref + `pendingTaskDetailSnapshot` 快照 + storage 兜底，避免 query/store 任一层失效时显示“任务不存在”
+- ✅ 登录 chip 使用直接动态文字类和用户名兜底，避免登录后只显示绿色胶囊不显示用户名
+- ✅ 删除确认统一改用 `showActionSheet`，避开 `UniShowModalResult cannot be cast to UTSJSONObject`
+- ✅ 本地种子点云端不存在时，checkin 页不再同时弹“打卡成功”和“打卡点不存在”；本地打卡成功优先，云端种子同步列为后续完善项
+- ✅ 未登录点击 marker 详情的“打卡”时先提示登录，不再进入 checkin 页，也不再产生本地已打卡状态
+- ✅ checkin 页取消 actionSheet 中间层，改成“拍照 / 相册”两个直接按钮调用 `chooseImage`
+- ✅ 首页进入 checkin 前记录同 marker 的短时 preflight 距离，减少 GPS 跳变导致的“详情页可打卡、checkin 页距离过远”
 
 P2 主链路已真机验收通过（详见 `UTS_COMPILE_PITFALLS.md §九`）：
 - ✅ **登录态打通**：主地图 auth-chip 入口；登录成功 → `setUserInfo` 写 `uni_id_token` → marker-center 云对象 `_before` 通过 `authUtil.checkAuth` 拿到 `this.auth.uid` → checkin/add 真正写入云端

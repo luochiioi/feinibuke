@@ -170,10 +170,17 @@ export async function syncMarkers(): Promise<CheckinMarker[]> {
   }
 
   // Merge cloud markers
+  // PITFALLS §九 法则 8：必须用泛型 JSON.parse<T>() 才会真实构造 typed 实例；
+  // `as` 只是类型断言，访问嵌套数组（如 checkedBy[]）会 ClassCastException。
   for (const raw of cloudData) {
     const jsonStr = JSON.stringify(raw)
-    const cloudMarker = JSON.parse(jsonStr) as CheckinMarker
+    const cloudMarker = JSON.parse<CheckinMarker>(jsonStr)
     if (cloudMarker == null) continue
+
+    // 防御 PITFALLS §F #7：腾讯地图插件对远程 https iconPath 偶发不渲染
+    if (cloudMarker.iconPath == null || cloudMarker.iconPath.startsWith('http')) {
+      cloudMarker.iconPath = '/static/marker_default.png'
+    }
 
     const local = merged.get(cloudMarker.id)
 
@@ -181,20 +188,21 @@ export async function syncMarkers(): Promise<CheckinMarker[]> {
       // New cloud marker not in local: add it
       merged.set(cloudMarker.id, cloudMarker)
     } else {
-      // Both exist: merge strategy
-      // Cloud checkin data takes priority (checkedBy from other users)
+      // Both exist: cloud 永远是 checkedBy / checkinCount 的权威来源
+      local.checkedBy = cloudMarker.checkedBy
+      local.checkinCount = cloudMarker.checkinCount
       if (cloudMarker.checked) {
         local.checked = true
         if (local.checkedAt == null) local.checkedAt = now
       }
-      // Preserve local photoPath if it exists
-      if (local.photoPath != null && cloudMarker.photoPath == null) {
-        // keep local photoPath
-      }
+      // 保留 local.photoPath（本地拍照路径，云端没有）
       if (cloudMarker.photoPath != null) {
         local.photoPath = cloudMarker.photoPath
       }
-      // checkinCount not in CheckinMarker type — skip cloud metadata merge
+      // photoCloudURL 也应以云端为准
+      if (cloudMarker.photoCloudURL != null) {
+        local.photoCloudURL = cloudMarker.photoCloudURL
+      }
     }
   }
 

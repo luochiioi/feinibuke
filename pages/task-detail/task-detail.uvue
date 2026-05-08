@@ -21,6 +21,10 @@
       <view class="section">
         <text class="section-title">状态</text>
         <view class="info-row"><text class="info-label">任务状态</text><text class="info-value" :class="task.status === 'completed' ? 'done' : 'pending'">{{ task.status === 'completed' ? '已完成' : '待完成' }}</text></view>
+        <view class="info-row" v-if="task.status === 'completed' && task.completedAt != null">
+          <text class="info-label">完成时间</text>
+          <text class="info-value done">{{ fmtTime(task.completedAt!!) }}</text>
+        </view>
       </view>
     </view>
     <view v-else class="empty"><text class="empty-icon">?</text><text class="empty-text">任务不存在</text></view>
@@ -28,27 +32,63 @@
 </template>
 
 <script setup lang="uts">
-import { ref, computed } from 'vue'
+import { ref, computed, onShow } from 'vue'
 // onLoad 在 uni-app x 中是全局页面生命周期钩子，无需 import
-import { findTaskById } from '@/stores/useTaskStore'
-import { findById } from '@/stores/useMarkerStore'
+import { findTaskById, loadFromStorage as loadTasks, pendingTaskDetailId, pendingTaskDetailSnapshot } from '@/stores/useTaskStore'
+import { findById, loadFromStorage as loadMarkers } from '@/stores/useMarkerStore'
 import { requestFocus } from '@/stores/useMapStore'
 import { formatDateTime } from '@/utils/format'
+import type { Task } from '@/types/task'
+import type { CheckinMarker } from '@/types/marker'
 
 const taskId = ref<string>('')
-const task = computed(() => findTaskById(taskId.value))
-const linkedMarker = computed(() => {
+const cachedTask = ref<Task | null>(null)
+const task = computed((): Task | null => {
+  const found = findTaskById(taskId.value)
+  if (found != null) return found
+  if (pendingTaskDetailSnapshot.value != null) return pendingTaskDetailSnapshot.value
+  return cachedTask.value
+})
+const linkedMarker = computed((): CheckinMarker | null => {
   const t = task.value; if (t == null) return null
   const m = findById(t.targetMarkerId); if (m != null) return m
   return null
 })
 
 onLoad((options: OnLoadOptions): void => {
-  taskId.value = (options['id'] as string | null) ?? ''
+  const id = options['id'] as string | null
+  if (id != null && id.length > 0) {
+    taskId.value = id
+  }
+})
+
+onShow((): void => {
+  // 确保 store 已加载，避免直接进入此页时 tasks/markers ref 是空数组导致 findById 全失败。
+  // 真机上 onLoad(options) 偶发拿不到 id，任务列表跳转前会写入这个兜底 key。
+  loadTasks()
+  loadMarkers()
+  if (pendingTaskDetailId.value.length > 0) {
+    taskId.value = pendingTaskDetailId.value
+  }
+  if (taskId.value.length === 0) {
+    const cachedId = uni.getStorageSync('pending_task_detail_id') as string | null
+    taskId.value = cachedId ?? ''
+  }
+  if (cachedTask.value == null) {
+    const raw = uni.getStorageSync('pending_task_detail_snapshot') as string | null
+    if (raw != null && raw.length > 0) {
+      cachedTask.value = JSON.parse<Task>(raw)
+    }
+  }
 })
 
 function goToMarker(): void {
   const m = linkedMarker.value; if (m != null) { requestFocus(m); uni.navigateBack() }
+}
+
+// UTS 5.07：模板不能直接调 import 的独立函数，wrap 进 setup 作用域
+function fmtTime(ts: number): string {
+  return formatDateTime(ts)
 }
 </script>
 

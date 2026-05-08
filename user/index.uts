@@ -25,9 +25,27 @@ export const state = reactive({
   userInfo: processedUserInfo
 } as AuthState)
 
+// 清掉与当前账号绑定的本地业务数据（marker / task / reward / 同步队列）。
+// 切换账号或退出登录时调用，避免上一个账号的打卡记录穿透到下一个账号。
+// 注：默认 8 个种子 marker 与 6 个种子 task 是无主数据，下次 loadFromStorage
+// 时会从 utils/defaults.uts 重新填充，不需要在这里保留。
+export function clearUserData(): void {
+  uni.removeStorageSync('tourism_markers')
+  uni.removeStorageSync('task_list')
+  uni.removeStorageSync('user_tasks')
+  uni.removeStorageSync('rewards')
+  uni.removeStorageSync('sync_queue')
+}
+
 export function setUserInfo(data: UserInfo, token: string, tokenExpired: number) {
-  state.userInfo = data
-  uni.setStorageSync('userInfo', data)
+  // 登录新账号前先清掉上一个账号残留的业务数据
+  clearUserData()
+  const safeData: UserInfo = {
+    userId: data.userId,
+    userName: data.userName.length > 0 ? data.userName : data.userId
+  }
+  state.userInfo = safeData
+  uni.setStorageSync('userInfo', safeData)
   uni.setStorageSync('uni_id_token', token)
   uni.setStorageSync('uni_id_token_expired', tokenExpired)
 }
@@ -37,4 +55,6 @@ export function clearUserInfo() {
   uni.removeStorageSync('userInfo')
   uni.removeStorageSync('uni_id_token')
   uni.removeStorageSync('uni_id_token_expired')
+  // 退出登录时同步清除本地业务数据，避免下一个账号看到旧数据
+  clearUserData()
 }

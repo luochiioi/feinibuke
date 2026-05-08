@@ -682,3 +682,130 @@ items[0].action  // ← 安全
 | **离线打卡端到端验证** | sync_queue 修了 ClassCastException，但还没真机走过"断网打卡 → 联网 flush"完整路径 |
 | **后台管理 (uni-admin)** | tourism_markers / users / rewards 后台 dashboard 仍未搭建，参考 §13 |
 | **照片上传链路** | photo-center.upload 路径已通，但实际真机录入还没拍过带照片的打卡（包括压缩、cloudURL 入库） |
+
+---
+
+## 十、P3 闭环（2026-05-08）
+
+P3（详情面板重做 + bug 批量修复）编译闭环。本阶段的关键修复（每条都对应一次真机或编译异常）：
+
+| # | 问题 | 修复 | 落点 |
+|---|------|------|------|
+| 1 | tasks 页 `filteredMarkers` 的 `pending` 分支错返回 `checkedMarkers.value`，"待打卡"过滤显示已打卡列表 | 改为 `pendingMarkers.value`，import 补 `pendingMarkers` | `pages/tasks/tasks.uvue` |
+| 2 | stats 页时间线 `'' + m.checkedAt` 直显裸 timestamp（已 import `formatDateTime` 但未用） | 用 `fmtTime(m.checkedAt!!)` 走格式化（套法则 10 wrapper） | `pages/stats/stats.uvue` |
+| 3 | 云端 `tourism_markers.iconPath` 残留 `https://img.icons8.com/...` 远程 URL，腾讯地图插件偶发不渲染 | 三层防御：服务端 add 写入默认值 / cloudSync 入口归一化 / store 终点基于 checked 重写 | `marker-center/index.obj.js` + `utils/cloudSync.uts` + `stores/useMarkerStore.uts` |
+| 4 | task-detail 缺"完成时间"行（已 import `formatDateTime` 未用） | 模板新增 `v-if` 条件行 + wrapper `fmtTime` | `pages/task-detail/task-detail.uvue` |
+| 5 | checkin 完成 navigateBack 后主地图仍停在原位 | doSubmit 内 `requestFocus(updatedMarker)` → 主地图 onShow 走 `consumeFocus` 自动 moveToLocation + setActiveMarker | `pages/checkin/checkin.uvue` |
+| 6 | 详情面板缺：他人足迹、自己照片预览、打卡数、创建者权限化删除 | β 方案：扩 `CheckinMarker` 加 `checkedBy: CheckinEntry[] \| null` + `checkinCount: number \| null`；cloudSync 切换 typed `JSON.parse<CheckinMarker>()` 真实构造嵌套数组；index 模板大改含 5 个新 computed | `types/marker.uts` + `utils/cloudSync.uts` + `pages/index/index.uvue` |
+| 7 | β 改完后 `useMarkerStore.uts:13` `computed(() => filter(m => m.checked))` 报 `Parenthesized expression cannot be empty at col 39` | 5 个 computed 全部加显式 callback 类型注解 + filter/find/findIndex callback 加 `(m: CheckinMarker): boolean =>` | `stores/useMarkerStore.uts` |
+| 8 | 模板 `{{ formatDateTime(...) }}` 报 `找不到名称"invoke"` + `Function invocation expected` | 把 `formatDateTime` 包进 setup 作用域的本地函数 `fmtTime`，模板调 `fmtTime(...)` | `pages/index/index.uvue` + `pages/stats/stats.uvue` + `pages/task-detail/task-detail.uvue` |
+
+### 10.1 新增黄金法则（提取自本阶段）
+
+**法则 10：模板不能直接调 import 的独立函数 → 包成 setup 本地 wrapper**
+
+UTS 5.07 把 .uvue 编译成 Kotlin 时，模板 AST 转换走独立 resolver，**未注入 `<script setup>` 顶层 import 的函数符号**。结果：
+
+```ts
+// ❌ 模板报 "找不到名称 invoke" + "Function invocation 'formatDateTime(...)' expected"
+import { formatDateTime } from '@/utils/format'
+// template:  {{ formatDateTime(ts) }}
+
+// ✅ wrap 进 setup 作用域
+import { formatDateTime } from '@/utils/format'
+function fmtTime(ts: number): string {
+  return formatDateTime(ts)
+}
+// template:  {{ fmtTime(ts) }}
+```
+
+适用范围：所有 `{{ utilFn(x) }}` / `:src="utilFn(x)"` 等模板表达式调 import 函数的位置。computed 不能替代 — computed 不接受 v-for 循环里的动态实参（`v-for="e in list"` 中的 `fmtTime(e.checkedAt)`）。
+
+**法则 11：computed callback 必须显式标注返回类型 + 内部 callback 也要标注**
+
+UTS 5.07 类型推断链路超过 2 层时**断链**，错误指针错放在最外层 `(` 上，报 `Parenthesized expression cannot be empty`。触发条件：被消费的 reactive 类型字段含嵌套对象 / 数组（如 `CheckinEntry[] | null`）。
+
+```ts
+// ❌ 类型推断断 → "Parenthesized expression cannot be empty at col 39"
+export const checkedMarkers = computed(() => markers.value.filter(m => m.checked))
+
+// ✅ 双层显式注解：computed 回调 + filter 回调
+export const checkedMarkers = computed((): CheckinMarker[] =>
+  markers.value.filter((m: CheckinMarker): boolean => m.checked)
+)
+```
+
+适用范围：所有导出的 store 派生 ref（`computed`），以及 `.find / .findIndex / .filter / .map` callback。即使 TS/JS 不需要也要写 — 这是"类型推断失败 → 错误指针错放"的防御。
+
+**法则 12：嵌套类型对象一律走 `JSON.parse<T>()` 真实构造，禁用 `as T`**
+
+法则 8 的强化版。法则 8 说"`as` 假 cast 会运行时崩"，本阶段实际兑现：
+
+```ts
+// ❌ as 是 type erasure，nested 数组访问运行时 ClassCastException
+const cloudMarker = JSON.parse(jsonStr) as CheckinMarker
+cloudMarker.checkedBy[0].photoCloudURL  // ← UTSJSONObject cannot be cast to CheckinEntry
+
+// ✅ 泛型 JSON.parse<T>() 递归构造嵌套 typed 实例
+const cloudMarker = JSON.parse<CheckinMarker>(jsonStr)
+cloudMarker.checkedBy[0].photoCloudURL  // ← 安全
+```
+
+判定：被解析对象**含数组字段或嵌套对象字段**时永远走泛型；只有纯扁平基本类型（string/number/bool）才能侥幸用 `as`。
+
+### 10.2 P3 真机验收清单（编译通过后逐条勾）
+
+- [ ] tasks 页 → 切到"待打卡"chip → 只显示未 checked 的 marker
+- [ ] stats 页时间线 → 渲染 `2026-XX-XX HH:mm` 格式（非裸数字）
+- [ ] task-detail（任意已完成任务）→ 状态区域有"完成时间"行
+- [ ] 主地图详情面板顶部状态徽章（已打卡 / 未打卡）
+- [ ] 自己创建的 marker → 显示"由我创建" pill + 删除按钮
+- [ ] 他人创建的 marker → 删除按钮**不显示**
+- [ ] 自己打过卡的 marker → 详情面板显示"我的打卡"卡片（照片 + 备注 + 时间）
+- [ ] 有他人打过卡的 marker → 显示"他人足迹"横滑照片墙
+- [ ] checkin 完成 navigateBack → 主地图自动 zoom 到刚打卡的点 + 详情面板自动打开
+- [ ] 主地图 marker 图标全部用本地静态图（无 https://img.icons8.com 漏渲）
+
+### 10.3 已知 P4 候选（下一会话起点）
+
+| 项 | 说明 |
+|----|------|
+| **多设备数据同步真机验证** | β 已让 cloud `checkedBy[]` 完整拉回，需双设备真机验证：A 打卡 → B onShow 拉取 → 看 B 端详情面板是否显示 A 的足迹 |
+| **离线打卡 e2e 验证** | sync_queue 修复后未真机走过完整闭环 |
+| **照片打卡端到端真机** | photo-center.upload 路径完整，但需真机拍照 → upload → cloudURL 入 marker.checkedBy[].photoCloudURL → 详情面板他人足迹展示 |
+| **add-marker 页 UI 美化 + 实时坐标预览** | C4 候选 |
+| **tasks 任务列表的过滤 chips** | C1 候选 |
+| **stats 时间线分组（今日/本周/本月）** | C2 候选 |
+| **后台管理 uni-admin** | §13，未起 |
+
+### 10.4 2026-05-09 P1 收尾补充
+
+| 问题 | 根因 | 当前约定 |
+|------|------|----------|
+| tasks 页面整体不滚动 | 顶层直接用 `scroll-view` + `100vh` 在 Android 真机上高度计算不稳定 | 页面外层用普通 `view` 固定 `height: 100%`，内部 `scroll-view` 单独设置 `height: 100%` |
+| 成就徽章不能横滑 | 横向 `scroll-view` 的内容宽度没有显式大于容器宽度，flex 子项被压回视口内 | 横滑内容层设置固定宽度，徽章外包一层固定宽度 item |
+| task-detail 显示“任务不存在” | 真机上页面 query 可能未及时进 `taskId`，store 加载时机也会影响 computed | 任务列表跳转前写 `pending_task_detail_id`，详情页 `onShow` 加载 store 后用该 key 兜底 |
+| 未登录仍可进入 checkin 并本地打卡 | 登录校验只在云端提交阶段发生，本地 `doCheckIn()` 仍会把 marker 改成 checked | 首页 `doCheckin()` 先检查 `userState.userInfo`，未登录只提示/引导登录，不进入 checkin 页 |
+| `showModal` 回调误写 `ShowModalSuccess` | UTS 5.07 当前全局类型里没有该名称，`.confirm` 成员也无法解析 | 沿用本项目稳定写法：`success: (res: any) => { const r = res as UTSJSONObject; r['confirm'] }` |
+| `showActionSheet` 选图链路仍不稳 | 5.07 真机对 `ShowActionSheetSuccessImpl` 类型边界敏感，历史代码曾发生 cast 崩溃 | checkin 页改成“拍照 / 相册”两个按钮，直接调用 `uni.chooseImage`，绕开 actionSheet 中间层 |
+| 首页显示可打卡，进入 checkin 后偶发“距离过远” | 页面跳转后 GPS 重新采样可能短时漂移，两页虽共用半径但读到的位置不同 | 首页跳转前记录同 marker 的短时 preflight 距离，checkin 页仅在同一 marker 且 2 分钟内允许兜底 |
+
+2026-05-09 二次调整：
+
+- `tasks.uvue` 不再把原生迷你地图放在筛选 chips 前面。原生 map 组件在 Android 上容易吞掉滑动手势，P1 阶段把 filter bar 放到上半部分固定可见，marker 列表在内层 `scroll-view` 中滚动，迷你地图下移到列表后。
+- `task-detail.uvue` 不只依赖 URL query / storage。`useTaskStore.uts` 新增 `pendingTaskDetailId` 与 `requestTaskDetail(id)`，任务列表点击时先写共享 ref，再 navigate；详情页按 URL → shared ref → storage 的顺序恢复 id。
+
+2026-05-09 三次调整：
+
+- `tasks.uvue` 回到与 `stats.uvue` 一致的单根纵向 `scroll-view`，并显式设置 `direction="vertical"`；横向徽章 `scroll-view` 同时写 `scroll-x` 与 `direction="horizontal"`。
+- 筛选 chips 不再用 `v-for` + 联合类型参数，改为三个显式按钮和 `setFilterAll / setFilterPending / setFilterDone`。筛选同时作用于任务列表和打卡点列表，避免用户点了但首屏任务区不变化。
+- `task-detail.uvue` 增加完整任务快照兜底：`requestTaskDetail(id)` 会把当前 `Task` 写入 `pendingTaskDetailSnapshot` 和 `pending_task_detail_snapshot`。详情页 `findTaskById()` 失败时仍能展示快照，避免“任务不存在”。
+- 登录 chip 文字不再依赖父子选择器 `.auth-chip-on .auth-chip-text`，改用直接动态类 `auth-chip-text-on/off`；`setUserInfo()` 也会把空 `userName` 兜底成 `userId`。
+- `computed` 里调用的本地函数必须先声明再使用。UTS 5.07 对函数提升不稳定，`filteredTasks` 在 `isTaskDone` 前面声明会编译报 `找不到名称 "isTaskDone"`。
+
+2026-05-09 四次调整：
+
+- `uni.showModal` 的 `success` 返回值是 `uts.sdk.modules.DCloudUniModal.UniShowModalResult`，不能 `as UTSJSONObject`。本项目业务确认动作统一改用 `uni.showActionSheet` + `ShowActionSheetSuccess.tapIndex`，避免删除时 `ClassCastException`。
+- 本地种子打卡点可能还没有云端 `tourism_markers` 文档，`marker-center.checkin` 会返回“打卡点不存在”。P1 阶段不再把这个云端错误提示给用户；本地存在的 marker 继续完成打卡，云端同步问题留到“种子点云端初始化/修复脚本”处理。
+- `tasks.uvue` 信息架构改为 `任务 / 成就 / 地点` 三段。成就用网格，不再和地点列表堆在同一段，也减少横向滚动依赖。
+- `deleteMarker()` 先尝试调用 `marker-center.delete({_id})`，无权限或云端不存在时记录日志但不阻塞本地删除。

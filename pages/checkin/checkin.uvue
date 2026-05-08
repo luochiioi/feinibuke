@@ -15,11 +15,19 @@
     </view>
     <view class="photo-section">
       <text class="section-label">照片（选填）</text>
-      <view class="photo-preview" @click="choosePhoto">
+      <view class="photo-preview">
         <image v-if="photoPath != null" :src="photoPath" class="photo-image" />
         <view v-else class="photo-placeholder">
           <text class="photo-icon">📷</text>
-          <text class="photo-hint">点击拍照或选择照片</text>
+          <text class="photo-hint">可拍照或从相册选择</text>
+        </view>
+      </view>
+      <view class="photo-actions">
+        <view class="photo-action-btn" @click="choosePhotoFromCamera">
+          <text class="photo-action-text">拍照</text>
+        </view>
+        <view class="photo-action-btn photo-action-secondary" @click="choosePhotoFromAlbum">
+          <text class="photo-action-text secondary">相册</text>
         </view>
       </view>
     </view>
@@ -41,7 +49,10 @@ import { ref, computed, onShow, onHide } from 'vue'
 import { findById, doCheckIn } from '@/stores/useMarkerStore'
 import { currentLocation, accuracyText as locAccText, startPolling, stopPolling, distanceTo, getEffectiveCheckinRadius } from '@/stores/useLocationStore'
 import { checkTaskCompletion } from '@/stores/useTaskStore'
+import { requestFocus } from '@/stores/useMapStore'
+import { state as userState } from '@/user/index.uts'
 import { enqueueAction } from '@/utils/cloudSync'
+import type { CheckinMarker } from '@/types/marker'
 
 const markerId = ref<number>(0)
 const markerTitle = ref<string>('')
@@ -49,8 +60,12 @@ const photoPath = ref<string | null>(null)
 const cloudURL = ref<string | null>(null)
 const note = ref<string>('')
 const isSubmitting = ref<boolean>(false)
+const preflightAt = ref<number>(0)
+const preflightDistance = ref<number>(-1)
 
-const marker = computed(() => findById(markerId.value))
+const PREFLIGHT_VALID_MS: number = 120000
+
+const marker = computed((): CheckinMarker | null => findById(markerId.value))
 
 const distance = computed((): number | null => {
   const m = marker.value
@@ -63,7 +78,8 @@ const effectiveRadius = computed((): number => getEffectiveCheckinRadius())
 
 const withinRange = computed((): boolean => {
   const d = distance.value
-  return d != null && d <= effectiveRadius.value
+  if (d != null && d <= effectiveRadius.value) return true
+  return preflightDistance.value >= 0 && preflightDistance.value <= effectiveRadius.value && Date.now() - preflightAt.value <= PREFLIGHT_VALID_MS
 })
 
 const gpsLabel = computed((): string => {
@@ -79,11 +95,25 @@ const canSubmit = computed((): boolean => {
 onLoad((options: OnLoadOptions): void => {
   const idStr = options['id'] as string | null
   const titleStr = options['title'] as string | null
-  markerId.value = idStr != null ? parseInt(idStr) : 0
-  markerTitle.value = titleStr != null ? (decodeURIComponent(titleStr) ?? '') : ''
+  const cachedId = uni.getStorageSync('pending_checkin_marker_id') as string | null
+  const cachedTitle = uni.getStorageSync('pending_checkin_marker_title') as string | null
+  const cachedAt = uni.getStorageSync('pending_checkin_preflight_at') as number | null
+  const cachedDistance = uni.getStorageSync('pending_checkin_preflight_distance') as number | null
+  const finalId = idStr != null ? idStr : cachedId
+  const finalTitle = titleStr != null ? titleStr : cachedTitle
+  const canUsePreflight = cachedId != null && finalId != null && cachedId === finalId
+  markerId.value = finalId != null ? parseInt(finalId) : 0
+  markerTitle.value = finalTitle != null ? (decodeURIComponent(finalTitle) ?? '') : ''
+  preflightAt.value = canUsePreflight ? (cachedAt ?? 0) : 0
+  preflightDistance.value = canUsePreflight ? (cachedDistance ?? -1) : -1
 })
 
 onShow((): void => {
+  if (userState.userInfo == null) {
+    uni.showToast({ title: '请先登录后再打卡', icon: 'none' })
+    setTimeout((): void => { uni.navigateBack() }, 800)
+    return
+  }
   startPolling(5000)
 })
 
@@ -91,24 +121,30 @@ onHide((): void => {
   stopPolling()
 })
 
-function choosePhoto(): void {
-  uni.showActionSheet({
-    itemList: ['拍照', '从相册选择'],
-    success: (res: ShowActionSheetSuccess): void => {
-      const sourceType: string[] = res.tapIndex == 0 ? ['camera'] : ['album']
-      uni.chooseImage({
-        count: 1, sizeType: ['compressed'], sourceType: sourceType,
-        success: (imgRes: ChooseImageSuccess): void => {
-          if (imgRes.tempFilePaths.length > 0) {
-            photoPath.value = imgRes.tempFilePaths[0]
-          }
-        }
-      })
+function choosePhoto(sourceType: string[]): void {
+  uni.chooseImage({
+    count: 1, sizeType: ['compressed'], sourceType: sourceType,
+    success: (imgRes: ChooseImageSuccess): void => {
+      if (imgRes.tempFilePaths.length > 0) {
+        photoPath.value = imgRes.tempFilePaths[0]
+      }
     }
   })
 }
 
+function choosePhotoFromCamera(): void {
+  choosePhoto(['camera'])
+}
+
+function choosePhotoFromAlbum(): void {
+  choosePhoto(['album'])
+}
+
 async function doSubmit(): Promise<void> {
+  if (userState.userInfo == null) {
+    uni.showToast({ title: '请先登录后再打卡', icon: 'none' })
+    return
+  }
   if (withinRange.value == false || marker.value == null) return
   isSubmitting.value = true
 
@@ -140,22 +176,27 @@ async function doSubmit(): Promise<void> {
         const errMsg = checkinRes["errMsg"] as string
         // “请先登录” 来自 marker-center._before token 缺失/过期。引导用户去登录页。
         if (errMsg === '请先登录') {
-          uni.showModal({
-            title: '需要登录',
-            content: '请先登录后再提交打卡',
-            confirmText: '去登录',
-            success: (res: any): void => {
-              const r = res as UTSJSONObject
-              if ((r['confirm'] as boolean) == true) {
-                uni.navigateTo({ url: '/pages/login/login' })
-              }
+          uni.showActionSheet({
+            itemList: ['去登录'],
+            success: (res: ShowActionSheetSuccess): void => {
+              if (res.tapIndex == 0) uni.navigateTo({ url: '/pages/login/login' })
             }
           })
+        } else if (errMsg === '打卡点不存在') {
+          const payload = JSON.parse('{}') as UTSJSONObject
+          payload["markerId"] = markerId.value; payload["photoCloudURL"] = cloudURL.value
+          payload["note"] = note.value; payload["latitude"] = currentLocation.value?.latitude
+          payload["longitude"] = currentLocation.value?.longitude
+          enqueueAction('checkin', payload)
         } else {
           uni.showToast({ title: errMsg, icon: 'none' })
+          isSubmitting.value = false
+          return
         }
-        isSubmitting.value = false
-        return
+        if (errMsg === '请先登录') {
+          isSubmitting.value = false
+          return
+        }
       }
     } catch (e) {
       const payload = JSON.parse('{}') as UTSJSONObject
@@ -165,8 +206,15 @@ async function doSubmit(): Promise<void> {
       enqueueAction('checkin', payload)
     }
 
-    await doCheckIn(markerId.value, photoPath.value, note.value != '' ? note.value : null)
+    const updatedMarker = await doCheckIn(markerId.value, photoPath.value, note.value != '' ? note.value : null)
     const completed = checkTaskCompletion(marker.value)
+    // 主地图 onShow 调 consumeFocus()，移到打卡完成的点并打开详情面板，
+    // 用户回到地图能立即看到刚刚打卡的成果。
+    requestFocus(updatedMarker)
+    uni.removeStorageSync('pending_checkin_marker_id')
+    uni.removeStorageSync('pending_checkin_marker_title')
+    uni.removeStorageSync('pending_checkin_preflight_at')
+    uni.removeStorageSync('pending_checkin_preflight_distance')
     uni.showToast({ title: '打卡成功！', icon: 'success' })
     if (completed.length > 0) {
       setTimeout((): void => {
@@ -202,6 +250,11 @@ async function doSubmit(): Promise<void> {
 .photo-placeholder { display: flex; flex-direction: column; align-items: center; }
 .photo-icon { font-size: 48rpx; }
 .photo-hint { font-size: 22rpx; color: #999999; }
+.photo-actions { display: flex; flex-direction: row; margin-top: 16rpx; }
+.photo-action-btn { width: 168rpx; height: 64rpx; border-radius: 32rpx; background-color: #2ecc71; display: flex; align-items: center; justify-content: center; margin-right: 16rpx; }
+.photo-action-secondary { background-color: #eef2f3; }
+.photo-action-text { font-size: 26rpx; color: #ffffff; font-weight: 500; }
+.photo-action-text.secondary { color: #5f6f65; }
 .note-section { padding: 0 32rpx 24rpx; }
 .note-label { font-size: 26rpx; color: #666666; margin-bottom: 12rpx; }
 .note-input { width: 100%; height: 160rpx; background-color: #ffffff; border-radius: 12rpx; padding: 20rpx; font-size: 28rpx; color: #333333; box-sizing: border-box; }

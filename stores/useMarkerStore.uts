@@ -10,13 +10,13 @@ const CHECKED_MARKER_ICON = '/static/marker_checked.webp'
 export const markers = ref<CheckinMarker[]>([])
 export const isLoading = ref<boolean>(false)
 
-export const checkedMarkers = computed(() => markers.value.filter(m => m.checked))
-export const pendingMarkers = computed(() => markers.value.filter(m => !m.checked))
-export const totalCount = computed(() => markers.value.length)
-export const doneCount = computed(() => checkedMarkers.value.length)
-export const completionRate = computed(() =>
-  totalCount.value === 0 ? 0 : Math.round((doneCount.value / totalCount.value) * 100)
-)
+export const checkedMarkers = computed((): CheckinMarker[] => markers.value.filter((m: CheckinMarker): boolean => m.checked))
+export const pendingMarkers = computed((): CheckinMarker[] => markers.value.filter((m: CheckinMarker): boolean => !m.checked))
+export const totalCount = computed((): number => markers.value.length)
+export const doneCount = computed((): number => checkedMarkers.value.length)
+export const completionRate = computed((): number => {
+  return totalCount.value === 0 ? 0 : Math.round((doneCount.value / totalCount.value) * 100)
+})
 
 // 注：原本这里有 displayMarkers / miniMapMarkers 导出，把 CheckinMarker 转成
 // SDK 原生 Marker[]。但 .uts 文件里 `Marker` 这个名字会被 UTS 编译器在
@@ -56,7 +56,14 @@ export async function addMarker(input: NewMarkerInput): Promise<CheckinMarker> {
     width: 36,
     height: 36,
     iconPath: DEFAULT_MARKER_ICON,
-    createdAt: Date.now()
+    checkedAt: null,
+    photoPath: null,
+    photoCloudURL: null,
+    note: null,
+    createdAt: Date.now(),
+    createdBy: null,
+    checkedBy: null,
+    checkinCount: null
   }
   markers.value.push(marker)
   persist()
@@ -64,7 +71,7 @@ export async function addMarker(input: NewMarkerInput): Promise<CheckinMarker> {
 }
 
 export async function doCheckIn(markerId: number, photoPath: string | null, note: string | null): Promise<CheckinMarker> {
-  const idx = markers.value.findIndex(m => m.id === markerId)
+  const idx = markers.value.findIndex((m: CheckinMarker): boolean => m.id === markerId)
   if (idx === -1) throw new Error('CheckinMarker not found: ' + markerId)
   markers.value[idx].checked = true
   markers.value[idx].checkedAt = Date.now()
@@ -76,24 +83,39 @@ export async function doCheckIn(markerId: number, photoPath: string | null, note
 }
 
 export async function deleteMarker(markerId: number): Promise<void> {
-  markers.value = markers.value.filter(m => m.id !== markerId)
+  const target = markers.value.find((m: CheckinMarker): boolean => m.id === markerId)
+  if (target != null && target._id.length > 0 && target.createdBy != null) {
+    try {
+      const markerApi = uniCloud.importObject('marker-center')
+      await markerApi.delete({ _id: target._id })
+    } catch (e) {
+      console.log('Cloud marker delete failed', e)
+    }
+  }
+  markers.value = markers.value.filter((m: CheckinMarker): boolean => m.id !== markerId)
   persist()
 }
 
 export function findById(id: number): CheckinMarker | null {
-  const found = markers.value.find(m => m.id === id)
+  const found = markers.value.find((m: CheckinMarker): boolean => m.id === id)
   return found ?? null
 }
 
 export function findByTitle(title: string): CheckinMarker | null {
-  const found = markers.value.find(m => m.title === title)
+  const found = markers.value.find((m: CheckinMarker): boolean => m.title === title)
   return found ?? null
 }
 
 export async function syncFromCloud(): Promise<number> {
   isLoading.value = true
   const merged = await syncMarkers()
-  markers.value = merged.length > 0 ? merged : markers.value
+  if (merged.length > 0) {
+    // 同 loadFromStorage：基于 checked 状态强制重写 iconPath，杜绝远程 URL 渗漏
+    merged.forEach((m: CheckinMarker) => {
+      m.iconPath = m.checked ? CHECKED_MARKER_ICON : DEFAULT_MARKER_ICON
+    })
+    markers.value = merged
+  }
   isLoading.value = false
   return merged.length
 }
