@@ -362,6 +362,12 @@ function goLocate(): void {
   else uni.showToast({ title: '定位中，请稍候', icon: 'none' })
 }
 
+async function doDeleteMarker(markerId: number): Promise<void> {
+  await deleteMarker(markerId)
+  setActiveMarker(null)
+  uni.showToast({ title: '已删除', icon: 'none' })
+}
+
 function doDelete(): void {
   const marker = activeMarker.value
   if (marker == null) return
@@ -373,12 +379,6 @@ function doDelete(): void {
       }
     }
   })
-}
-
-async function doDeleteMarker(markerId: number): Promise<void> {
-  await deleteMarker(markerId)
-  setActiveMarker(null)
-  uni.showToast({ title: '已删除', icon: 'none' })
 }
 </script>
 

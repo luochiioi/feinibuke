@@ -2935,30 +2935,36 @@ P2 主链路已真机验收通过（详见 `UTS_COMPILE_PITFALLS.md §九`）：
 - ✅ **cloudSync 启动崩溃修复**：`readQueue()` 改用泛型 `JSON.parse<QueueItem[]>()`，离线队列 flush 不再 ClassCastException
 - ✅ **假 captcha 移除**：登录/注册去掉 client-side 验证码，只校验用户名+密码
 
-**P3 起点（新会话开做）** — 按重要性排序：
+**P3 起点（新会话开做）** — 按重要性排序（2026-05-09 更新）：
 
-1. **iconPath 远程 URL → 本地路径统一化**（中优先级）
+1. **uniCloud 后台打卡点管理 + 云端种子点同步**（最高优先级，§13）
+   - 目标：管理员能在 uniCloud/uni-admin Web 端看到每个打卡点的名称、经纬度、创建者、打卡人数、打卡用户、打卡时间、照片/备注摘要。
+   - 能力：新增打卡点、编辑名称/位置、删除打卡点、查看打卡记录。
+   - 必做前置：把默认 8 个本地种子点初始化到 `tourism_markers`，否则 App 本地可打卡但云端 `marker-center.checkin` 会找不到文档。
+   - 建议拆成两步：先做 `admin-center` 云对象和初始化脚本，再做 uni-admin 页面。
+
+2. **iconPath 远程 URL → 本地路径统一化**（中优先级）
    - 现象：云端 `tourism_markers` 部分文档 `iconPath` 是 `https://img.icons8.com/color/48/marker.png`（远程 URL），腾讯地图插件偶发不渲染（PITFALLS §F #7）
    - 修复：客户端 `add-marker` 提交前强制把 iconPath 改成 `/static/marker_default.png`；并写一次性脚本/云函数更新历史数据
 
-2. **登录态过期 UX**（中优先级）
+3. **登录态过期 UX**（中优先级）
    - 现象：`App.uvue:48` 检测到 `tokenExpired < Date.now()` 时只清 storage，主地图不感知
    - 修复：清 storage 后通过 EventBus 通知 index 弹"会话已过期，请重新登录" modal，或直接刷新 `state.userInfo` reactive 触发 chip 切换
 
-3. **多设备数据同步真机验证**（高优先级，端到端测试）
+4. **多设备数据同步真机验证**（高优先级，端到端测试）
    - 用两台设备 A/B 都登录同一账号 → A 创建/打卡 → B 重启或 onShow 拉取 → 看 marker 是否同步显示
    - 可能要补 `syncMarkers()` 在 onShow 时也调用，不只 onLaunch
 
-4. **离线打卡 e2e 验证**（中优先级）
+5. **离线打卡 e2e 验证**（中优先级）
    - sync_queue 修了 cast bug，但完整链路（断网 → 打卡 → 联网 → flush → 服务端 checkin → marker.checked 同步）没真机走过
    - 容易踩的坑：断网时 `marker-center.checkin` 是直接 throw（被 catch 进 enqueueAction），还是返回 errCode？要看下真机日志
 
-5. **照片打卡端到端**（中优先级）
+6. **照片打卡端到端**（中优先级）
    - photo-center.upload 路径已通，但还没真机拍照 → upload → cloudURL 入 marker.checkedBy[].photoCloudURL → 详情页展示
    - 注意 PITFALLS §四 的 chooseImage 必须用 `ChooseImageSuccess` typed 回调
 
-6. **后台管理 uni-admin**（低优先级，§13）
-   - tourism_markers / users / rewards / 打卡记录 后台 dashboard 全空缺
+7. **照片墙与回顾页**（中优先级）
+   - 从 checkin 记录中按时间/地点展示照片，作为 Phase 2 剧情系统前的沉淀页
 
 **P3 验收前必读**：
 - `UTS_COMPILE_PITFALLS.md §F` — uni_modules 子组件方案细则

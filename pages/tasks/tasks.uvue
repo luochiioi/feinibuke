@@ -158,6 +158,12 @@ function showTasks(): void { activeSection.value = 'tasks' }
 function showBadges(): void { activeSection.value = 'badges' }
 function showSpots(): void { activeSection.value = 'spots' }
 function goFocus(item: CheckinMarker): void { requestFocus(item); uni.navigateBack() }
+
+async function doDeleteMarker(markerId: number): Promise<void> {
+  await deleteMarker(markerId)
+  uni.showToast({ title: '已删除', icon: 'none' })
+}
+
 function doDelete(item: CheckinMarker): void {
   uni.showActionSheet({
     itemList: ['删除打卡点'],
@@ -167,11 +173,6 @@ function doDelete(item: CheckinMarker): void {
       }
     }
   })
-}
-
-async function doDeleteMarker(markerId: number): Promise<void> {
-  await deleteMarker(markerId)
-  uni.showToast({ title: '已删除', icon: 'none' })
 }
 </script>
 
