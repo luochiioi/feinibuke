@@ -137,7 +137,23 @@ async function doSubmit(): Promise<void> {
         longitude: currentLocation.value?.longitude
       }) as UTSJSONObject
       if ((checkinRes["errCode"] as number) !== 0) {
-        uni.showToast({ title: checkinRes["errMsg"] as string, icon: 'none' })
+        const errMsg = checkinRes["errMsg"] as string
+        // “请先登录” 来自 marker-center._before token 缺失/过期。引导用户去登录页。
+        if (errMsg === '请先登录') {
+          uni.showModal({
+            title: '需要登录',
+            content: '请先登录后再提交打卡',
+            confirmText: '去登录',
+            success: (res: any): void => {
+              const r = res as UTSJSONObject
+              if ((r['confirm'] as boolean) == true) {
+                uni.navigateTo({ url: '/pages/login/login' })
+              }
+            }
+          })
+        } else {
+          uni.showToast({ title: errMsg, icon: 'none' })
+        }
         isSubmitting.value = false
         return
       }

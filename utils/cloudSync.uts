@@ -22,12 +22,16 @@ function readQueue(): QueueItem[] {
     const raw = uni.getStorageSync(KEY_SYNC_QUEUE)
     if (raw == null) return []
     if (typeof raw === 'string' && (raw as string).length > 0) {
-      const parsed = JSON.parse(raw as string)
-      return (parsed as any) as QueueItem[]
+      // 必须用泛型 JSON.parse<T>() 真实构造 typed 实例。
+      // 旧写法 JSON.parse(raw) as QueueItem[] 是 Kotlin 假 cast，运行时
+      // ClassCastException: UTSJSONObject cannot be cast to QueueItem。
+      // 详见 UTS_COMPILE_PITFALLS.md §Phase 1.5/D。
+      const parsed = JSON.parse<QueueItem[]>(raw as string)
+      return parsed ?? ([] as QueueItem[])
     }
-    if (Array.isArray(raw)) return raw as QueueItem[]
     return []
   } catch (e) {
+    console.log('[cloudSync] readQueue parse fail', e)
     return []
   }
 }

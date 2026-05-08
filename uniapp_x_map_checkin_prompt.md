@@ -2901,7 +2901,7 @@ const cloudURL = uploadData["cloudURL"] as string
 
 ## 十五、更新后的验证清单
 
-### 15.0 Phase 1 当前真实状态（2026-05-08，**P1 真机闭环 ✅**）
+### 15.0 Phase 1 当前真实状态（2026-05-08，**P1 + P2 真机闭环 ✅**）
 
 P1 主链路已真机验收通过：
 - ✅ 地图 marker 图标显示（uni_modules 子组件方案落地，详见 `UTS_COMPILE_PITFALLS.md §F` 终极方案）
@@ -2911,18 +2911,43 @@ P1 主链路已真机验收通过：
 - ✅ actionSheet + chooseImage 拍照/相册选图（typed 回调 `ShowActionSheetSuccess` / `ChooseImageSuccess`）
 - ✅ 提交打卡后 marker 图标切换 checked，tasks 页面同步任务/成就
 
-**P2 起点（新会话开做）**：
+P2 主链路已真机验收通过（详见 `UTS_COMPILE_PITFALLS.md §九`）：
+- ✅ **登录态打通**：主地图 auth-chip 入口；登录成功 → `setUserInfo` 写 `uni_id_token` → marker-center 云对象 `_before` 通过 `authUtil.checkAuth` 拿到 `this.auth.uid` → checkin/add 真正写入云端
+- ✅ **注册闭环**：`uni-id-users` 表写入 nickname/username/password；登录成功后 chip 切换为用户昵称
+- ✅ **tasks 页任务列表 + 缩略图**：徽章/任务/缩略图三段式；点击任务进入 task-detail，再点"前往"回主地图聚焦 marker
+- ✅ **cloudSync 启动崩溃修复**：`readQueue()` 改用泛型 `JSON.parse<QueueItem[]>()`，离线队列 flush 不再 ClassCastException
+- ✅ **假 captcha 移除**：登录/注册去掉 client-side 验证码，只校验用户名+密码
 
-1. **登录态打通**（最高优先级）：当前 `marker-center.checkin` 返回 `请先登录`，云端 `this.auth.uid == null`，照片 + 元数据未真正上云。
-   - 排查 App.uvue 启动 token 校验、user-center 配置、user store 与 `_before` 校验链路
-   - 复用 feiyi_Demo3 的 user-center / uni-id（参考 §15.0 旧检查清单）
-2. **tasks 页缩略地图**：`pages/tasks/tasks.uvue` 的 `<map>` 接到 `<checkin-map>` 包装组件（与 index.uvue 同模式），显示当前打卡点缩略
-3. **task-detail 路由复活**：当前 `pages/task-detail/task-detail.uvue` 已注册路由但项目内无 navigateTo 入口；要么从 tasks 列表点击进入，要么删除路由
+**P3 起点（新会话开做）** — 按重要性排序：
 
-**P2 验收前必读**（避免重复踩坑）：
+1. **iconPath 远程 URL → 本地路径统一化**（中优先级）
+   - 现象：云端 `tourism_markers` 部分文档 `iconPath` 是 `https://img.icons8.com/color/48/marker.png`（远程 URL），腾讯地图插件偶发不渲染（PITFALLS §F #7）
+   - 修复：客户端 `add-marker` 提交前强制把 iconPath 改成 `/static/marker_default.png`；并写一次性脚本/云函数更新历史数据
+
+2. **登录态过期 UX**（中优先级）
+   - 现象：`App.uvue:48` 检测到 `tokenExpired < Date.now()` 时只清 storage，主地图不感知
+   - 修复：清 storage 后通过 EventBus 通知 index 弹"会话已过期，请重新登录" modal，或直接刷新 `state.userInfo` reactive 触发 chip 切换
+
+3. **多设备数据同步真机验证**（高优先级，端到端测试）
+   - 用两台设备 A/B 都登录同一账号 → A 创建/打卡 → B 重启或 onShow 拉取 → 看 marker 是否同步显示
+   - 可能要补 `syncMarkers()` 在 onShow 时也调用，不只 onLaunch
+
+4. **离线打卡 e2e 验证**（中优先级）
+   - sync_queue 修了 cast bug，但完整链路（断网 → 打卡 → 联网 → flush → 服务端 checkin → marker.checked 同步）没真机走过
+   - 容易踩的坑：断网时 `marker-center.checkin` 是直接 throw（被 catch 进 enqueueAction），还是返回 errCode？要看下真机日志
+
+5. **照片打卡端到端**（中优先级）
+   - photo-center.upload 路径已通，但还没真机拍照 → upload → cloudURL 入 marker.checkedBy[].photoCloudURL → 详情页展示
+   - 注意 PITFALLS §四 的 chooseImage 必须用 `ChooseImageSuccess` typed 回调
+
+6. **后台管理 uni-admin**（低优先级，§13）
+   - tourism_markers / users / rewards / 打卡记录 后台 dashboard 全空缺
+
+**P3 验收前必读**：
 - `UTS_COMPILE_PITFALLS.md §F` — uni_modules 子组件方案细则
 - `UTS_COMPILE_PITFALLS.md §四` — 5.07 真机崩溃黑名单（onLoad / typed callback / cast UTSJSONObject）
 - `UTS_COMPILE_PITFALLS.md §八` — P1 闭环 7 条修复清单
+- `UTS_COMPILE_PITFALLS.md §九` — P2 闭环 5 条修复清单 + 法则 6/7/8/9（reactive cast / Math.floor.toString / JSON.parse 泛型 / fake captcha）
 
 - [ ] 所有 UTS 文件通过 HBuilderX 编译检查
 - [ ] uniCloud 服务空间创建并关联项目

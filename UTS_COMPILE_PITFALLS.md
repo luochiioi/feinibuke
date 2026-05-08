@@ -598,3 +598,87 @@ P1（地图渲染 + 打卡链路）真机闭环通过。本会话补齐的关键
 **P1 已通过的真机验收**：marker 图标渲染、详情面板距离显示、打卡按钮跳转、checkin 范围/精度判断、actionSheet 弹出、相册/相机选图、提交打卡、marker 图标切换为 checked、tasks 页同步状态。
 
 **已知 P2 起点**：`marker-center.checkin` 服务端返回 `请先登录`（`this.auth.uid == null`） — 需登录态打通：检查 App.uvue 启动时的 `uni-id` token 校验、user-center 配置、user 状态 store 与云对象 `_before` 校验链路；同时把 `pages/tasks/tasks.uvue` 的 `<map>` 也接到 `<checkin-map>` 包装组件、显示打卡点缩略。
+
+---
+
+## 九、P2 闭环（2026-05-08）
+
+P2（登录态打通 + tasks 缩略图 + task-detail 路由）真机闭环通过。本阶段补齐的关键修复（每条都对应一次真机异常或硬性 bug）：
+
+| # | 问题 | 修复 | 落点 |
+|---|------|------|------|
+| 1 | 主地图 / 打卡页没有任何登录入口；`marker-center.checkin` 返回"请先登录"时静默 toast，用户无路可走 | index 顶栏加 `auth-chip`（reactive `state.userInfo` 驱动文案/颜色）；checkin 页拿到 `errMsg === '请先登录'` 时改用 `showModal('需要登录')` 引导跳登录页 | `pages/index/index.uvue` / `pages/checkin/checkin.uvue` |
+| 2 | `reactive({ userInfo: x })` 不带类型断言时 UTS 5.07 推断成泛型 `Map<K,V>`，访问 `.userInfo` 报 error18 "找不到名称 userInfo" + "Not enough information to infer type argument for 'K'" | 仿照 `store/index.uts:45` 写法：`type AuthState = { userInfo: UserInfo \| null }` + `reactive({...} as AuthState)` | `user/index.uts` |
+| 3 | 登录页"验证码错误"误报 — `parseInt(captcha) !== parseInt(code)` 在 UTS 比 JS 严格（更接近 Kotlin `String.toInt`），且后续发现 `Math.floor(...).toString()` 在 UTS Kotlin 下产出 `"123456.0"` 而非 `"123456"` | **彻底移除假 captcha**（client 生成 + toast 显示，零安全价值）；登录/注册只校验用户名+密码 | `pages/login/login.uvue` / `pages/signUp/signUp.uvue` |
+| 4 | `cloudSync.readQueue()` 用 `JSON.parse(raw) as QueueItem[]` 假 cast → 启动时 `flushSyncQueue` 抛 `ClassCastException: UTSJSONObject cannot be cast to QueueItem` | 改用泛型 `JSON.parse<QueueItem[]>(raw)` 真实构造 typed 实例（与 `utils/storage.uts` 同款） | `utils/cloudSync.uts` |
+| 5 | tasks 页有"成就徽章 + 缩略地图 + 打卡点列表"但**缺任务列表 section** → `task-detail` 路由注册了却进不去 | 在徽章和缩略图之间插入「任务列表」section，每条任务可点击 → `navigateTo('/pages/task-detail/task-detail?id=${t.id}')` | `pages/tasks/tasks.uvue` |
+
+### 9.1 新增黄金法则（提取自本阶段）
+
+**法则 6：`reactive({...})` 必须带 `as XxxState` 类型断言**
+
+```ts
+// ❌ UTS 5.07 推不出 K，访问 state.userInfo 报 error18
+export const state = reactive({
+  userInfo: processedUserInfo
+})
+
+// ✅ 显式断言成具名类型
+type AuthState = { userInfo: UserInfo | null }
+export const state = reactive({
+  userInfo: processedUserInfo
+} as AuthState)
+```
+
+**法则 7：UTS `Math.floor(x).toString()` ≠ JS `Math.floor(x).toString()`**
+
+UTS 的 `number` 在 Kotlin 是 `Double`：
+
+```ts
+// ❌ Kotlin Double.toString() = "123456.0"，模板插值后用户看到 "你的验证码是123456.0"
+this.code = Math.floor(Math.random() * 900000 + 100000).toString()
+
+// ✅ .toFixed(0) 强制整数格式输出 "123456"
+this.code = Math.floor(Math.random() * 900000 + 100000).toFixed(0)
+```
+
+同理 `Math.round / Math.ceil` 等任何返回 `number` 的表达式，要拼到字符串时都得检查是否会带 `.0`。`'sync_' + Math.floor(...)` 这种隐式 `+` 拼接里也藏过同样的坑。
+
+**法则 8：`JSON.parse(raw) as T[]` = 假 cast，访问成员必崩**
+
+```ts
+// ❌ 编译过，运行时 ClassCastException: UTSJSONObject cannot be cast to T
+const items = JSON.parse(raw) as QueueItem[]
+items[0].action  // ← 在这里炸
+
+// ✅ 泛型 JSON.parse<T>() 真实构造 typed 实例
+const items = JSON.parse<QueueItem[]>(raw)
+items[0].action  // ← 安全
+```
+
+适用范围：所有从 `uni.getStorageSync` / cloud function 响应 / `request` 返回值反序列化的对象。`as` 在 Kotlin 不做转换，只做断言；真正的反序列化必须走泛型。
+
+**法则 9：客户端生成 + 客户端比对的 captcha 应该直接删掉**
+
+零安全价值，且通常会暴露 UTS 的 number→string、v-model 同步、字符串比较语义等 N 个边界 bug。真要登录验证码就走云端（短信/邮件 + 服务端校验），UI 上别留这种装饰物。
+
+### 9.2 P2 已通过的真机验收
+
+- ✅ 主地图右上 auth-chip：未登录显示"登录"，点击跳 login 页
+- ✅ 注册新账号 → uni-id-users 表写入 nickname/username/password
+- ✅ 登录成功 → `setUserInfo` 写 `uni_id_token`/`uni_id_token_expired`/`userInfo` → 返回主地图，chip 切换为用户昵称
+- ✅ 打卡链路：检查 token 有效 → marker-center.checkin 通过 → tourism_markers.checkedBy 增加该用户记录
+- ✅ 创建打卡点：marker-center.add 写入云端，tourism_markers 表新增文档（含 id=Date.now()、createdBy=uid、createdAt）
+- ✅ tasks 页任务列表 → 点击进入 task-detail → "前往" 回到地图聚焦该 marker
+- ✅ App 启动不再因 sync_queue 旧数据 ClassCastException 崩溃
+
+### 9.3 已知 P3 候选（下一会话起点）
+
+| 项 | 说明 |
+|----|------|
+| **iconPath 远程 URL → 本地路径统一化** | 当前云端 `tourism_markers.iconPath` 部分是 `https://img.icons8.com/...`，腾讯地图插件对远程图片偶发静默不渲染（PITFALLS §F #7）；建议客户端入库时强制改成 `/static/marker_default.png` |
+| **多设备数据同步真机验证** | 设备 A 打卡 → 设备 B 拉取，看 marker.checked 是否同步到 UI；目前只单机测过 |
+| **登录态过期处理** | 当前 token 过期后 `App.uvue` 会清 storage 但不引导用户重新登录；可在 chip / checkin 模态里加"会话已过期"提示 |
+| **离线打卡端到端验证** | sync_queue 修了 ClassCastException，但还没真机走过"断网打卡 → 联网 flush"完整路径 |
+| **后台管理 (uni-admin)** | tourism_markers / users / rewards 后台 dashboard 仍未搭建，参考 §13 |
+| **照片上传链路** | photo-center.upload 路径已通，但实际真机录入还没拍过带照片的打卡（包括压缩、cloudURL 入库） |

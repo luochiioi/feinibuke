@@ -17,11 +17,6 @@
           <input class="custom-input" v-model="userPassword" type="password" placeholder="请输入用户密码" placeholder-class="placeholder-style" />
         </view>
 
-        <view class="input-group captcha-group">
-          <input class="custom-input" v-model="captcha" placeholder="请输入验证码" placeholder-class="placeholder-style" />
-          <text class="get-captcha-btn" @click="getCaptcha">获取验证码</text>
-        </view>
-
         <button class="confirm-btn" hover-class="btn-hover" @click="confirm">立即注册</button>
       </view>
     </view>
@@ -35,8 +30,6 @@
         userId: '',
         userPassword: '',
         userName: '',
-        captcha: '',
-        code: '',
       }
     },
     methods: {
@@ -45,29 +38,17 @@
       },
 
       async confirm() {
-        if (this.userName === '') {
+        if (this.userName.trim() === '') {
           uni.showToast({ title: '请输入用户名称', icon: 'none' })
           return
         }
-        if (this.userPassword === '') {
+        if (this.userPassword.trim() === '') {
           uni.showToast({ title: '请输入用户密码', icon: 'none' })
-          return
-        }
-        if (this.code === '') {
-          uni.showToast({ title: '请先获取验证码', icon: 'none' })
-          return
-        }
-        if (this.captcha === '') {
-          uni.showToast({ title: '请输入验证码', icon: 'none' })
-          return
-        }
-        if (this.captcha !== this.code) {
-          uni.showToast({ title: '验证码错误', icon: 'none' })
           return
         }
 
         const userSignUp = uniCloud.importObject('user-center')
-        const successCreate = await userSignUp.sign(this.userName, this.userPassword)
+        const successCreate = await userSignUp.sign(this.userName.trim(), this.userPassword.trim())
 
         if (successCreate.errCode === 0) {
           uni.showToast({ title: '注册成功，正在返回登录页面', icon: 'none', duration: 1500 })
@@ -75,11 +56,6 @@
             uni.navigateBack()
           }, 1500)
         }
-      },
-
-      getCaptcha() {
-        this.code = Math.random().toString().slice(-6)
-        uni.showToast({ title: `你的验证码是${this.code}`, icon: 'none', duration: 3000 })
       }
     }
   }
@@ -159,19 +135,6 @@
 .placeholder-style {
   color: #aabb99;
   font-size: 28rpx;
-}
-
-.captcha-group {
-  justify-content: space-between;
-}
-
-.get-captcha-btn {
-  font-size: 28rpx;
-  color: #2ecc71;
-  padding-left: 30rpx;
-  border-left: 2rpx solid #d0f0d0;
-  height: 60rpx;
-  line-height: 60rpx;
 }
 
 .confirm-btn {

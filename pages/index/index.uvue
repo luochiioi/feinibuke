@@ -13,6 +13,10 @@
       </view>
     </view>
 
+    <view class="auth-chip" :class="isLoggedIn ? 'auth-chip-on' : 'auth-chip-off'" @click="goAuth">
+      <text class="auth-chip-text">{{ authLabel }}</text>
+    </view>
+
     <checkin-map
       map-id="mainMap"
       class="map-component"
@@ -79,7 +83,29 @@ import { deleteMarker, doneCount, findById, loadFromStorage as loadMarkers, mark
 import { accuracyLevel, accuracyText, currentLocation, distanceTo, getEffectiveCheckinRadius, startTracking, stopTracking } from '@/stores/useLocationStore'
 import { activeMarker, consumeFocus, latitude, longitude, mapCenterLat, mapCenterLng, moveToLocation, onRegionChangeEnd, scale, setActiveMarker, zoomIn, zoomOut } from '@/stores/useMapStore'
 import { loadFromStorage as loadTasks } from '@/stores/useTaskStore'
+import { state as userState, clearUserInfo } from '@/user/index.uts'
 import type { CheckinMarker } from '@/types/marker'
+
+const isLoggedIn = computed((): boolean => userState.userInfo != null)
+const authLabel = computed((): string => {
+  return userState.userInfo != null ? userState.userInfo!!.userName : '登录'
+})
+
+function goAuth(): void {
+  if (userState.userInfo == null) {
+    uni.navigateTo({ url: '/pages/login/login' })
+    return
+  }
+  uni.showActionSheet({
+    itemList: ['退出登录'],
+    success: (res: ShowActionSheetSuccess): void => {
+      if (res.tapIndex == 0) {
+        clearUserInfo()
+        uni.showToast({ title: '已退出登录', icon: 'none' })
+      }
+    }
+  })
+}
 
 function ensureMapCtx(): MapContext | null {
   return uni.createMapContext('mainMap')
@@ -253,6 +279,12 @@ function doDelete(): void {
 .map-page { flex: 1; display: flex; flex-direction: column; width: 750rpx; height: 100%; position: relative; }
 .map-component { width: 750rpx; flex: 1; }
 .location-card { position: absolute; top: 0; left: 0; right: 0; z-index: 10; background-color: rgba(255,255,255,0.92); padding: 20rpx 30rpx; padding-top: 88rpx; display: flex; flex-direction: column; }
+.auth-chip { position: absolute; top: 210rpx; right: 24rpx; z-index: 20; padding: 10rpx 24rpx; border-radius: 24rpx; box-shadow: 0 4rpx 12rpx rgba(0,0,0,0.08); }
+.auth-chip-on { background-color: #2ecc71; }
+.auth-chip-off { background-color: #ffffff; border: 2rpx solid #2ecc71; }
+.auth-chip-text { font-size: 24rpx; font-weight: 500; }
+.auth-chip-on .auth-chip-text { color: #ffffff; }
+.auth-chip-off .auth-chip-text { color: #2ecc71; }
 .loc-row { display: flex; flex-direction: row; align-items: center; justify-content: space-between; }
 .coordinate { font-size: 22rpx; color: #666666; font-family: monospace; }
 .accuracy-badge { padding: 6rpx 20rpx; border-radius: 20rpx; }

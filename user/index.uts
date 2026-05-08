@@ -5,6 +5,12 @@ export type UserInfo = {
   userName: string
 }
 
+// reactive() 必须传入带具名类型的对象字面量，否则 UTS 5.07 编译器无法推断成员类型
+// （error18: 找不到名称 "userInfo"）。参考 store/index.uts 的同款 `as State` 写法。
+type AuthState = {
+  userInfo: UserInfo | null
+}
+
 const savedUserInfo = uni.getStorageSync('userInfo')
 
 let processedUserInfo: UserInfo | null = null
@@ -17,7 +23,7 @@ if (savedUserInfo instanceof UTSJSONObject) {
 
 export const state = reactive({
   userInfo: processedUserInfo
-})
+} as AuthState)
 
 export function setUserInfo(data: UserInfo, token: string, tokenExpired: number) {
   state.userInfo = data
