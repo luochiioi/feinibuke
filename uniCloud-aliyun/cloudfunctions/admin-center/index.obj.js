@@ -150,6 +150,29 @@ module.exports = {
     return ok({ list: listRes.data, total: totalRes.total, offset, limit })
   },
 
+  // 仪表盘"最近打卡记录"专用：直接返回扁平 record 列表（按 checkedAt 降序），
+  // 每条带打卡人 userName / 所在 marker / 备注 / 照片缩略图，方便 dashboard 渲染。
+  // getCheckins 是按 marker 分组的列表，调用方需要扁平视图时走这里更直观。
+  async getRecentCheckins(data) {
+    const rawLimit = Number((data && data.limit) || 10)
+    const limit = Math.min(Math.max(rawLimit, 1), 100)
+    const [markerRes, userRes] = await Promise.all([
+      colMarkers
+        .where({ 'checkedBy.0': db.command.exists(true) })
+        .field({ id: true, title: true, latitude: true, longitude: true, checkedBy: true })
+        .orderBy('updatedAt', 'desc')
+        .get(),
+      colUsers.field({ _id: true, username: true, nickname: true }).get()
+    ])
+    const userLookup = buildUserLookup(userRes.data)
+    const records = flattenCheckinRecords(markerRes.data, userLookup)
+    return ok({
+      list: records.slice(0, limit),
+      total: records.length,
+      limit
+    })
+  },
+
   async getCheckins(data) {
     const { offset, limit } = toPageArgs(data)
     const keyword = String((data && data.keyword) || '').trim()

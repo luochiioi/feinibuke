@@ -64,14 +64,23 @@
       <view v-if="!loading && checkins.length === 0" class="empty">
         暂无云端打卡记录。若之前是在默认点同步前完成的本地打卡，需要同步默认点后重新打卡，或让客户端补传后才会出现在这里。
       </view>
-      <view v-for="(record, i) in checkins" :key="i" class="checkin-item">
+      <view v-for="(record, i) in checkins" :key="record.markerDocId + '_' + record.userId + '_' + record.checkedAt + '_' + i" class="checkin-item">
         <view class="checkin-header">
-          <text class="checkin-title">{{ record.markerTitle }}</text>
+          <text class="checkin-title">{{ record.markerTitle || '--' }}</text>
           <text class="checkin-count">{{ formatTime(record.checkedAt) }}</text>
         </view>
-        <view class="checked-entry">
-          <text class="entry-user">用户: {{ record.userId }}</text>
-          <text class="entry-time">{{ record.note || '无备注' }}</text>
+        <view class="checkin-body">
+          <image
+            v-if="record.photoCloudURL"
+            :src="record.photoCloudURL"
+            class="checkin-photo"
+            mode="aspectFill"
+          />
+          <view class="checkin-meta">
+            <text class="entry-user">{{ record.userName || record.userId || '匿名' }}</text>
+            <text class="entry-note">{{ record.note ? record.note : '--' }}</text>
+            <text v-if="record.repaired" class="entry-tag">补传</text>
+          </view>
         </view>
       </view>
     </view>
@@ -115,7 +124,7 @@ async function loadDashboard() {
     if (dres.errCode !== 0) throw new Error(dres.errMsg || '同步诊断加载失败')
     diagnostics.value = dres.data || diagnostics.value
 
-    const cres = await api.getCheckins({ offset: 0, limit: 10 })
+    const cres = await api.getRecentCheckins({ limit: 10 })
     if (cres.errCode !== 0) throw new Error(cres.errMsg || '打卡记录加载失败')
     checkins.value = (cres.data && cres.data.list) || []
   } catch (e) {
@@ -266,13 +275,49 @@ function goToCheckins() {
   color: #2ecc71;
 }
 
-.checked-entry {
+.checkin-body {
   display: flex;
-  justify-content: space-between;
-  font-size: 22rpx;
+  align-items: flex-start;
+  gap: 16rpx;
   padding: 4rpx 0;
 }
 
-.entry-user { color: #666; }
-.entry-time { color: #aaa; }
+.checkin-photo {
+  width: 96rpx;
+  height: 96rpx;
+  border-radius: 12rpx;
+  background-color: #eef0f2;
+  flex-shrink: 0;
+}
+
+.checkin-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 4rpx;
+  flex: 1;
+  min-width: 0;
+}
+
+.entry-user {
+  font-size: 24rpx;
+  color: #444;
+  font-weight: 500;
+}
+
+.entry-note {
+  font-size: 22rpx;
+  color: #888;
+  line-height: 1.5;
+  word-break: break-all;
+}
+
+.entry-tag {
+  align-self: flex-start;
+  background: #fff7e6;
+  color: #d48806;
+  font-size: 18rpx;
+  padding: 2rpx 10rpx;
+  border-radius: 999rpx;
+  margin-top: 4rpx;
+}
 </style>
