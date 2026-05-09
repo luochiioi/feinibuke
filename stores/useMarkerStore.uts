@@ -21,7 +21,7 @@ export const completionRate = computed((): number => {
 export function isCheckedByUser(marker: CheckinMarker, uid: string): boolean {
   const list = marker.checkedBy
   if (list == null) return false
-  return list.some((entry: CheckinEntry): boolean => entry.userId === uid)
+  return list.some((entry: CheckinEntry): boolean => entry.userId == uid)
 }
 
 export function loadLocalMarkersForRepair(): CheckinMarker[] {
@@ -93,7 +93,7 @@ export async function doCheckIn(markerId: number, photoPath: string | null, note
   if (userId != null) {
     if (markers.value[idx].checkedBy == null) markers.value[idx].checkedBy = [] as CheckinEntry[]
     const list = markers.value[idx].checkedBy!!
-    const exists = list.some((entry: CheckinEntry): boolean => entry.userId === userId)
+    const exists = list.some((entry: CheckinEntry): boolean => entry.userId == userId)
     if (!exists) {
       list.push({
         userId: userId,

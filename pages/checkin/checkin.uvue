@@ -50,7 +50,7 @@ import { findById, doCheckIn } from '@/stores/useMarkerStore'
 import { currentLocation, accuracyText as locAccText, startPolling, stopPolling, distanceTo, getEffectiveCheckinRadius } from '@/stores/useLocationStore'
 import { checkTaskCompletion } from '@/stores/useTaskStore'
 import { requestFocus } from '@/stores/useMapStore'
-import { state as userState } from '@/user/index.uts'
+import { state as userState, refreshUserIdFromAuth } from '@/user/index.uts'
 import { enqueueAction } from '@/utils/cloudSync'
 import type { CheckinMarker } from '@/types/marker'
 
@@ -183,6 +183,7 @@ async function doSubmit(): Promise<void> {
   isSubmitting.value = true
 
   try {
+    const currentUid = await refreshUserIdFromAuth()
     if (photoPath.value != null) {
       try {
         const fs = uni.getFileSystemManager()
@@ -239,7 +240,7 @@ async function doSubmit(): Promise<void> {
       enqueueCheckinForLater()
     }
 
-    const userId = userState.userInfo != null ? userState.userInfo!!.userId : null
+    const userId = currentUid != null ? currentUid : (userState.userInfo != null ? userState.userInfo!!.userId : null)
     const updatedMarker = await doCheckIn(markerId.value, photoPath.value, note.value != '' ? note.value : null, userId, cloudURL.value)
     const completed = checkTaskCompletion(marker.value)
     // 主地图 onShow 调 consumeFocus()，移到打卡完成的点并打开详情面板，

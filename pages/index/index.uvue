@@ -1,18 +1,5 @@
 <template>
   <view class="map-page">
-    <view class="location-card">
-      <view class="loc-row">
-        <text class="coordinate">经度: {{ currentLocation?.longitude?.toFixed(6) ?? '--' }}</text>
-        <text class="coordinate">纬度: {{ currentLocation?.latitude?.toFixed(6) ?? '--' }}</text>
-      </view>
-      <view class="loc-row">
-        <view class="accuracy-badge" :class="'accuracy-' + accuracyLevel">
-          <text class="accuracy-text">{{ accuracyText }}</text>
-        </view>
-        <text class="stats">{{ doneCount }}/{{ totalCount }} 已打卡</text>
-      </view>
-    </view>
-
     <view class="auth-chip" :class="isLoggedIn ? 'auth-chip-on' : 'auth-chip-off'" @click="goAuth">
       <text :class="isLoggedIn ? 'auth-chip-text auth-chip-text-on' : 'auth-chip-text auth-chip-text-off'">{{ authLabel }}</text>
     </view>
@@ -111,8 +98,8 @@
 
 <script setup lang="uts">
 import { computed } from 'vue'
-import { deleteMarker, doneCount, findById, isCheckedByUser, loadFromStorage as loadMarkers, markers, syncFromCloud, totalCount } from '@/stores/useMarkerStore'
-import { accuracyLevel, accuracyText, currentLocation, distanceTo, getEffectiveCheckinRadius, pollLocationOnce, startTracking, stopTracking } from '@/stores/useLocationStore'
+import { deleteMarker, findById, isCheckedByUser, loadFromStorage as loadMarkers, markers, syncFromCloud } from '@/stores/useMarkerStore'
+import { currentLocation, distanceTo, getEffectiveCheckinRadius, pollLocationOnce, startTracking, stopTracking } from '@/stores/useLocationStore'
 import { activeMarker, consumeFocus, latitude, longitude, mapCenterLat, mapCenterLng, moveToLocation, onRegionChangeEnd, scale, setActiveMarker, zoomIn, zoomOut } from '@/stores/useMapStore'
 import { loadFromStorage as loadTasks } from '@/stores/useTaskStore'
 import { state as userState, clearUserInfo, refreshUserIdFromAuth } from '@/user/index.uts'
@@ -218,7 +205,7 @@ const myCheckin = computed((): CheckinEntry | null => {
   const u = userState.userInfo
   if (u == null) return null
   const myId = u!!.userId
-  const found = list.find((e: CheckinEntry): boolean => e.userId === myId)
+  const found = list.find((e: CheckinEntry): boolean => e.userId == myId)
   return found ?? null
 })
 
@@ -230,7 +217,7 @@ const otherCheckins = computed((): CheckinEntry[] => {
   const u = userState.userInfo
   if (u == null) return list
   const myId = u!!.userId
-  return list.filter((e: CheckinEntry): boolean => e.userId !== myId)
+  return list.filter((e: CheckinEntry): boolean => e.userId != myId)
 })
 
 const otherCheckinsWithPhoto = computed((): CheckinEntry[] => {
@@ -448,26 +435,12 @@ function doDelete(): void {
 <style>
 .map-page { flex: 1; display: flex; flex-direction: column; width: 750rpx; height: 100%; position: relative; }
 .map-component { width: 750rpx; flex: 1; }
-.location-card { position: absolute; top: 0; left: 0; right: 0; z-index: 10; background-color: rgba(255,255,255,0.92); padding: 20rpx 30rpx; padding-top: 88rpx; display: flex; flex-direction: column; }
-.auth-chip { position: absolute; top: 210rpx; right: 24rpx; z-index: 20; padding: 10rpx 24rpx; border-radius: 24rpx; box-shadow: 0 4rpx 12rpx rgba(0,0,0,0.08); }
+.auth-chip { position: absolute; top: 88rpx; right: 24rpx; z-index: 20; padding: 10rpx 24rpx; border-radius: 24rpx; box-shadow: 0 4rpx 12rpx rgba(0,0,0,0.08); }
 .auth-chip-on { background-color: #2ecc71; }
 .auth-chip-off { background-color: #ffffff; border: 2rpx solid #2ecc71; }
 .auth-chip-text { font-size: 24rpx; font-weight: 500; }
 .auth-chip-text-on { color: #ffffff; }
 .auth-chip-text-off { color: #2ecc71; }
-.loc-row { display: flex; flex-direction: row; align-items: center; justify-content: space-between; }
-.coordinate { font-size: 22rpx; color: #666666; font-family: monospace; }
-.accuracy-badge { padding: 6rpx 20rpx; border-radius: 20rpx; }
-.accuracy-badge.accuracy-good { background-color: #e6f9ed; }
-.accuracy-badge.accuracy-mid { background-color: #fff3e0; }
-.accuracy-badge.accuracy-bad { background-color: #fde8e8; }
-.accuracy-badge.accuracy-unknown { background-color: #f0f0f0; }
-.accuracy-text { font-size: 22rpx; font-weight: 500; }
-.accuracy-good .accuracy-text { color: #34c759; }
-.accuracy-mid .accuracy-text { color: #f39c12; }
-.accuracy-bad .accuracy-text { color: #ff3b30; }
-.accuracy-unknown .accuracy-text { color: #999999; }
-.stats { font-size: 24rpx; color: #2ecc71; font-weight: bold; }
 .bottom-toolbar {
   width: 750rpx;
   height: 120rpx;
