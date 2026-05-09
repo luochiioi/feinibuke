@@ -213,13 +213,30 @@ function closePhotoPreview() {
 
 function confirmDeleteRecord(record, group) {
   const userLabel = record.userName || record.userId || '该用户'
+  const hasPhoto = !!record.photoCloudURL
+  if (!hasPhoto) {
+    uni.showModal({
+      title: '确认删除',
+      content: `确认删除 ${userLabel} 在「${group.markerTitle || '该打卡点'}」的这条打卡记录？此操作不可撤销，且第一版不会回滚任务进度。`,
+      confirmText: '违规删除',
+      cancelText: '取消',
+      success: (res) => {
+        if (res.confirm) doDeleteRecord(record, group, false, false)
+      }
+    })
+    return
+  }
   uni.showModal({
-    title: '确认删除',
-    content: `确认删除 ${userLabel} 在「${group.markerTitle || '该打卡点'}」的这条打卡记录？此操作不可撤销，且第一版不会回滚任务进度。`,
-    confirmText: '违规删除',
-    cancelText: '取消',
+    title: '同步物理删除照片？',
+    content: `${userLabel} 在「${group.markerTitle || '该打卡点'}」的这条打卡含照片。「确认」将一并物理删除云存储文件；「仅删记录」只清空数据库 entry，文件保留。`,
+    confirmText: '确认',
+    cancelText: '仅删记录',
     success: (res) => {
-      if (res.confirm) doDeleteRecord(record, group, false)
+      if (res.confirm) {
+        doDeleteRecord(record, group, false, true)
+      } else if (res.cancel) {
+        doDeleteRecord(record, group, false, false)
+      }
     }
   })
 }
@@ -232,7 +249,8 @@ function confirmDeleteFromPreview() {
     markerTitle: snapshot.markerTitle,
     userId: snapshot.userId,
     userName: snapshot.userName,
-    checkedAt: snapshot.checkedAt
+    checkedAt: snapshot.checkedAt,
+    photoCloudURL: snapshot.url
   }
   const group = {
     markerDocId: snapshot.markerDocId,
@@ -240,17 +258,21 @@ function confirmDeleteFromPreview() {
     markerTitle: snapshot.markerTitle
   }
   uni.showModal({
-    title: '确认删除',
-    content: `确认删除 ${snapshot.userName || snapshot.userId || '该用户'} 在「${snapshot.markerTitle || '该打卡点'}」的这条打卡记录？此操作不可撤销。`,
-    confirmText: '违规删除',
-    cancelText: '取消',
+    title: '同步物理删除照片？',
+    content: `确认删除 ${snapshot.userName || snapshot.userId || '该用户'} 在「${snapshot.markerTitle || '该打卡点'}」的这条打卡记录？「确认」会一并物理删除云存储照片；「仅删记录」保留文件。`,
+    confirmText: '确认',
+    cancelText: '仅删记录',
     success: (res) => {
-      if (res.confirm) doDeleteRecord(record, group, true)
+      if (res.confirm) {
+        doDeleteRecord(record, group, true, true)
+      } else if (res.cancel) {
+        doDeleteRecord(record, group, true, false)
+      }
     }
   })
 }
 
-async function doDeleteRecord(record, group, fromPreview) {
+async function doDeleteRecord(record, group, fromPreview, purgePhoto) {
   const key = recordKey(record)
   deletingKey.value = key
   try {
@@ -258,12 +280,20 @@ async function doDeleteRecord(record, group, fromPreview) {
       _id: record.markerDocId || (group && group.markerDocId) || undefined,
       markerId: record.markerId != null ? record.markerId : (group && group.markerId),
       userId: record.userId,
-      checkedAt: record.checkedAt
+      checkedAt: record.checkedAt,
+      purgePhoto: purgePhoto === true
     })
     if (res.errCode !== 0) throw new Error(res.errMsg || '删除失败')
     const data = res.data || {}
-    const msg = data.deleted ? '已删除该打卡记录' : '记录不存在或已被删除'
-    uni.showToast({ title: msg, icon: 'none' })
+    let msg = data.deleted ? '已删除该打卡记录' : '记录不存在或已被删除'
+    if (data.deleted && purgePhoto) {
+      if (data.photoPurged) {
+        msg += '，照片已物理删除'
+      } else if (data.purgeError) {
+        msg += `，但物理删除失败：${data.purgeError}`
+      }
+    }
+    uni.showToast({ title: msg, icon: 'none', duration: 2500 })
     if (fromPreview) closePhotoPreview()
     reload()
   } catch (e) {
