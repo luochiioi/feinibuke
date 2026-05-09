@@ -3163,3 +3163,17 @@ App 登录态统一使用 uni-id 用户 `_id` 作为 `userInfo.userId`，`user-c
 主地图首次打开时会尝试 `pollLocationOnce()` 并居中到当前位置；只有当存在任务详情或打卡完成后的 focus target 时，才优先定位到目标打卡点。`useMapStore.moveToLocation()` 同步维护 `latitude/longitude` 和 `mapCenterLat/mapCenterLng`，避免新增点默认仍取旧中心。
 
 下一步建议继续做 P3.2：补全历史本地打卡记录的安全回填接口，按 `markerId + uid` 幂等补写当前用户自己的 `checkedBy` 记录；同时在后台增加“同步诊断”页，展示某个 marker 的本地种子、云端 marker、checkedBy、用户 uid 是否一致，方便真机双账号验收。
+---
+
+## 2026-05-09 P3.2 下一轮计划入口
+
+下一轮正式迭代目标为 **P3.2：打卡数据一致性与历史补传**，计划文件位于：
+
+`docs/superpowers/plans/2026-05-09-p3.2-checkin-consistency.md`
+
+执行顺序：
+
+1. 先区分 App 端“当前用户已打卡”和云端“全局已有打卡记录”。
+2. 再新增 `marker-center.repairCheckin()`，只允许当前登录用户按 `markerId + uid` 幂等补传自己的历史本地记录。
+3. 然后让 `utils/cloudSync.uts` 检测本地已打卡但云端缺当前 uid 的记录，补传后重新拉云端刷新 UI。
+4. 最后补后台同步诊断，并做双账号同一景点打卡验收。
