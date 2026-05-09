@@ -1,4 +1,4 @@
-const uniID = require('../../../../uni_modules/uni-id-common/uniCloud/cloudfunctions/common/uni-id-common')
+const uniID = require('uni-id-common')
 
 module.exports = {
   checkAuth: async function(context) {
