@@ -100,6 +100,7 @@ function getCloudErrorMessage(e: any): string {
   try {
     const json = JSON.stringify(e)
     const obj = JSON.parse<UTSJSONObject>(json)
+    if (obj == null) return ''
     const errMsg = obj["errMsg"] as string | null
     if (errMsg != null && errMsg.length > 0) return errMsg
     const message = obj["message"] as string | null
