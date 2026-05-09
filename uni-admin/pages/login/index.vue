@@ -31,6 +31,9 @@ async function login() {
   errorText.value = ''
   try {
     const api = uniCloud.importObject('user-center')
+    if (!api || typeof api.login !== 'function') {
+      throw new Error('未识别 user-center 云对象，请重新运行 uni-admin 或检查 uniCloud-aliyun 目录')
+    }
     const res = await api.login(userName.value, password.value)
     if (res.errCode !== 0) {
       throw new Error(res.errMsg || '登录失败')
