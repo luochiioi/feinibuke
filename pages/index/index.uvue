@@ -33,38 +33,40 @@
         </view>
       </view>
 
-      <view class="panel-meta">
-        <text class="meta-coord">{{ activeMarker!!.latitude.toFixed(4) }}, {{ activeMarker!!.longitude.toFixed(4) }}</text>
-        <text class="meta-distance" v-if="currentUserChecked == false && dist != null">距离 {{ (dist as number).toFixed(0) }}m</text>
-      </view>
-
-      <view class="panel-stats">
-        <view class="stat-pill">
-          <text class="stat-pill-text">{{ checkinCountText }}</text>
+      <scroll-view scroll-y class="panel-body" :show-scrollbar="false">
+        <view class="panel-meta">
+          <text class="meta-coord">{{ activeMarker!!.latitude.toFixed(4) }}, {{ activeMarker!!.longitude.toFixed(4) }}</text>
+          <text class="meta-distance" v-if="currentUserChecked == false && dist != null">距离 {{ (dist as number).toFixed(0) }}m</text>
         </view>
-        <view class="stat-pill stat-pill-owner" v-if="isOwner">
-          <text class="stat-pill-text">由我创建</text>
-        </view>
-      </view>
 
-      <view class="my-checkin" v-if="myCheckin != null">
-        <text class="section-label">我的打卡</text>
-        <image v-if="myCheckin!!.photoCloudURL != null" :src="myCheckin!!.photoCloudURL!!" class="my-photo" mode="aspectFill" />
-        <text class="my-note" v-if="myCheckin!!.note != null">{{ myCheckin!!.note }}</text>
-        <text class="my-time">{{ fmtTime(myCheckin!!.checkedAt) }}</text>
-      </view>
-
-      <view class="other-checkins" v-if="otherCheckinsWithPhoto.length > 0">
-        <text class="section-label">他人足迹（{{ otherCheckins.length }}）</text>
-        <scroll-view scroll-x class="other-scroll" :show-scrollbar="false">
-          <view class="other-list">
-            <view v-for="e in otherCheckinsWithPhoto" :key="e.userId + '_' + e.checkedAt" class="other-card">
-              <image :src="e.photoCloudURL!!" class="other-photo" mode="aspectFill" />
-              <text class="other-time">{{ fmtTime(e.checkedAt) }}</text>
-            </view>
+        <view class="panel-stats">
+          <view class="stat-pill">
+            <text class="stat-pill-text">{{ checkinCountText }}</text>
           </view>
-        </scroll-view>
-      </view>
+          <view class="stat-pill stat-pill-owner" v-if="isOwner">
+            <text class="stat-pill-text">由我创建</text>
+          </view>
+        </view>
+
+        <view class="my-checkin" v-if="myCheckin != null">
+          <text class="section-label">我的打卡</text>
+          <image v-if="myCheckin!!.photoCloudURL != null" :src="myCheckin!!.photoCloudURL!!" class="my-photo" mode="aspectFill" />
+          <text class="my-note" v-if="myCheckin!!.note != null">{{ myCheckin!!.note }}</text>
+          <text class="my-time">{{ fmtTime(myCheckin!!.checkedAt) }}</text>
+        </view>
+
+        <view class="other-checkins" v-if="visibleOtherCheckinsWithPhoto.length > 0">
+          <text class="section-label">{{ otherFootprintLabel }}</text>
+          <scroll-view scroll-x class="other-scroll" :show-scrollbar="false">
+            <view class="other-list">
+              <view v-for="e in visibleOtherCheckinsWithPhoto" :key="e.userId + '_' + e.checkedAt" class="other-card">
+                <image :src="e.photoCloudURL!!" class="other-photo" mode="aspectFill" />
+                <text class="other-time">{{ fmtTime(e.checkedAt) }}</text>
+              </view>
+            </view>
+          </scroll-view>
+        </view>
+      </scroll-view>
 
       <view class="panel-actions">
         <view class="panel-btn panel-btn-danger" v-if="currentUserChecked" @click="confirmDeleteCheckin">
@@ -111,6 +113,7 @@ import { formatDateTime } from '@/utils/format'
 import { deleteCloudCheckin, repairMissingCheckins } from '@/utils/cloudSync'
 
 const LOCATE_SCALE: number = 17
+const OTHER_FOOTPRINT_PHOTO_LIMIT: number = 12
 let hasCenteredOnUser: boolean = false
 
 const isLoggedIn = computed((): boolean => userState.userInfo != null)
@@ -225,6 +228,19 @@ const otherCheckins = computed((): CheckinEntry[] => {
 
 const otherCheckinsWithPhoto = computed((): CheckinEntry[] => {
   return otherCheckins.value.filter((e: CheckinEntry): boolean => e.photoCloudURL != null)
+})
+
+const visibleOtherCheckinsWithPhoto = computed((): CheckinEntry[] => {
+  return otherCheckinsWithPhoto.value.slice(0, OTHER_FOOTPRINT_PHOTO_LIMIT)
+})
+
+const otherFootprintLabel = computed((): string => {
+  const total = otherCheckins.value.length
+  const photoTotal = otherCheckinsWithPhoto.value.length
+  if (photoTotal > OTHER_FOOTPRINT_PHOTO_LIMIT) {
+    return '他人足迹（' + total.toString() + '，展示前 ' + OTHER_FOOTPRINT_PHOTO_LIMIT.toString() + ' 张照片）'
+  }
+  return '他人足迹（' + total.toString() + '）'
 })
 
 const isOwner = computed((): boolean => {
@@ -462,7 +478,7 @@ function doDelete(): void {
 <style>
 .map-page { flex: 1; display: flex; flex-direction: column; width: 750rpx; height: 100%; position: relative; }
 .map-component { width: 750rpx; flex: 1; }
-.auth-chip { position: absolute; top: 88rpx; right: 24rpx; z-index: 20; padding: 10rpx 24rpx; border-radius: 24rpx; box-shadow: 0 4rpx 12rpx rgba(0,0,0,0.08); }
+.auth-chip { position: absolute; top: 64rpx; right: 24rpx; z-index: 20; padding: 10rpx 24rpx; border-radius: 24rpx; box-shadow: 0 4rpx 12rpx rgba(0,0,0,0.08); }
 .auth-chip-on { background-color: #2ecc71; }
 .auth-chip-off { background-color: #ffffff; border: 2rpx solid #2ecc71; }
 .auth-chip-text { font-size: 24rpx; font-weight: 500; }
@@ -510,6 +526,12 @@ function doDelete(): void {
   display: flex;
   flex-direction: column;
   max-height: 880rpx;
+}
+.panel-body {
+  flex: 1;
+  min-height: 0;
+  max-height: 600rpx;
+  margin-top: 16rpx;
 }
 .panel-header {
   display: flex;

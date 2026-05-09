@@ -80,6 +80,7 @@
 import { ref } from 'vue'
 import { onShow } from '@dcloudio/uni-app'
 import AdminHeader from '@/components/AdminHeader.vue'
+import { mergeCheckinGroups, normalizeCheckinGroups } from './checkin-groups.mjs'
 
 const list = ref([])
 const searchQuery = ref('')
@@ -127,12 +128,16 @@ async function fetchData() {
       : await api.getCheckins({ offset, limit, keyword: searchQuery.value })
     if (res.errCode !== 0) throw new Error(res.errMsg || '打卡记录加载失败')
     const data = res.data || {}
-    const groups = data.list || []
-    list.value = offset === 0 ? groups : [...list.value, ...groups]
-    total.value = data.total || list.value.length
-    totalRecordCount.value = data.totalRecords || list.value.reduce((sum, item) => sum + (item.recordCount || 0), 0)
+    const rawItems = data.list || []
+    const groupedResponse = rawItems.some(item => Array.isArray(item && item.records))
+    const groups = normalizeCheckinGroups(rawItems)
+    list.value = offset === 0 ? groups : mergeCheckinGroups(list.value, groups)
+    total.value = groupedResponse ? (data.total || list.value.length) : list.value.length
+    totalRecordCount.value = data.totalRecords || (groupedResponse
+      ? list.value.reduce((sum, item) => sum + (item.recordCount || 0), 0)
+      : (data.total || list.value.reduce((sum, item) => sum + (item.recordCount || 0), 0)))
     markerInfo.value = data.marker || {}
-    hasMore.value = list.value.length < total.value
+    hasMore.value = groupedResponse ? list.value.length < total.value : rawItems.length === limit
     offset += limit
   } catch (e) {
     errorText.value = e.message || '连接服务器失败，请确认 admin-center 已上传'
