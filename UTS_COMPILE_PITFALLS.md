@@ -914,3 +914,28 @@ onHide((): void => {})
 ```
 
 `uni-admin` 是 Vue3/H5 后台项目，若页面需要生命周期，则从 `@dcloudio/uni-app` import；App `.uvue` 与后台 `.vue` 不要混用规则。
+
+### 规则 17：历史补传必须先拉云端事实，再按当前 uid 做差异
+
+P3.2 落地了 `repairMissingCheckins(uid)`。顺序必须保持为：
+
+1. `syncMarkers()` 拉取云端 `checkedBy[] / checkinCount`。
+2. 对比本地 `checked == true` 的历史记录和云端 `checkedBy[]`。
+3. 只补传云端缺少当前 uid 的 marker。
+4. 补传后再 `syncMarkers()` 一次刷新 UI。
+
+不要从 App 端上传完整 `checkedBy[]`，也不要上传客户端传来的 `userId`。`marker-center.repairCheckin()` 必须只使用 `this.auth.uid` 生成 `checkedBy[].userId`，并按 `markerId + uid` 判断已存在记录，避免重复递增 `checkinCount`。
+
+### 规则 18：本地 checked 只是历史痕迹，不等于当前用户云端状态
+
+同一景点允许多人打卡后，`marker.checked == true` 只能说明“本机历史上完成过一次本地打卡”或“云端全局已有打卡”。App 当前用户是否已打卡必须用：
+
+```ts
+function isCheckedByUser(marker: CheckinMarker, uid: string): boolean {
+  const list = marker.checkedBy
+  if (list == null) return false
+  return list.some((entry: CheckinEntry): boolean => entry.userId === uid)
+}
+```
+
+详情面板状态、打卡按钮、我的打卡卡片都应看当前 uid；总人数、他人足迹和后台统计才看 `checkinCount` 或 `checkedBy.length`。

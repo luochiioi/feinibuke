@@ -3177,3 +3177,34 @@ App 登录态统一使用 uni-id 用户 `_id` 作为 `userInfo.userId`，`user-c
 2. 再新增 `marker-center.repairCheckin()`，只允许当前登录用户按 `markerId + uid` 幂等补传自己的历史本地记录。
 3. 然后让 `utils/cloudSync.uts` 检测本地已打卡但云端缺当前 uid 的记录，补传后重新拉云端刷新 UI。
 4. 最后补后台同步诊断，并做双账号同一景点打卡验收。
+
+---
+
+## 2026-05-09 P3.2 打卡一致性与历史补传已落地
+
+本轮完成 P3.2 的代码侧闭环：
+
+- App 详情面板已区分“当前用户已打卡”和“全局已有打卡记录”。状态、距离提示和打卡按钮使用 `checkedBy[] + 当前 uni-id uid` 判断；全局人数仍使用 `checkinCount`，缺失时回退到 `checkedBy.length`。
+- `marker-center.repairCheckin()` 已新增，补传只使用云对象认证得到的 `this.auth.uid`，不信任客户端 `userId`。同一 `markerId + uid` 已存在记录时返回成功但不再次递增 `checkinCount`。
+- `utils/cloudSync.uts` 新增 `findRepairableCheckins()` 和 `repairMissingCheckins()`：先拉云端事实，再查找本地 `checked == true` 但云端缺当前 uid 的记录，补传后再重新拉云端刷新本地和 UI。
+- 拍照打卡本地记录现在会保存当前 uid、`photoCloudURL`、备注和打卡时间，便于云端点同步后做历史补传。
+- uni-admin 仪表盘新增同步诊断，显示云端打卡点数、有记录的点数、云端打卡记录数和 uni-id 用户数；打卡记录页会标出 `repaired: true` 的历史补传记录。
+- 已清理 App `.uvue` 页面从 `vue` import `onShow` 的旧坑，页面生命周期继续使用 uni-app x 全局钩子。
+
+本轮自动化验证命令：
+
+```bash
+node --test uniCloud-aliyun/cloudfunctions/admin-center/marker-service.test.js
+node --test uniCloud-aliyun/cloudfunctions/marker-center/repair-service.test.js
+node --check uniCloud-aliyun/cloudfunctions/marker-center/index.obj.js
+node --check uniCloud-aliyun/cloudfunctions/admin-center/index.obj.js
+node --check uniCloud-aliyun/cloudfunctions/user-center/index.obj.js
+git diff --check
+```
+
+真机/服务空间验收仍需在 HBuilderX 中执行：
+
+1. 上传 `marker-center`、`admin-center`，并确认 `repair-service.js` 随 `marker-center` 一起部署。
+2. 后台先同步默认点和默认任务，打开仪表盘确认同步诊断数据能加载。
+3. 账号 A 对同一景点打卡，账号 B 重新进入首页后应看到全局“已被 1 人打卡”，但 B 自己仍显示“未打卡”且范围内可继续打卡。
+4. 账号 B 打卡后，App 和 uni-admin 打卡记录页总数应为 2；如果某条来自历史补传，后台应显示“历史补传”标记。
