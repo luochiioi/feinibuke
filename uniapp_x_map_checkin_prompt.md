@@ -929,7 +929,7 @@ onHide():
 **关键逻辑**：
 ```typescript
 <script setup lang="uts">
-import { ref, computed, onShow, onHide } from 'vue'
+import { ref, computed } from 'vue'
 import { useMarkerStore } from '@/stores/useMarkerStore'
 import { useLocationStore } from '@/stores/useLocationStore'
 import { useMapStore } from '@/stores/useMapStore'
@@ -1118,7 +1118,7 @@ useTaskStore     → checkTaskCompletion()
 **关键逻辑**：
 ```typescript
 <script setup lang="uts">
-import { ref, computed, onShow, onHide } from 'vue'
+import { ref, computed } from 'vue'
 import { useMarkerStore } from '@/stores/useMarkerStore'
 import { useLocationStore } from '@/stores/useLocationStore'
 import { useTaskStore } from '@/stores/useTaskStore'
@@ -1353,7 +1353,7 @@ export function createApp() {
 
 ```html
 <script setup lang="uts">
-import { onLaunch, onShow, onHide } from '@dcloudio/uni-app'
+// uni-app x .uvue 生命周期为全局钩子，不要从 vue 或 @dcloudio/uni-app import。
 
 onLaunch((): void => {
   console.log('App Launch')
@@ -2935,13 +2935,13 @@ P2 主链路已真机验收通过（详见 `UTS_COMPILE_PITFALLS.md §九`）：
 - ✅ **cloudSync 启动崩溃修复**：`readQueue()` 改用泛型 `JSON.parse<QueueItem[]>()`，离线队列 flush 不再 ClassCastException
 - ✅ **假 captcha 移除**：登录/注册去掉 client-side 验证码，只校验用户名+密码
 
-**P3 起点（新会话开做）** — 按重要性排序（2026-05-09 更新）：
+**P3 当前状态与下一轮起点（2026-05-09 更新）**：
 
-1. **uniCloud 后台打卡点管理 + 云端种子点同步**（最高优先级，§13）
+1. **uniCloud 后台打卡点管理 + 云端种子点同步**（已基本落地，§13）
    - 目标：管理员能在 uniCloud/uni-admin Web 端看到每个打卡点的名称、经纬度、创建者、打卡人数、打卡用户、打卡时间、照片/备注摘要。
    - 能力：新增打卡点、编辑名称/位置、删除打卡点、查看打卡记录。
    - 必做前置：把默认 8 个本地种子点初始化到 `tourism_markers`，否则 App 本地可打卡但云端 `marker-center.checkin` 会找不到文档。
-   - 建议拆成两步：先做 `admin-center` 云对象和初始化脚本，再做 uni-admin 页面。
+   - 当前完成：`admin-center` 管理接口、默认 8 个点同步、默认 6 个任务同步、uni-admin 5 个后台页面、后台返回/刷新/加载/错误状态、用户统计修正。
 
    **2026-05-09 已落地（P3 后台第一轮）**：
    - `admin-center` 新增 `getMarkers`、`getMarkerCheckins`、`createMarker`、`syncDefaultMarkers`，并收紧 `updateMarker` / `deleteMarker` / `batchImport` 只走管理员鉴权。
@@ -2959,28 +2959,40 @@ P2 主链路已真机验收通过（详见 `UTS_COMPILE_PITFALLS.md §九`）：
    - 打卡点管理页增强为详情卡片：展示经纬度、创建者、创建/更新时间、图标路径、尺寸、打卡人数，并支持编辑图标路径与尺寸。
    - 注意：种子点同步前已经发生的“本地成功但云端失败”的历史打卡，不会自动出现在后台；后台记录来自 `tourism_markers.checkedBy[]`，需要云端点存在后重新打卡或由客户端离线队列补传。
 
-2. **iconPath 远程 URL → 本地路径统一化**（中优先级）
-   - 现象：云端 `tourism_markers` 部分文档 `iconPath` 是 `https://img.icons8.com/color/48/marker.png`（远程 URL），腾讯地图插件偶发不渲染（PITFALLS §F #7）
-   - 修复：客户端 `add-marker` 提交前强制把 iconPath 改成 `/static/marker_default.png`；并写一次性脚本/云函数更新历史数据
+   **后台复测顺序**：
+   - 在 HBuilderX 重新上传 `admin-center`、`marker-center`、`users.schema.json`。
+   - 打开 uni-admin，管理员登录后先进入“打卡点”页点击“同步默认点”，再进入“任务”页点击“同步默认任务”。
+   - 用 App 登录任一账号重新完成一次云端点打卡，再刷新后台“仪表盘 / 打卡记录 / 用户管理”确认数据增长。
+   - 历史本地打卡如果发生在云端点同步前，需要下一轮客户端补传能力才能回填到后台。
 
-3. **登录态过期 UX**（中优先级）
-   - 现象：`App.uvue:48` 检测到 `tokenExpired < Date.now()` 时只清 storage，主地图不感知
-   - 修复：清 storage 后通过 EventBus 通知 index 弹"会话已过期，请重新登录" modal，或直接刷新 `state.userInfo` reactive 触发 chip 切换
+2. **P3.1：客户端云端补传与多端同步硬化**（下一轮最高优先级）
+   - 目标：让“历史本地已打卡但云端没有记录”的数据可被用户主动补传；让设备 A 打卡后设备 B 能稳定拉到最新 `checkedBy[]`、任务、照片记录。
+   - 主要文件：`utils/cloudSync.uts`、`stores/useMarkerStore.uts`、`stores/useTaskStore.uts`、`pages/index/index.uvue`、`pages/checkin/checkin.uvue`、`uniCloud-aliyun/cloudfunctions/marker-center/index.obj.js`。
+   - 开工前置：先清理 App H5 已知生命周期 import 警告，`.uvue` 页面不要从 `vue` import `onShow/onHide`，避免 Web 调试时 async component loader 报错。
+   - 做法：增加“本地 checked 但云端 checkedBy 缺当前用户”的差异检测；补一个 `marker-center.repairCheckin()` 或复用受控 `checkin` 路径；App 启动和首页 `onShow` 后先拉云端、再补传队列、再刷新本地 marker/task 状态。
+   - 验收：同步默认点后，用旧账号打开 App，可补传本地已打卡记录；设备 A 打卡后，设备 B 重新进入首页能看到足迹与后台记录一致。
 
-4. **多设备数据同步真机验证**（高优先级，端到端测试）
-   - 用两台设备 A/B 都登录同一账号 → A 创建/打卡 → B 重启或 onShow 拉取 → 看 marker 是否同步显示
-   - 可能要补 `syncMarkers()` 在 onShow 时也调用，不只 onLaunch
+3. **P3.2：后台发布与验收清单固化**（高优先级）
+   - 目标：把 uni-admin 从本地 H5 调试状态推进到可访问的前端网页托管，并形成可复测流程。
+   - 做法：HBuilderX 内置浏览器先跑通；确认跨域配置；执行发行/上传前端网页托管；记录管理员账号、同步按钮顺序、接口错误排查入口。
+   - 验收：外部浏览器访问后台可登录，五个 tab 正常加载，新增/编辑/删除打卡点能反映到 App 地图。
 
-5. **离线打卡 e2e 验证**（中优先级）
+4. **P3.3：离线打卡 e2e 验证**（中优先级）
    - sync_queue 修了 cast bug，但完整链路（断网 → 打卡 → 联网 → flush → 服务端 checkin → marker.checked 同步）没真机走过
    - 容易踩的坑：断网时 `marker-center.checkin` 是直接 throw（被 catch 进 enqueueAction），还是返回 errCode？要看下真机日志
 
-6. **照片打卡端到端**（中优先级）
+5. **P3.4：照片打卡端到端**（中优先级）
    - photo-center.upload 路径已通，但还没真机拍照 → upload → cloudURL 入 marker.checkedBy[].photoCloudURL → 详情页展示
    - 注意 PITFALLS §四 的 chooseImage 必须用 `ChooseImageSuccess` typed 回调
 
+6. **P3.5：登录态过期 UX**（中优先级）
+   - 现象：`App.uvue` 检测 token 过期时只清 storage，主地图不感知
+   - 修复：清 storage 后刷新 `userState.userInfo`，首页 chip 切回登录态；打卡入口提示“会话已过期，请重新登录”
+
 7. **照片墙与回顾页**（中优先级）
    - 从 checkin 记录中按时间/地点展示照片，作为 Phase 2 剧情系统前的沉淀页
+
+下一轮详细执行计划见：`docs/superpowers/plans/2026-05-09-cloud-sync-hardening.md`。
 
 **P3 验收前必读**：
 - `UTS_COMPILE_PITFALLS.md §F` — uni_modules 子组件方案细则

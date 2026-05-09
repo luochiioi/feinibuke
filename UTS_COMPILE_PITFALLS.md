@@ -776,7 +776,7 @@ cloudMarker.checkedBy[0].photoCloudURL  // ← 安全
 | **add-marker 页 UI 美化 + 实时坐标预览** | C4 候选 |
 | **tasks 任务列表的过滤 chips** | C1 候选 |
 | **stats 时间线分组（今日/本周/本月）** | C2 候选 |
-| **后台管理 uni-admin** | §13，未起 |
+| **后台管理 uni-admin** | 已进入 P3 第一轮：后台页面、种子点/任务同步、用户统计已落地；下一步是 HBuilderX 发布与客户端补传联调 |
 
 ### 10.4 2026-05-09 P1 收尾补充
 
@@ -844,6 +844,23 @@ cloudMarker.checkedBy[0].photoCloudURL  // ← 安全
 node --test uniCloud-aliyun/cloudfunctions/admin-center/marker-service.test.js
 node --check uniCloud-aliyun/cloudfunctions/admin-center/index.obj.js
 node --check uniCloud-aliyun/cloudfunctions/admin-center/marker-service.js
+node --check uniCloud-aliyun/cloudfunctions/marker-center/index.obj.js
 ```
 
 这些命令只能证明云端 helper 行为和 JS 语法正确；uniCloud 部署、管理员 token、`uni-admin` 页面真实联调仍需在 HBuilderX/关联服务空间中验证。
+
+### 11.5 下一轮 P3.1 代码规范重点
+
+- **客户端补传只补“当前用户自己的记录”**：不要从 App 端构造或上传别人的 `checkedBy[]`，补传 payload 只能包含 `markerId`、当前用户备注/照片/时间和可验证位置。最终写库仍必须由云对象根据 `this.auth.uid` 生成 `userId`。
+- **不要直接把云端 marker 对象假 cast 成 `CheckinMarker`**：云端 `checkedBy[]` 是嵌套数组，App 端进入 UTS 类型世界前继续用 `JSON.stringify` + `JSON.parse<CheckinMarker>()` 或集中转换函数，不能 `as CheckinMarker`。
+- **补传和拉取要分阶段**：先 `marker-center.getAll()` 拉云端事实，再比较本地差异，再调用补传接口，最后重新拉一次云端刷新 UI。不要在一个循环里边改本地、边发云端、边触发 UI。
+- **离线队列仍用普通 JSON 结构**：`sync_queue` 存储项只能包含简单字段，不能塞 class 实例、函数、Map 或 UTSJSONObject。读取仍使用 `JSON.parse<QueueItem[]>()`。
+- **后台 H5 与 App UTS 生命周期不要混用**：`uni-admin` 页面从 `@dcloudio/uni-app` import `onShow`；App `.uvue` 页面生命周期继续遵守 uni-app x 全局钩子约定。
+- **历史本地打卡回填要有幂等保护**：云对象需按 `markerId + uid` 判断是否已存在记录，已存在则返回成功或“已存在但无需重复写”，不要二次递增 `checkinCount`。
+
+### 11.6 P3.1 推荐实施顺序
+
+1. 先在 HBuilderX 部署并复测当前后台：`admin-center`、`marker-center`、`users.schema.json`、uni-admin H5。
+2. 再做客户端补传接口：优先新增 `marker-center.repairCheckin()`，权限与幂等逻辑由服务端兜住。
+3. 然后改 `utils/cloudSync.uts`：拉云端 markers → 找本地已打卡但云端缺当前用户记录的点 → 入队/补传 → 重拉云端。
+4. 最后做真机双设备验收：A 打卡、B 拉取、后台刷新，三端数字一致后再进入照片墙/回顾页。
