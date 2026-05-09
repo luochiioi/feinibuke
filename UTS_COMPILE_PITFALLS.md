@@ -966,3 +966,45 @@ local.createdAt = cloudMarker.createdAt
 ```
 
 同时仍要保留本机专属的 `photoPath`，因为云端不会持有本地临时文件路径。
+
+### 规则 21：删除打卡也必须只信任云端 uid，并在删除后重拉云端事实
+
+P3.3 新增 `marker-center.deleteCheckin()`。删除打卡和补传/打卡一样，不能信任客户端传来的 `userId`，也不要让 App 上传完整 `checkedBy[]`。客户端只传：
+
+```ts
+const payload = JSON.parse('{}') as UTSJSONObject
+payload["markerId"] = markerId
+await markerApi.deleteCheckin(payload)
+```
+
+云对象内部必须用 `this.auth.uid` 过滤当前用户自己的记录：
+
+```js
+const checkedBy = marker.checkedBy.filter(entry => entry.userId !== this.auth.uid)
+await col.doc(marker._id).update({
+  checked: checkedBy.length > 0,
+  checkinCount: checkedBy.length,
+  checkedBy,
+  updatedAt: Date.now()
+})
+```
+
+删除后 App 不要手动猜测本地 `checkedBy/checkinCount`。应调用云端删除接口后立刻 `syncFromCloud(uid)`，再用 `findById(markerId)` 刷新详情面板。这样 A 删除自己的打卡时，B 在同一景点的记录、照片和全局人数不会被误删或误算。
+
+P3.3 第一版不回滚任务进度；如后续要撤销 `user_tasks/rewards`，必须单独设计并测试，因为“删除一次记录”不等于“撤销所有由该记录触发的奖励”。
+
+### 规则 22：后台打卡记录优先按 marker 分组，照片审核用显式预览入口
+
+`uni-admin` 是 Vue3/H5 后台，不受 App UTS 的 `<cover-view>` 和地图 SDK 类型限制。P3.3 打卡记录页按 marker 分组展示，云对象返回：
+
+```js
+{
+  markerId,
+  markerTitle,
+  recordCount,
+  latestCheckedAt,
+  records: [...]
+}
+```
+
+前端列表保留缩略图，但审核大图必须通过独立按钮/弹窗打开，避免把长 URL 或大图直接塞进每条记录卡片造成页面噪音。后续违规照片删除入口应接在该弹窗动作区，而不是复用公开 App 接口做后台管理写操作。

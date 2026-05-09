@@ -288,6 +288,24 @@ export async function repairMissingCheckins(uid: string): Promise<number> {
   return repairIds.length
 }
 
+export async function deleteCloudCheckin(markerId: number): Promise<boolean> {
+  const markerApi = uniCloud.importObject('marker-center', { customUI: true } as UniCloudImportObjectOptions)
+  const payload = JSON.parse('{}') as UTSJSONObject
+  payload["markerId"] = markerId
+  const res = await markerApi.deleteCheckin(payload) as UTSJSONObject
+  const errCode = res["errCode"] as number
+  if (errCode !== 0) {
+    const rawMsg = res["errMsg"]
+    const msg = rawMsg != null ? rawMsg as string : ''
+    throw new Error(msg.length > 0 ? msg : '删除打卡失败')
+  }
+  const rawData = res["data"]
+  if (rawData == null) return true
+  const data = rawData as UTSJSONObject
+  const deleted = data["deleted"] as boolean
+  return deleted
+}
+
 // ===== Pull user tasks from cloud =====
 
 export async function pullUserTasks(): Promise<UTSJSONObject[]> {

@@ -237,6 +237,27 @@ function flattenCheckinRecords(markers) {
   return records
 }
 
+function groupCheckinRecordsByMarker(markers) {
+  const groups = []
+  ;(markers || []).forEach(marker => {
+    const records = flattenCheckinRecords([marker])
+    if (records.length === 0) return
+    groups.push({
+      markerDocId: marker._id || '',
+      markerId: marker.id,
+      markerTitle: marker.title,
+      latitude: marker.latitude,
+      longitude: marker.longitude,
+      checkinCount: marker.checkinCount || records.length,
+      recordCount: records.length,
+      latestCheckedAt: records[0] ? records[0].checkedAt : 0,
+      records
+    })
+  })
+  groups.sort((a, b) => (b.latestCheckedAt || 0) - (a.latestCheckedAt || 0))
+  return groups
+}
+
 function buildSyncDiagnostics(markers, users) {
   let checkinTotal = 0
   let markerWithCheckins = 0
@@ -317,6 +338,7 @@ module.exports = {
   sanitizeMarkerCreate,
   sanitizeMarkerUpdate,
   flattenCheckinRecords,
+  groupCheckinRecordsByMarker,
   deriveUserStatsFromMarkers,
   normalizeAdminUsers,
   buildSyncDiagnostics

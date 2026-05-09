@@ -4,7 +4,8 @@ const test = require('node:test')
 const {
   hasUserCheckin,
   buildRepairCheckinEntry,
-  createRepairCheckinPlan
+  createRepairCheckinPlan,
+  createDeleteCheckinPlan
 } = require('./repair-service')
 
 test('hasUserCheckin only matches the authenticated uid', () => {
@@ -58,5 +59,49 @@ test('createRepairCheckinPlan is idempotent for markerId plus uid', () => {
     photoCloudURL: null,
     note: null,
     repaired: true
+  })
+})
+
+test('createDeleteCheckinPlan removes only the authenticated uid and recounts safely', () => {
+  const marker = {
+    checked: true,
+    checkinCount: 5,
+    checkedBy: [
+      { userId: 'uid-a', checkedAt: 100, photoCloudURL: 'a.jpg' },
+      { userId: 'uid-b', checkedAt: 200, photoCloudURL: 'b.jpg' },
+      { userId: 'uid-a', checkedAt: 300, photoCloudURL: 'a2.jpg' }
+    ]
+  }
+
+  assert.deepEqual(createDeleteCheckinPlan(marker, 'uid-a'), {
+    shouldDelete: true,
+    existed: true,
+    removedCount: 2,
+    checked: true,
+    checkinCount: 1,
+    checkedBy: [
+      { userId: 'uid-b', checkedAt: 200, photoCloudURL: 'b.jpg' }
+    ]
+  })
+})
+
+test('createDeleteCheckinPlan is idempotent when the uid has no record', () => {
+  const marker = {
+    checked: true,
+    checkinCount: 1,
+    checkedBy: [
+      { userId: 'uid-b', checkedAt: 200 }
+    ]
+  }
+
+  assert.deepEqual(createDeleteCheckinPlan(marker, 'uid-a'), {
+    shouldDelete: false,
+    existed: false,
+    removedCount: 0,
+    checked: true,
+    checkinCount: 1,
+    checkedBy: [
+      { userId: 'uid-b', checkedAt: 200 }
+    ]
   })
 })

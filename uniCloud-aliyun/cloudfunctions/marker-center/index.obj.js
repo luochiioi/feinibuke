@@ -4,7 +4,7 @@ const colTasks = db.collection('user_tasks')
 const colRewards = db.collection('rewards')
 const colUserProfiles = db.collection('users')
 const authUtil = require('auth-util')
-const { createRepairCheckinPlan } = require('./repair-service')
+const { createRepairCheckinPlan, createDeleteCheckinPlan } = require('./repair-service')
 
 module.exports = {
   _before: async function() {
@@ -121,6 +121,39 @@ module.exports = {
 
     const completedTasks = await checkTasksForMarker(this.auth.uid, marker)
     return { errCode: 0, errMsg: '补传成功', data: { repaired: true, completedTasks } }
+  },
+
+  async deleteCheckin(data) {
+    if (!this.auth.uid) return { errCode: -1, errMsg: '请先登录' }
+    const payload = data || {}
+    const markerId = Number(payload.markerId)
+    if (!markerId) return { errCode: -1, errMsg: '缺少打卡点 ID' }
+
+    const markerRes = await col.where({ id: markerId }).limit(1).get()
+    if (!markerRes.data.length) return { errCode: -1, errMsg: '打卡点不存在' }
+    const marker = markerRes.data[0]
+
+    const plan = createDeleteCheckinPlan(marker, this.auth.uid)
+    if (!plan.shouldDelete) {
+      return { errCode: 0, errMsg: '记录不存在', data: { deleted: false, existed: false } }
+    }
+
+    await col.doc(marker._id).update({
+      checked: plan.checked,
+      checkinCount: plan.checkinCount,
+      checkedBy: plan.checkedBy,
+      updatedAt: Date.now()
+    })
+
+    return {
+      errCode: 0,
+      errMsg: '删除打卡成功',
+      data: {
+        deleted: true,
+        removedCount: plan.removedCount,
+        checkinCount: plan.checkinCount
+      }
+    }
   },
 
   async _checkTasks(marker) {

@@ -12,7 +12,7 @@
     <view v-if="selectedMarkerId" class="filter-card">
       <view>
         <text class="filter-title">当前打卡点：{{ selectedMarkerTitle || markerInfo.title || selectedMarkerId }}</text>
-        <text class="filter-meta">共 {{ total }} 条云端打卡记录</text>
+        <text class="filter-meta">共 {{ totalRecordCount }} 条云端打卡记录</text>
       </view>
       <text class="clear-filter" @click="clearMarkerFilter">查看全部</text>
     </view>
@@ -26,23 +26,21 @@
       暂无云端打卡记录。请确认：1. 已同步默认点；2. App 当前连接的是同一个服务空间；3. 打卡发生在云端点存在之后。
     </view>
 
-    <view v-for="record in list" :key="record.markerDocId + '-' + record.userId + '-' + record.checkedAt" class="record-card">
+    <view v-for="group in list" :key="group.markerDocId + '-' + group.markerId" class="marker-group-card">
       <view class="record-header">
         <view>
-          <text class="record-title">{{ record.markerTitle }}</text>
-          <text class="record-coords">{{ formatCoord(record.latitude) }}, {{ formatCoord(record.longitude) }}</text>
+          <text class="record-title">{{ group.markerTitle }}</text>
+          <text class="record-coords">{{ formatCoord(group.latitude) }}, {{ formatCoord(group.longitude) }}</text>
         </view>
-        <text class="record-time">{{ formatTime(record.checkedAt) }}</text>
+        <view class="group-meta">
+          <text class="group-count">{{ group.recordCount }} 条记录</text>
+          <text class="record-time">{{ formatTime(group.latestCheckedAt) }}</text>
+        </view>
       </view>
 
-      <view class="entry">
-        <image
-          v-if="record.photoCloudURL"
-          :src="record.photoCloudURL"
-          class="entry-photo"
-          mode="aspectFill"
-          @click="previewPhoto(record.photoCloudURL)"
-        />
+      <view v-for="record in group.records" :key="record.markerDocId + '-' + record.userId + '-' + record.checkedAt" class="entry">
+        <image v-if="record.photoCloudURL" :src="record.photoCloudURL" class="entry-photo" mode="aspectFill" />
+        <view v-else class="entry-photo entry-photo-empty">无图</view>
         <view class="entry-info">
           <text class="entry-user">打卡人：{{ record.userId || '--' }}</text>
           <text v-if="record.repaired" class="entry-repaired">历史补传</text>
@@ -51,11 +49,29 @@
           <text v-if="record.note" class="entry-note">备注：{{ record.note }}</text>
           <text v-else class="entry-note muted">备注：--</text>
         </view>
+        <button v-if="record.photoCloudURL" class="btn-preview" @click="openPhotoPreview(record)">预览</button>
+        <button v-else class="btn-preview disabled" disabled>无图</button>
       </view>
     </view>
 
     <view v-if="hasMore" class="load-more" @click="fetchData">
       <text>{{ loading ? '加载中...' : '加载更多' }}</text>
+    </view>
+
+    <view v-if="preview.visible" class="preview-mask" @click="closePhotoPreview">
+      <view class="preview-dialog" @click.stop>
+        <view class="preview-header">
+          <view>
+            <text class="preview-title">照片审核预览</text>
+            <text class="preview-meta">{{ preview.userId }} · {{ formatTime(preview.checkedAt) }}</text>
+          </view>
+          <text class="preview-close" @click="closePhotoPreview">×</text>
+        </view>
+        <image :src="preview.url" class="preview-image" mode="aspectFit" />
+        <view class="preview-actions">
+          <button class="btn-reserved" disabled>违规删除入口预留</button>
+        </view>
+      </view>
     </view>
   </view>
 </template>
@@ -74,6 +90,13 @@ const selectedMarkerId = ref(null)
 const selectedMarkerTitle = ref('')
 const markerInfo = ref({})
 const total = ref(0)
+const totalRecordCount = ref(0)
+const preview = ref({
+  visible: false,
+  url: '',
+  userId: '',
+  checkedAt: 0
+})
 let offset = 0
 const limit = 20
 const api = uniCloud.importObject('admin-center')
@@ -90,6 +113,7 @@ function reload() {
   offset = 0
   list.value = []
   total.value = 0
+  totalRecordCount.value = 0
   fetchData()
 }
 
@@ -103,9 +127,10 @@ async function fetchData() {
       : await api.getCheckins({ offset, limit, keyword: searchQuery.value })
     if (res.errCode !== 0) throw new Error(res.errMsg || '打卡记录加载失败')
     const data = res.data || {}
-    const records = data.list || []
-    list.value = offset === 0 ? records : [...list.value, ...records]
+    const groups = data.list || []
+    list.value = offset === 0 ? groups : [...list.value, ...groups]
     total.value = data.total || list.value.length
+    totalRecordCount.value = data.totalRecords || list.value.reduce((sum, item) => sum + (item.recordCount || 0), 0)
     markerInfo.value = data.marker || {}
     hasMore.value = list.value.length < total.value
     offset += limit
@@ -136,8 +161,22 @@ function formatTime(ts) {
   return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`
 }
 
-function previewPhoto(url) {
-  uni.previewImage({ urls: [url], current: url })
+function openPhotoPreview(record) {
+  preview.value = {
+    visible: true,
+    url: record.photoCloudURL || '',
+    userId: record.userId || '--',
+    checkedAt: record.checkedAt || 0
+  }
+}
+
+function closePhotoPreview() {
+  preview.value = {
+    visible: false,
+    url: '',
+    userId: '',
+    checkedAt: 0
+  }
 }
 </script>
 
@@ -210,11 +249,11 @@ function previewPhoto(url) {
   border: none;
 }
 
-.record-card {
+.marker-group-card {
   background: #fff;
   border-radius: 12rpx;
   padding: 24rpx;
-  margin-bottom: 12rpx;
+  margin-bottom: 16rpx;
 }
 
 .record-header {
@@ -237,6 +276,19 @@ function previewPhoto(url) {
   white-space: nowrap;
 }
 
+.group-meta {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 4rpx;
+}
+
+.group-count {
+  font-size: 24rpx;
+  color: #123322;
+  font-weight: 600;
+}
+
 .record-coords {
   font-size: 22rpx;
   color: #aaa;
@@ -246,8 +298,10 @@ function previewPhoto(url) {
 .entry {
   display: flex;
   padding-top: 12rpx;
+  margin-top: 12rpx;
   border-top: 1rpx solid #f5f5f5;
   gap: 12rpx;
+  align-items: flex-start;
 }
 
 .entry-photo {
@@ -256,6 +310,14 @@ function previewPhoto(url) {
   border-radius: 8rpx;
   background: #f0f0f0;
   flex-shrink: 0;
+}
+
+.entry-photo-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #999;
+  font-size: 22rpx;
 }
 
 .entry-info {
@@ -271,6 +333,100 @@ function previewPhoto(url) {
 .entry-url { font-size: 22rpx; color: #1677ff; word-break: break-all; }
 .entry-note { font-size: 24rpx; color: #666; margin-top: 4rpx; }
 .entry-note.muted { color: #aaa; }
+
+.btn-preview {
+  margin: 0;
+  padding: 0 18rpx;
+  height: 56rpx;
+  line-height: 56rpx;
+  background: #1677ff;
+  color: #fff;
+  border: none;
+  border-radius: 8rpx;
+  font-size: 22rpx;
+}
+
+.btn-preview.disabled {
+  background: #eef2f3;
+  color: #9aa4a8;
+}
+
+.preview-mask {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.55);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 32rpx;
+  z-index: 99;
+}
+
+.preview-dialog {
+  width: 680rpx;
+  max-width: 92vw;
+  background: #fff;
+  border-radius: 14rpx;
+  padding: 20rpx;
+}
+
+.preview-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16rpx;
+  margin-bottom: 16rpx;
+}
+
+.preview-title {
+  display: block;
+  color: #123322;
+  font-size: 30rpx;
+  font-weight: 700;
+}
+
+.preview-meta {
+  display: block;
+  color: #7b8c83;
+  font-size: 22rpx;
+  margin-top: 4rpx;
+}
+
+.preview-close {
+  width: 56rpx;
+  height: 56rpx;
+  line-height: 52rpx;
+  text-align: center;
+  border-radius: 28rpx;
+  background: #f2f3f5;
+  color: #66736c;
+  font-size: 38rpx;
+}
+
+.preview-image {
+  width: 100%;
+  height: 70vh;
+  background: #f5f5f5;
+  border-radius: 10rpx;
+}
+
+.preview-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 16rpx;
+}
+
+.btn-reserved {
+  margin: 0;
+  padding: 0 20rpx;
+  height: 58rpx;
+  line-height: 58rpx;
+  background: #fff2f1;
+  color: #d93026;
+  border-radius: 8rpx;
+  border: none;
+  font-size: 22rpx;
+}
 
 .empty { text-align: center; color: #999; line-height: 1.7; padding: 80rpx 20rpx; font-size: 26rpx; }
 .load-more { text-align: center; padding: 24rpx; color: #2ecc71; font-size: 26rpx; }

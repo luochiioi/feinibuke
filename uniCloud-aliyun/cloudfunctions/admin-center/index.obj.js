@@ -10,6 +10,7 @@ const {
   sanitizeMarkerCreate,
   sanitizeMarkerUpdate,
   flattenCheckinRecords,
+  groupCheckinRecordsByMarker,
   deriveUserStatsFromMarkers,
   normalizeAdminUsers,
   buildSyncDiagnostics
@@ -159,13 +160,15 @@ module.exports = {
     }
     const markerRes = await colMarkers
       .where(where)
-      .field({ id: true, title: true, checkedBy: true, latitude: true, longitude: true })
+      .field({ id: true, title: true, checkedBy: true, checkinCount: true, latitude: true, longitude: true })
       .orderBy('updatedAt', 'desc')
       .get()
-    const records = flattenCheckinRecords(markerRes.data)
+    const groups = groupCheckinRecordsByMarker(markerRes.data)
+    const totalRecords = groups.reduce((sum, item) => sum + item.recordCount, 0)
     return ok({
-      list: records.slice(offset, offset + limit),
-      total: records.length,
+      list: groups.slice(offset, offset + limit),
+      total: groups.length,
+      totalRecords,
       offset,
       limit
     })
@@ -187,6 +190,7 @@ module.exports = {
 
     const marker = markerRes.data[0]
     const records = flattenCheckinRecords([marker])
+    const groups = groupCheckinRecordsByMarker([marker])
     return ok({
       marker: {
         _id: marker._id,
@@ -198,8 +202,9 @@ module.exports = {
         createdBy: marker.createdBy || null,
         createdAt: marker.createdAt || null
       },
-      list: records.slice(offset, offset + limit),
-      total: records.length,
+      list: groups.slice(offset, offset + limit),
+      total: groups.length,
+      totalRecords: records.length,
       offset,
       limit
     })

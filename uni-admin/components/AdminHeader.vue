@@ -1,6 +1,6 @@
 <template>
   <view class="admin-header">
-    <text class="back-btn" @click="goBack">‹ 返回</text>
+    <text class="back-btn" @click="goBack">‹</text>
     <view class="header-main">
       <text class="header-title">{{ title }}</text>
       <text v-if="subtitle" class="header-subtitle">{{ subtitle }}</text>
@@ -52,6 +52,17 @@ function goBack() {
   color: #1f8f54;
   font-size: 26rpx;
   white-space: nowrap;
+}
+
+.back-btn {
+  width: 56rpx;
+  height: 56rpx;
+  line-height: 52rpx;
+  text-align: center;
+  border-radius: 28rpx;
+  background: #ecf9f1;
+  font-size: 44rpx;
+  font-weight: 600;
 }
 
 .header-main {

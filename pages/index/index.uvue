@@ -67,14 +67,17 @@
       </view>
 
       <view class="panel-actions">
+        <view class="panel-btn panel-btn-danger" v-if="currentUserChecked" @click="confirmDeleteCheckin">
+          <text class="panel-btn-text danger">删除打卡</text>
+        </view>
         <view class="panel-btn panel-btn-primary" v-if="canShowCheckinButton" @click="doCheckin">
           <text class="panel-btn-text light">打卡</text>
         </view>
         <view class="panel-btn panel-btn-ghost" v-if="currentUserChecked == false && canCheckIn == false">
           <text class="panel-btn-text muted">未进入范围</text>
         </view>
-        <view class="panel-btn panel-btn-danger" v-if="isOwner" @click="doDelete">
-          <text class="panel-btn-text danger">删除</text>
+        <view class="panel-btn panel-btn-danger-secondary" v-if="isOwner" @click="doDelete">
+          <text class="panel-btn-text danger">删除点位</text>
         </view>
       </view>
     </view>
@@ -105,7 +108,7 @@ import { loadFromStorage as loadTasks } from '@/stores/useTaskStore'
 import { state as userState, clearUserInfo, refreshUserIdFromAuth } from '@/user/index.uts'
 import type { CheckinMarker, CheckinEntry } from '@/types/marker'
 import { formatDateTime } from '@/utils/format'
-import { repairMissingCheckins } from '@/utils/cloudSync'
+import { deleteCloudCheckin, repairMissingCheckins } from '@/utils/cloudSync'
 
 const LOCATE_SCALE: number = 17
 let hasCenteredOnUser: boolean = false
@@ -418,6 +421,30 @@ async function doDeleteMarker(markerId: number): Promise<void> {
   uni.showToast({ title: '已删除', icon: 'none' })
 }
 
+async function doDeleteCheckin(markerId: number): Promise<void> {
+  try {
+    await deleteCloudCheckin(markerId)
+    await refreshCloudAndPanel(markerId)
+    uni.showToast({ title: '已删除打卡', icon: 'none' })
+  } catch (e) {
+    console.log('deleteCloudCheckin failed', e)
+    uni.showToast({ title: '删除失败，请稍后重试', icon: 'none' })
+  }
+}
+
+function confirmDeleteCheckin(): void {
+  const marker = activeMarker.value
+  if (marker == null) return
+  uni.showActionSheet({
+    itemList: ['删除打卡'],
+    success: (res: ShowActionSheetSuccess): void => {
+      if (res.tapIndex == 0) {
+        doDeleteCheckin(marker.id)
+      }
+    }
+  })
+}
+
 function doDelete(): void {
   const marker = activeMarker.value
   if (marker == null) return
@@ -634,7 +661,11 @@ function doDelete(): void {
   background-color: #eef2f3;
 }
 .panel-btn-danger {
-  width: 180rpx;
+  flex: 1;
+  background-color: #fff2f1;
+}
+.panel-btn-danger-secondary {
+  width: 188rpx;
   margin-left: 16rpx;
   background-color: #fff2f1;
 }

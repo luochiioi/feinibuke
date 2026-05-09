@@ -3263,3 +3263,35 @@ git diff --check
 1. 打卡成功返回首页后，等待云端刷新，当前景点仍应显示 `已打卡`，自己的照片仍在“我的打卡”，不应进入“他人足迹”。
 2. 已打卡景点再次点击时，首页不应再显示可打卡状态；如后续 P3.3 接入删除打卡，主按钮应切换为 `删除打卡`。
 3. 首页顶部不再显示经纬度、精度、`x/y 已打卡` 信息条，地图显示区域应明显增加。
+
+---
+
+## 2026-05-09 P3.3 打卡记录管理与照片审核已落地
+
+本轮完成 P3.3 的代码侧闭环：
+
+- App 首页详情面板在当前 uid 已存在于 `checkedBy[]` 时直接显示 `已打卡`，主操作切换为 `删除打卡`；创建者删除点位保留为 `删除点位`，避免和删除自己的打卡记录混淆。
+- `marker-center.deleteCheckin()` 新增当前用户删除打卡接口，只接受 `markerId`，服务端只按 `this.auth.uid` 删除自己的 `checkedBy[]` 记录；接口幂等，未找到自己的记录时返回成功但不改数据。
+- 删除打卡后 `utils/cloudSync.uts` 调用云对象并重新 `syncFromCloud(uid)`，刷新当前面板，确保 App 的个人状态、全局人数和后台记录来自同一份云端事实。
+- 删除第一版只处理 `checkedBy[]` 和 `checkinCount`，暂不回滚 `user_tasks`、`rewards` 或任务完成状态，符合 P3.3 范围。
+- uni-admin 打卡记录页改为按打卡点分组：一个点位卡片展示该点所有打卡人、时间、照片和备注，不再每条记录重复完整点位信息。
+- 后台照片审核新增大图预览弹窗，列表保留缩略图，并预留“违规删除入口”按钮位，后续可接入删除违规照片/记录。
+- `AdminHeader` 返回按钮改为左上角图标按钮，只显示返回图标，不再显示“返回”文字。
+
+本轮自动化验证命令：
+
+```bash
+node --test uniCloud-aliyun/cloudfunctions/marker-center/repair-service.test.js
+node --test uniCloud-aliyun/cloudfunctions/admin-center/marker-service.test.js
+node --check uniCloud-aliyun/cloudfunctions/marker-center/index.obj.js
+node --check uniCloud-aliyun/cloudfunctions/admin-center/index.obj.js
+node --check uniCloud-aliyun/cloudfunctions/user-center/index.obj.js
+git diff --check
+```
+
+真机/服务空间验收仍需在 HBuilderX 中执行：
+
+1. 上传 `marker-center`、`admin-center`，并确认 `repair-service.js` 随 `marker-center` 一起部署。
+2. 账号 A 和 B 对同一景点打卡，确认后台该点分组下有 2 条记录。
+3. 账号 A 在 App 首页详情面板点击 `删除打卡`，确认 A 的面板变回 `未打卡`，全局人数减 1，B 的记录和照片仍保留。
+4. 打开 uni-admin 打卡记录页，确认同一 marker 分组记录数、照片预览弹窗和 App 侧人数一致。

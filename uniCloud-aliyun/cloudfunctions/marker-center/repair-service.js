@@ -30,8 +30,23 @@ function createRepairCheckinPlan(marker, payload, uid, now) {
   }
 }
 
+function createDeleteCheckinPlan(marker, uid) {
+  const original = marker && Array.isArray(marker.checkedBy) ? marker.checkedBy : []
+  const checkedBy = original.filter(entry => !entry || entry.userId !== uid)
+  const removedCount = original.length - checkedBy.length
+  return {
+    shouldDelete: removedCount > 0,
+    existed: removedCount > 0,
+    removedCount,
+    checked: checkedBy.length > 0,
+    checkinCount: checkedBy.length,
+    checkedBy
+  }
+}
+
 module.exports = {
   hasUserCheckin,
   buildRepairCheckinEntry,
-  createRepairCheckinPlan
+  createRepairCheckinPlan,
+  createDeleteCheckinPlan
 }

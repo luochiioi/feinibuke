@@ -9,6 +9,7 @@ const {
   sanitizeMarkerCreate,
   sanitizeMarkerUpdate,
   flattenCheckinRecords,
+  groupCheckinRecordsByMarker,
   deriveUserStatsFromMarkers,
   normalizeAdminUsers,
   buildSyncDiagnostics
@@ -149,6 +150,40 @@ test('flattenCheckinRecords preserves repaired checkin flags', () => {
 
   assert.equal(records.length, 1)
   assert.equal(records[0].repaired, true)
+})
+
+test('groupCheckinRecordsByMarker returns one group per marker with nested records', () => {
+  const groups = groupCheckinRecordsByMarker([
+    {
+      _id: 'm1',
+      id: 1,
+      title: '北京故宫',
+      latitude: 39.9163,
+      longitude: 116.3972,
+      checkinCount: 2,
+      checkedBy: [
+        { userId: 'u1', checkedAt: 100, photoCloudURL: 'a.jpg', note: '早' },
+        { userId: 'u2', checkedAt: 300, photoCloudURL: null, note: null }
+      ]
+    },
+    {
+      _id: 'm2',
+      id: 2,
+      title: '上海迪士尼',
+      latitude: 31.1465,
+      longitude: 121.6593,
+      checkinCount: 1,
+      checkedBy: [
+        { userId: 'u3', checkedAt: 200, photoCloudURL: 'b.jpg', note: '中', repaired: true }
+      ]
+    }
+  ])
+
+  assert.equal(groups.length, 2)
+  assert.equal(groups[0].markerId, 1)
+  assert.equal(groups[0].recordCount, 2)
+  assert.deepEqual(groups[0].records.map(item => item.userId), ['u2', 'u1'])
+  assert.equal(groups[1].records[0].repaired, true)
 })
 
 test('buildSyncDiagnostics summarizes cloud marker, checkin, and user counts', () => {
