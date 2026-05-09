@@ -25,6 +25,11 @@ module.exports = {
 
   // ===== 需登录操作 =====
 
+  async whoami() {
+    if (!this.auth.uid) return { errCode: -1, errMsg: '请先登录' }
+    return { errCode: 0, data: { uid: this.auth.uid } }
+  },
+
   async add(data) {
     if (!this.auth.uid) return { errCode: -1, errMsg: '请先登录' }
     const { title, latitude, longitude } = data

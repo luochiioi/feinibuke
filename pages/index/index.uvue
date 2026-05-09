@@ -115,7 +115,7 @@ import { deleteMarker, doneCount, findById, isCheckedByUser, loadFromStorage as 
 import { accuracyLevel, accuracyText, currentLocation, distanceTo, getEffectiveCheckinRadius, pollLocationOnce, startTracking, stopTracking } from '@/stores/useLocationStore'
 import { activeMarker, consumeFocus, latitude, longitude, mapCenterLat, mapCenterLng, moveToLocation, onRegionChangeEnd, scale, setActiveMarker, zoomIn, zoomOut } from '@/stores/useMapStore'
 import { loadFromStorage as loadTasks } from '@/stores/useTaskStore'
-import { state as userState, clearUserInfo } from '@/user/index.uts'
+import { state as userState, clearUserInfo, refreshUserIdFromAuth } from '@/user/index.uts'
 import type { CheckinMarker, CheckinEntry } from '@/types/marker'
 import { formatDateTime } from '@/utils/format'
 import { repairMissingCheckins } from '@/utils/cloudSync'
@@ -276,6 +276,7 @@ async function refreshCloudAndPanel(markerId: number): Promise<void> {
 }
 
 async function repairAndRefreshForUser(markerId: number): Promise<void> {
+  await refreshUserIdFromAuth()
   const user = userState.userInfo
   if (user == null) {
     await refreshCloudAndPanel(markerId)

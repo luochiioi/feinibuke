@@ -59,6 +59,31 @@ export function refreshUserInfo(data: UserInfo): void {
   uni.setStorageSync('userInfo', safeData)
 }
 
+export async function refreshUserIdFromAuth(): Promise<string | null> {
+  const current = state.userInfo
+  if (current == null) return null
+  try {
+    const markerApi = uniCloud.importObject('marker-center', { customUI: true } as UniCloudImportObjectOptions)
+    const res = await markerApi.whoami() as UTSJSONObject
+    const errCode = res["errCode"] as number
+    if (errCode != 0) return current.userId
+    const data = res["data"] as UTSJSONObject | null
+    if (data == null) return current.userId
+    const uid = data["uid"] as string | null
+    if (uid == null || uid.length == 0) return current.userId
+    if (uid != current.userId) {
+      refreshUserInfo({
+        userId: uid,
+        userName: current.userName
+      } as UserInfo)
+    }
+    return uid
+  } catch (e) {
+    console.log('refreshUserIdFromAuth failed', e)
+    return current.userId
+  }
+}
+
 export function clearUserInfo() {
   state.userInfo = null
   uni.removeStorageSync('userInfo')
