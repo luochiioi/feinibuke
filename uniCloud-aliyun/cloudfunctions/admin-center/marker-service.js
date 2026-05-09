@@ -324,6 +324,53 @@ function createDeleteCheckinRecordPlan(marker, target) {
   }
 }
 
+// 后台删除用户时的级联清理：把目标 uid 在该 marker 的 checkedBy[] 里全部移除，
+// 重算 checked / checkinCount。返回纯描述对象，由 obj.js 决定是否写库；
+// 与 createDeleteCheckinRecordPlan 不同——本计划允许同一 uid 多条记录一次性删干净。
+function createPurgeUserCheckinsPlan(marker, userId) {
+  const original = marker && Array.isArray(marker.checkedBy) ? marker.checkedBy : []
+  const targetUserId = userId != null ? String(userId) : ''
+  if (targetUserId.length === 0) {
+    return {
+      shouldUpdate: false,
+      removedCount: 0,
+      checked: original.length > 0,
+      checkinCount: original.length,
+      checkedBy: original
+    }
+  }
+
+  const checkedBy = []
+  let removedCount = 0
+  for (let i = 0; i < original.length; i++) {
+    const entry = original[i]
+    const entryUserId = entry && entry.userId != null ? String(entry.userId) : ''
+    if (entryUserId === targetUserId) {
+      removedCount += 1
+      continue
+    }
+    checkedBy.push(entry)
+  }
+
+  if (removedCount === 0) {
+    return {
+      shouldUpdate: false,
+      removedCount: 0,
+      checked: original.length > 0,
+      checkinCount: original.length,
+      checkedBy: original
+    }
+  }
+
+  return {
+    shouldUpdate: true,
+    removedCount,
+    checked: checkedBy.length > 0,
+    checkinCount: checkedBy.length,
+    checkedBy
+  }
+}
+
 function buildSyncDiagnostics(markers, users) {
   let checkinTotal = 0
   let markerWithCheckins = 0
@@ -407,6 +454,7 @@ module.exports = {
   flattenCheckinRecords,
   groupCheckinRecordsByMarker,
   createDeleteCheckinRecordPlan,
+  createPurgeUserCheckinsPlan,
   deriveUserStatsFromMarkers,
   normalizeAdminUsers,
   buildSyncDiagnostics

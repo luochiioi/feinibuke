@@ -12,6 +12,7 @@ const {
   flattenCheckinRecords,
   groupCheckinRecordsByMarker,
   createDeleteCheckinRecordPlan,
+  createPurgeUserCheckinsPlan,
   deriveUserStatsFromMarkers,
   normalizeAdminUsers,
   buildSyncDiagnostics
@@ -220,6 +221,72 @@ test('createDeleteCheckinRecordPlan removes one exact checkin record and recalcu
       { userId: 'u1', checkedAt: 300 }
     ]
   })
+})
+
+test('createPurgeUserCheckinsPlan removes every entry of a user and recounts', () => {
+  const marker = {
+    checked: true,
+    checkinCount: 3,
+    checkedBy: [
+      { userId: 'u1', checkedAt: 100 },
+      { userId: 'u2', checkedAt: 200 },
+      { userId: 'u1', checkedAt: 300 }
+    ]
+  }
+
+  assert.deepEqual(createPurgeUserCheckinsPlan(marker, 'u1'), {
+    shouldUpdate: true,
+    removedCount: 2,
+    checked: true,
+    checkinCount: 1,
+    checkedBy: [
+      { userId: 'u2', checkedAt: 200 }
+    ]
+  })
+})
+
+test('createPurgeUserCheckinsPlan flips checked to false when last entry removed', () => {
+  const marker = {
+    checked: true,
+    checkinCount: 1,
+    checkedBy: [
+      { userId: 'u1', checkedAt: 100 }
+    ]
+  }
+
+  assert.deepEqual(createPurgeUserCheckinsPlan(marker, 'u1'), {
+    shouldUpdate: true,
+    removedCount: 1,
+    checked: false,
+    checkinCount: 0,
+    checkedBy: []
+  })
+})
+
+test('createPurgeUserCheckinsPlan is a no-op when user has no records on this marker', () => {
+  const marker = {
+    checked: true,
+    checkinCount: 1,
+    checkedBy: [
+      { userId: 'u2', checkedAt: 200 }
+    ]
+  }
+
+  const plan = createPurgeUserCheckinsPlan(marker, 'u1')
+  assert.equal(plan.shouldUpdate, false)
+  assert.equal(plan.removedCount, 0)
+  assert.equal(plan.checkinCount, 1)
+  assert.equal(plan.checkedBy, marker.checkedBy)
+})
+
+test('createPurgeUserCheckinsPlan rejects empty userId without scanning', () => {
+  const plan = createPurgeUserCheckinsPlan({
+    checked: true,
+    checkinCount: 1,
+    checkedBy: [{ userId: '', checkedAt: 100 }]
+  }, '')
+  assert.equal(plan.shouldUpdate, false)
+  assert.equal(plan.removedCount, 0)
 })
 
 test('createDeleteCheckinRecordPlan is idempotent for a missing record', () => {

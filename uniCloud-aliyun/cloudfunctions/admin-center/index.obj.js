@@ -13,6 +13,7 @@ const {
   flattenCheckinRecords,
   groupCheckinRecordsByMarker,
   createDeleteCheckinRecordPlan,
+  createPurgeUserCheckinsPlan,
   deriveUserStatsFromMarkers,
   normalizeAdminUsers,
   buildSyncDiagnostics
@@ -22,6 +23,8 @@ const colMarkers = db.collection('tourism_markers')
 const colUsers = db.collection('uni-id-users')
 const colUserProfiles = db.collection('users')
 const colTasks = db.collection('tourism_tasks')
+const colUserTasks = db.collection('user_tasks')
+const colRewards = db.collection('rewards')
 
 function ok(data, errMsg) {
   return { errCode: 0, errMsg: errMsg || 'ok', data }
@@ -286,6 +289,78 @@ module.exports = {
       removedCount: plan.removedCount,
       checkinCount: plan.checkinCount
     }, '删除成功')
+  },
+
+  // 后台删除用户：必须服务端事务式级联清理，禁止前端遍历调用多接口（否则
+  // 删一半断网会留下孤儿统计 / 任务 / 打卡）。先做安全栅栏（不能删自己 / 最后
+  // 一个 admin），再用 createPurgeUserCheckinsPlan 计算每个 marker 的 patch，
+  // 然后顺序清理 colUserProfiles / user_tasks / rewards / colUsers。
+  async deleteUser(data) {
+    const targetId = String((data && data._id) || '').trim()
+    if (targetId.length === 0) return fail('缺少用户 _id')
+    if (targetId === String(this.auth.uid)) {
+      return fail('不能删除当前登录管理员')
+    }
+
+    const targetRes = await colUsers.doc(targetId).get()
+    if (!targetRes.data.length) return fail('用户不存在')
+    const target = targetRes.data[0]
+
+    if (isAdminUser(target)) {
+      const allUsersRes = await colUsers.field({ _id: true, role: true, permission: true }).get()
+      const adminCount = (allUsersRes.data || []).filter(isAdminUser).length
+      if (adminCount <= 1) {
+        return fail('不能删除最后一个管理员账号')
+      }
+    }
+
+    const markerRes = await colMarkers.field({ _id: true, checkedBy: true }).get()
+    let markerPatched = 0
+    let checkinsRemoved = 0
+    for (const marker of markerRes.data) {
+      const plan = createPurgeUserCheckinsPlan(marker, targetId)
+      if (!plan.shouldUpdate) continue
+      await colMarkers.doc(marker._id).update({
+        checked: plan.checked,
+        checkinCount: plan.checkinCount,
+        checkedBy: plan.checkedBy,
+        updatedAt: Date.now()
+      })
+      markerPatched += 1
+      checkinsRemoved += plan.removedCount
+    }
+
+    const profileRes = await colUserProfiles.where({ userId: targetId }).get()
+    let profilesRemoved = 0
+    for (const profile of profileRes.data) {
+      await colUserProfiles.doc(profile._id).remove()
+      profilesRemoved += 1
+    }
+
+    const userTasksRes = await colUserTasks.where({ userId: targetId }).get()
+    let userTasksRemoved = 0
+    for (const row of userTasksRes.data) {
+      await colUserTasks.doc(row._id).remove()
+      userTasksRemoved += 1
+    }
+
+    const rewardsRes = await colRewards.where({ userId: targetId }).get()
+    let rewardsRemoved = 0
+    for (const row of rewardsRes.data) {
+      await colRewards.doc(row._id).remove()
+      rewardsRemoved += 1
+    }
+
+    await colUsers.doc(targetId).remove()
+
+    return ok({
+      deleted: true,
+      markerPatched,
+      checkinsRemoved,
+      profilesRemoved,
+      userTasksRemoved,
+      rewardsRemoved
+    }, '用户及关联数据已删除')
   },
 
   async createMarker(data) {

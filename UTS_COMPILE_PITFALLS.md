@@ -1084,6 +1084,22 @@ function createDeleteCheckinRecordPlan(marker, target) {
 - 第一版不回滚 `user_tasks`/`rewards`，与 P3.3 规则 21 一致
 - 后续 P3.4 接入物理删除照片与审计日志时，物理删除失败不回滚数据库删除，仅记 `purgeError` 字段
 
+### 规则 26：删除用户必须服务端事务式级联清理，禁止前端遍历调用多接口
+
+后台 "删除用户" 不能在 vue 页面里串 5 次 `await api.xxx()`：删一半遇到网络中断或权限抖动会留下孤儿 — 用户已删但 `tourism_markers.checkedBy[]` / `users` / `user_tasks` / `rewards` 残留，从此显示成 "已离职打卡人" 或干脆撑爆 dashboard 计数。
+
+正解：**所有级联清理收口到 `admin-center.deleteUser({ _id })` 一个调用**，服务端按固定顺序执行：
+
+1. 安全栅栏：拒绝删除当前登录管理员（`this.auth.uid`），拒绝删除唯一剩余 admin。
+2. `tourism_markers` 全表扫描，对每个 marker 跑纯函数 `createPurgeUserCheckinsPlan(marker, uid)` 计算 patch，仅 `shouldUpdate: true` 才落库。
+3. `users`（colUserProfiles，统计文档）按 `userId` 全删。
+4. `user_tasks`、`rewards` 按 `userId` 全删。
+5. 最后 `colUsers.doc(_id).remove()`。
+
+`createPurgeUserCheckinsPlan` 与 P3.3 的 `createDeleteCheckinRecordPlan` 区别在于：本计划允许同一 uid 多条记录一次性删干净（防御性处理），而单条删除只删第一条匹配。两者都是纯函数 + 单测覆盖，写库副作用集中在 `index.obj.js`。
+
+返回值携带各表清理数量，供前端 toast 显示 "已清理 X 条打卡 / Y 条任务 / Z 条奖励"，让审计动作有可见回执。
+
 ### 11.6 P3.3 复测验证命令
 
 ```bash

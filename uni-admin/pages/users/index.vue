@@ -23,6 +23,7 @@
         <view class="name-row">
           <text class="user-name">{{ u.nickname || u.userId || '未知' }}</text>
           <text v-if="isAdmin(u.role)" class="role-badge">admin</text>
+          <text v-if="isSelf(u)" class="self-badge">本人</text>
         </view>
         <text class="user-id">账号: {{ u.userId }} · UID: {{ u.uid }}</text>
         <text class="user-id">创建时间: {{ formatTime(u.createdAt) }}</text>
@@ -32,7 +33,13 @@
           <text class="ustat">创建 {{ u.totalCreated || 0 }} 个</text>
         </view>
       </view>
-      <text class="arrow">›</text>
+      <view
+        class="del-btn"
+        :class="{ 'del-btn-disabled': isSelf(u) || deleting }"
+        @click.stop="confirmDelete(u)"
+      >
+        <text class="del-btn-text">{{ isSelf(u) ? '本人' : '删除' }}</text>
+      </view>
     </view>
 
     <view v-if="hasMore" class="load-more" @click="fetchUsers">
@@ -73,12 +80,65 @@ const total = ref(0)
 const selected = ref(null)
 const hasMore = ref(false)
 const loading = ref(false)
+const deleting = ref(false)
+const currentUid = ref('')
 const errorText = ref('')
 let offset = 0
 const limit = 20
 const api = uniCloud.importObject('admin-center')
 
-onShow(() => { reload() })
+onShow(() => {
+  refreshCurrentUid()
+  reload()
+})
+
+function refreshCurrentUid() {
+  try {
+    const info = uniCloud.getCurrentUserInfo()
+    currentUid.value = String((info && info.uid) || '')
+  } catch (e) {
+    currentUid.value = ''
+  }
+}
+
+function isSelf(u) {
+  if (!u || !currentUid.value) return false
+  return String(u._id || u.uid || '') === currentUid.value
+}
+
+function confirmDelete(u) {
+  if (!u || isSelf(u) || deleting.value) return
+  const name = u.nickname || u.userId || u._id
+  uni.showModal({
+    title: '删除用户',
+    content: `确认删除 ${name}？将一并清理打卡记录、统计、任务进度与奖励，且不可恢复。`,
+    confirmText: '删除',
+    confirmColor: '#d93026',
+    success: (res) => {
+      if (res.confirm) runDelete(u)
+    }
+  })
+}
+
+async function runDelete(u) {
+  if (!u || deleting.value) return
+  deleting.value = true
+  errorText.value = ''
+  try {
+    const res = await api.deleteUser({ _id: u._id })
+    if (res.errCode !== 0) throw new Error(res.errMsg || '删除失败')
+    const d = res.data || {}
+    const summary = `已清理 ${d.checkinsRemoved || 0} 条打卡 / ${d.userTasksRemoved || 0} 条任务 / ${d.rewardsRemoved || 0} 条奖励`
+    uni.showToast({ title: summary, icon: 'none', duration: 2500 })
+    if (selected.value && selected.value._id === u._id) selected.value = null
+    reload()
+  } catch (e) {
+    errorText.value = e.message || '删除失败'
+    uni.showToast({ title: errorText.value, icon: 'none' })
+  } finally {
+    deleting.value = false
+  }
+}
 
 function reload() {
   offset = 0
@@ -205,6 +265,14 @@ function selectUser(u) {
   padding: 4rpx 12rpx;
 }
 
+.self-badge {
+  background: #eef2f7;
+  color: #6477a6;
+  border-radius: 999rpx;
+  font-size: 20rpx;
+  padding: 4rpx 12rpx;
+}
+
 .user-id {
   display: block;
   font-size: 22rpx;
@@ -224,9 +292,26 @@ function selectUser(u) {
   color: #666;
 }
 
-.arrow {
-  font-size: 32rpx;
-  color: #ccc;
+.del-btn {
+  background: #ffeceb;
+  border-radius: 8rpx;
+  padding: 10rpx 20rpx;
+  margin-left: 12rpx;
+}
+
+.del-btn-disabled {
+  background: #f0f0f0;
+  opacity: 0.6;
+}
+
+.del-btn-text {
+  color: #d93026;
+  font-size: 24rpx;
+  font-weight: 500;
+}
+
+.del-btn-disabled .del-btn-text {
+  color: #999;
 }
 
 .empty { text-align: center; color: #999; line-height: 1.7; padding: 80rpx 20rpx; font-size: 26rpx; }
