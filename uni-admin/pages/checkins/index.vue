@@ -1,9 +1,18 @@
 <template>
   <view class="checkins-page">
+    <AdminHeader
+      title="打卡记录"
+      subtitle="查看所有云端打卡人、时间、照片和备注"
+      @refresh="reload"
+    />
+
+    <view v-if="errorText" class="notice error">{{ errorText }}</view>
+    <view v-if="loading && list.length === 0" class="notice">正在加载打卡记录...</view>
+
     <view v-if="selectedMarkerId" class="filter-card">
       <view>
         <text class="filter-title">当前打卡点：{{ selectedMarkerTitle || markerInfo.title || selectedMarkerId }}</text>
-        <text class="filter-meta">共 {{ total }} 条打卡记录</text>
+        <text class="filter-meta">共 {{ total }} 条云端打卡记录</text>
       </view>
       <text class="clear-filter" @click="clearMarkerFilter">查看全部</text>
     </view>
@@ -13,7 +22,10 @@
       <button class="btn-search" @click="reload">搜索</button>
     </view>
 
-    <view v-if="list.length === 0" class="empty">暂无打卡记录</view>
+    <view v-if="!loading && list.length === 0" class="empty">
+      暂无云端打卡记录。请确认：1. 已同步默认点；2. App 当前连接的是同一个服务空间；3. 打卡发生在云端点存在之后。
+    </view>
+
     <view v-for="record in list" :key="record.markerDocId + '-' + record.userId + '-' + record.checkedAt" class="record-card">
       <view class="record-header">
         <view>
@@ -42,7 +54,7 @@
     </view>
 
     <view v-if="hasMore" class="load-more" @click="fetchData">
-      <text>加载更多</text>
+      <text>{{ loading ? '加载中...' : '加载更多' }}</text>
     </view>
   </view>
 </template>
@@ -50,10 +62,13 @@
 <script setup>
 import { ref } from 'vue'
 import { onShow } from '@dcloudio/uni-app'
+import AdminHeader from '@/components/AdminHeader.vue'
 
 const list = ref([])
 const searchQuery = ref('')
 const hasMore = ref(false)
+const loading = ref(false)
+const errorText = ref('')
 const selectedMarkerId = ref(null)
 const selectedMarkerTitle = ref('')
 const markerInfo = ref({})
@@ -78,21 +93,25 @@ function reload() {
 }
 
 async function fetchData() {
+  if (loading.value) return
+  loading.value = true
+  errorText.value = ''
   try {
     const res = selectedMarkerId.value
       ? await api.getMarkerCheckins({ markerId: selectedMarkerId.value, offset, limit })
       : await api.getCheckins({ offset, limit, keyword: searchQuery.value })
-    if (res.errCode === 0) {
-      const data = res.data || {}
-      const records = data.list || []
-      list.value = offset === 0 ? records : [...list.value, ...records]
-      total.value = data.total || list.value.length
-      markerInfo.value = data.marker || {}
-      hasMore.value = list.value.length < total.value
-      offset += limit
-    }
+    if (res.errCode !== 0) throw new Error(res.errMsg || '打卡记录加载失败')
+    const data = res.data || {}
+    const records = data.list || []
+    list.value = offset === 0 ? records : [...list.value, ...records]
+    total.value = data.total || list.value.length
+    markerInfo.value = data.marker || {}
+    hasMore.value = list.value.length < total.value
+    offset += limit
   } catch (e) {
-    console.error(e)
+    errorText.value = e.message || '连接服务器失败，请确认 admin-center 已上传'
+  } finally {
+    loading.value = false
   }
 }
 
@@ -123,6 +142,20 @@ function previewPhoto(url) {
 
 <style>
 .checkins-page { padding: 24rpx; }
+
+.notice {
+  background: #eef9f2;
+  border-radius: 12rpx;
+  color: #2e9f5f;
+  font-size: 24rpx;
+  margin-bottom: 16rpx;
+  padding: 18rpx 20rpx;
+}
+
+.notice.error {
+  background: #fff1f0;
+  color: #d93026;
+}
 
 .filter-card {
   background: #ecf9f1;
@@ -237,6 +270,6 @@ function previewPhoto(url) {
 .entry-note { font-size: 24rpx; color: #666; margin-top: 4rpx; }
 .entry-note.muted { color: #aaa; }
 
-.empty { text-align: center; color: #999; padding: 80rpx 0; font-size: 26rpx; }
+.empty { text-align: center; color: #999; line-height: 1.7; padding: 80rpx 20rpx; font-size: 26rpx; }
 .load-more { text-align: center; padding: 24rpx; color: #2ecc71; font-size: 26rpx; }
 </style>

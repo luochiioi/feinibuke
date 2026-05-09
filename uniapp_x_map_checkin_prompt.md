@@ -2951,6 +2951,14 @@ P2 主链路已真机验收通过（详见 `UTS_COMPILE_PITFALLS.md §九`）：
    - `uni-admin/pages/dashboard/index.vue` 适配 `admin-center.getCheckins()` 的记录列表返回结构。
    - 本轮新增测试：`node --test uniCloud-aliyun/cloudfunctions/admin-center/marker-service.test.js`，覆盖种子点数量/id、云端种子文档形状、创建/编辑白名单、打卡记录展开排序。
 
+   **2026-05-09 已落地（P3 后台联调修复）**：
+   - `admin-center.getUsers()` 改为以 `uni-id-users` 为主数据源，并合并自建 `users` 集合中的统计字段，避免仪表盘显示 4 个用户但用户管理页为 0。
+   - 用户统计增加双保险：后台可从 `tourism_markers.checkedBy[]` / `createdBy` 反推打卡与创建统计；`marker-center.add/checkin` 后续也会自动创建或递增 `users` 统计文档。
+   - `admin-center` 新增 `DEFAULT_SEED_TASKS` / `syncDefaultTasks()`，可在后台任务页一键把本地 6 个默认任务同步到 `tourism_tasks`，状态固定为 `active`。
+   - `uni-admin` 新增统一 `AdminHeader`，各后台 tab 页面都有“返回”和“刷新”；页面增加 loading / error / empty 状态，避免接口失败时只显示“连接服务器超时”。
+   - 打卡点管理页增强为详情卡片：展示经纬度、创建者、创建/更新时间、图标路径、尺寸、打卡人数，并支持编辑图标路径与尺寸。
+   - 注意：种子点同步前已经发生的“本地成功但云端失败”的历史打卡，不会自动出现在后台；后台记录来自 `tourism_markers.checkedBy[]`，需要云端点存在后重新打卡或由客户端离线队列补传。
+
 2. **iconPath 远程 URL → 本地路径统一化**（中优先级）
    - 现象：云端 `tourism_markers` 部分文档 `iconPath` 是 `https://img.icons8.com/color/48/marker.png`（远程 URL），腾讯地图插件偶发不渲染（PITFALLS §F #7）
    - 修复：客户端 `add-marker` 提交前强制把 iconPath 改成 `/static/marker_default.png`；并写一次性脚本/云函数更新历史数据

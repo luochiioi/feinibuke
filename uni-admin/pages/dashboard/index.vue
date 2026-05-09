@@ -1,6 +1,14 @@
 <template>
   <view class="dashboard">
-    <!-- Stats cards -->
+    <AdminHeader
+      title="仪表盘"
+      subtitle="总览云端用户、打卡点、任务和打卡记录"
+      @refresh="loadDashboard"
+    />
+
+    <view v-if="errorText" class="notice error">{{ errorText }}</view>
+    <view v-if="loading" class="notice">正在加载云端数据...</view>
+
     <view class="stats-grid">
       <view class="stat-card">
         <text class="stat-value">{{ dashboard.totalUsers }}</text>
@@ -18,15 +26,20 @@
         <text class="stat-value">{{ dashboard.totalCheckins }}</text>
         <text class="stat-label">总打卡人次</text>
       </view>
+      <view class="stat-card wide">
+        <text class="stat-value">{{ dashboard.totalTasks || 0 }}</text>
+        <text class="stat-label">云端任务</text>
+      </view>
     </view>
 
-    <!-- Recent checkins -->
     <view class="section">
       <view class="section-header">
         <text class="section-title">最近打卡记录</text>
-        <text class="section-action" @click="goToCheckins">查看全部 →</text>
+        <text class="section-action" @click="goToCheckins">查看全部 ›</text>
       </view>
-      <view v-if="checkins.length === 0" class="empty">暂无打卡记录</view>
+      <view v-if="!loading && checkins.length === 0" class="empty">
+        暂无云端打卡记录。若之前是在默认点同步前完成的本地打卡，需要同步默认点后重新打卡，或让客户端补传后才会出现在这里。
+      </view>
       <view v-for="(record, i) in checkins" :key="i" class="checkin-item">
         <view class="checkin-header">
           <text class="checkin-title">{{ record.markerTitle }}</text>
@@ -44,32 +57,44 @@
 <script setup>
 import { ref } from 'vue'
 import { onShow } from '@dcloudio/uni-app'
+import AdminHeader from '@/components/AdminHeader.vue'
 
 const dashboard = ref({
   totalUsers: 0,
   totalMarkers: 0,
   totalMarkersWithCheckins: 0,
-  totalCheckins: 0
+  totalCheckins: 0,
+  totalTasks: 0
 })
 const checkins = ref([])
+const loading = ref(false)
+const errorText = ref('')
+const api = uniCloud.importObject('admin-center')
 
-onShow(async () => {
+onShow(() => { loadDashboard() })
+
+async function loadDashboard() {
+  loading.value = true
+  errorText.value = ''
   try {
-    const api = uniCloud.importObject('admin-center')
     const res = await api.getDashboard()
-    if (res.errCode === 0) dashboard.value = res.data
+    if (res.errCode !== 0) throw new Error(res.errMsg || '仪表盘加载失败')
+    dashboard.value = res.data || dashboard.value
 
     const cres = await api.getCheckins({ offset: 0, limit: 10 })
-    if (cres.errCode === 0) checkins.value = (cres.data && cres.data.list) || []
+    if (cres.errCode !== 0) throw new Error(cres.errMsg || '打卡记录加载失败')
+    checkins.value = (cres.data && cres.data.list) || []
   } catch (e) {
-    console.error('Dashboard load failed', e)
+    errorText.value = e.message || '连接服务器失败，请确认云对象已上传并已登录管理员账号'
+  } finally {
+    loading.value = false
   }
-})
+}
 
 function formatTime(ts) {
   if (!ts) return '--'
   const d = new Date(ts)
-  const pad = n => n < 10 ? '0' + n : n
+  const pad = n => n < 10 ? '0' + n : '' + n
   return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`
 }
 
@@ -80,6 +105,20 @@ function goToCheckins() {
 
 <style>
 .dashboard { padding: 24rpx; }
+
+.notice {
+  background: #eef9f2;
+  border-radius: 12rpx;
+  color: #2e9f5f;
+  font-size: 24rpx;
+  margin-bottom: 16rpx;
+  padding: 18rpx 20rpx;
+}
+
+.notice.error {
+  background: #fff1f0;
+  color: #d93026;
+}
 
 .stats-grid {
   display: grid;
@@ -97,6 +136,8 @@ function goToCheckins() {
   align-items: center;
   gap: 8rpx;
 }
+
+.stat-card.wide { grid-column: span 2; }
 
 .stat-value {
   font-size: 48rpx;
@@ -136,7 +177,8 @@ function goToCheckins() {
 .empty {
   text-align: center;
   color: #999;
-  padding: 60rpx 0;
+  line-height: 1.7;
+  padding: 60rpx 20rpx;
   font-size: 26rpx;
 }
 

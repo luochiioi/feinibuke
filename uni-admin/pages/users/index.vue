@@ -1,32 +1,49 @@
 <template>
   <view class="users-page">
-    <text class="page-desc">共 {{ users.length }} 个用户</text>
+    <AdminHeader
+      title="用户管理"
+      subtitle="读取 uni-id-users，并合并用户统计信息"
+      @refresh="reload"
+    />
 
-    <view v-if="users.length === 0" class="empty">暂无用户数据</view>
+    <view v-if="errorText" class="notice error">{{ errorText }}</view>
+    <view v-if="loading && users.length === 0" class="notice">正在加载用户...</view>
+
+    <text class="page-desc">共 {{ total }} 个用户</text>
+
+    <view v-if="!loading && users.length === 0" class="empty">
+      暂无用户数据。若仪表盘有用户但这里没有，请重新上传 admin-center 云对象。
+    </view>
+
     <view v-for="u in users" :key="u._id" class="user-card" @click="selectUser(u)">
       <view class="user-avatar">
-        <text class="avatar-text">{{ (u.nickname || '?')[0] }}</text>
+        <text class="avatar-text">{{ firstLetter(u.nickname || u.userId) }}</text>
       </view>
       <view class="user-info">
-        <text class="user-name">{{ u.nickname || u.userId || '未知' }}</text>
-        <text class="user-id">ID: {{ u.userId }}</text>
+        <view class="name-row">
+          <text class="user-name">{{ u.nickname || u.userId || '未知' }}</text>
+          <text v-if="isAdmin(u.role)" class="role-badge">admin</text>
+        </view>
+        <text class="user-id">账号: {{ u.userId }} · UID: {{ u.uid }}</text>
+        <text class="user-id">创建时间: {{ formatTime(u.createdAt) }}</text>
         <view class="user-stats">
           <text class="ustat">打卡 {{ u.totalCheckins || 0 }} 次</text>
           <text class="ustat">照片 {{ u.totalPhotos || 0 }} 张</text>
           <text class="ustat">创建 {{ u.totalCreated || 0 }} 个</text>
         </view>
       </view>
-      <text class="arrow">→</text>
+      <text class="arrow">›</text>
     </view>
 
     <view v-if="hasMore" class="load-more" @click="fetchUsers">
-      <text>加载更多</text>
+      <text>{{ loading ? '加载中...' : '加载更多' }}</text>
     </view>
 
-    <!-- User detail modal -->
     <view v-if="selected" class="modal-mask" @click="selected = null">
       <view class="modal-box" @click.stop>
         <text class="modal-title">{{ selected.nickname || selected.userId }}</text>
+        <text class="modal-sub">UID: {{ selected.uid }}</text>
+        <text class="modal-sub">角色: {{ formatRole(selected.role) }}</text>
         <view class="detail-grid">
           <view class="detail-item">
             <text class="detail-val">{{ selected.totalCheckins || 0 }}</text>
@@ -38,7 +55,7 @@
           </view>
           <view class="detail-item">
             <text class="detail-val">{{ selected.totalCreated || 0 }}</text>
-            <text class="detail-lbl">创建打卡点</text>
+            <text class="detail-lbl">创建点</text>
           </view>
         </view>
       </view>
@@ -49,26 +66,66 @@
 <script setup>
 import { ref } from 'vue'
 import { onShow } from '@dcloudio/uni-app'
+import AdminHeader from '@/components/AdminHeader.vue'
 
 const users = ref([])
+const total = ref(0)
 const selected = ref(null)
 const hasMore = ref(false)
+const loading = ref(false)
+const errorText = ref('')
 let offset = 0
 const limit = 20
 const api = uniCloud.importObject('admin-center')
 
-onShow(() => { offset = 0; fetchUsers() })
+onShow(() => { reload() })
+
+function reload() {
+  offset = 0
+  users.value = []
+  total.value = 0
+  fetchUsers()
+}
 
 async function fetchUsers() {
+  if (loading.value) return
+  loading.value = true
+  errorText.value = ''
   try {
     const res = await api.getUsers({ offset, limit })
-    if (res.errCode === 0) {
-      if (offset === 0) users.value = res.data
-      else users.value = [...users.value, ...res.data]
-      hasMore.value = res.data.length >= limit
-      offset += limit
-    }
-  } catch (e) { console.error(e) }
+    if (res.errCode !== 0) throw new Error(res.errMsg || '用户加载失败')
+    const data = res.data || {}
+    const list = data.list || []
+    users.value = offset === 0 ? list : [...users.value, ...list]
+    total.value = data.total || users.value.length
+    hasMore.value = users.value.length < total.value
+    offset += limit
+  } catch (e) {
+    errorText.value = e.message || '连接服务器失败，请确认 admin-center 已上传'
+  } finally {
+    loading.value = false
+  }
+}
+
+function firstLetter(value) {
+  const text = String(value || '?')
+  return text.substring(0, 1).toUpperCase()
+}
+
+function isAdmin(role) {
+  return role === 'admin' || (Array.isArray(role) && role.includes('admin'))
+}
+
+function formatRole(role) {
+  if (Array.isArray(role)) return role.join(', ')
+  return role || '--'
+}
+
+function formatTime(ts) {
+  if (!ts) return '--'
+  const d = new Date(ts)
+  const pad = n => n < 10 ? '0' + n : '' + n
+  return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`
 }
 
 function selectUser(u) {
@@ -78,6 +135,20 @@ function selectUser(u) {
 
 <style>
 .users-page { padding: 24rpx; }
+
+.notice {
+  background: #eef9f2;
+  border-radius: 12rpx;
+  color: #2e9f5f;
+  font-size: 24rpx;
+  margin-bottom: 16rpx;
+  padding: 18rpx 20rpx;
+}
+
+.notice.error {
+  background: #fff1f0;
+  color: #d93026;
+}
 
 .page-desc {
   font-size: 24rpx;
@@ -114,21 +185,38 @@ function selectUser(u) {
 
 .user-info { flex: 1; }
 
+.name-row {
+  display: flex;
+  align-items: center;
+  gap: 10rpx;
+}
+
 .user-name {
   font-size: 30rpx;
   font-weight: 500;
   color: #333;
 }
 
+.role-badge {
+  background: #e6f9ed;
+  color: #27ae60;
+  border-radius: 999rpx;
+  font-size: 20rpx;
+  padding: 4rpx 12rpx;
+}
+
 .user-id {
+  display: block;
   font-size: 22rpx;
   color: #aaa;
+  margin-top: 4rpx;
 }
 
 .user-stats {
   display: flex;
   gap: 16rpx;
   margin-top: 8rpx;
+  flex-wrap: wrap;
 }
 
 .ustat {
@@ -141,10 +229,9 @@ function selectUser(u) {
   color: #ccc;
 }
 
-.empty { text-align: center; color: #999; padding: 80rpx 0; font-size: 26rpx; }
+.empty { text-align: center; color: #999; line-height: 1.7; padding: 80rpx 20rpx; font-size: 26rpx; }
 .load-more { text-align: center; padding: 24rpx; color: #2ecc71; font-size: 26rpx; }
 
-/* Modal */
 .modal-mask {
   position: fixed; top: 0; left: 0; right: 0; bottom: 0;
   background: rgba(0,0,0,0.4); display: flex; align-items: center; justify-content: center; z-index: 999;
@@ -152,8 +239,9 @@ function selectUser(u) {
 .modal-box {
   width: 600rpx; background: #fff; border-radius: 16rpx; padding: 32rpx;
 }
-.modal-title { font-size: 34rpx; font-weight: bold; margin-bottom: 24rpx; display: block; }
-.detail-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16rpx; }
+.modal-title { font-size: 34rpx; font-weight: bold; margin-bottom: 8rpx; display: block; }
+.modal-sub { display: block; color: #888; font-size: 24rpx; margin-bottom: 8rpx; }
+.detail-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16rpx; margin-top: 24rpx; }
 .detail-item { text-align: center; }
 .detail-val { font-size: 40rpx; font-weight: bold; color: #2ecc71; }
 .detail-lbl { font-size: 22rpx; color: #999; }

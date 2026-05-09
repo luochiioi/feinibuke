@@ -15,6 +15,7 @@
     "totalCheckins": { "bsonType": "int", "defaultValue": 0 },
     "totalPhotos": { "bsonType": "int", "defaultValue": 0 },
     "totalCreated": { "bsonType": "int", "defaultValue": 0 },
-    "createdAt": { "bsonType": "timestamp" }
+    "createdAt": { "bsonType": "timestamp" },
+    "updatedAt": { "bsonType": "timestamp" }
   }
 }

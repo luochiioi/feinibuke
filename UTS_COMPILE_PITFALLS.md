@@ -829,7 +829,16 @@ cloudMarker.checkedBy[0].photoCloudURL  // ← 安全
 - `uni-admin/pages/markers/index.vue` 已改为调用 `admin-center.getMarkers/createMarker/updateMarker/deleteMarker/syncDefaultMarkers`，不再用公开的 `marker-center.getAll()` 做后台管理。
 - `uni-admin/pages/checkins/index.vue` 使用 `admin-center.getCheckins()` 查看全局记录，或通过 `admin_checkins_marker_id` storage 从打卡点页跳转到 `getMarkerCheckins()` 查看单点记录。
 
-### 11.3 本轮验证命令
+### 11.3 后台联调补充
+
+- `uni-admin` 是 Vue3/H5 后台，不是 uni-app x 页面。页面生命周期必须从 `@dcloudio/uni-app` import，例如 `import { onShow } from '@dcloudio/uni-app'`；从 `vue` import `onShow/onHide` 会导致 H5 async component loader 报 `does not provide an export named 'onShow'`，页面表现为“连接服务器超时”。
+- 用户管理页以 `uni-id-users` 为主表；自建 `users` 集合只作为统计补充。否则会出现仪表盘 `totalUsers` 正常、用户页列表为 0 的错位。后台还会从 `tourism_markers.checkedBy[]` / `createdBy` 反推统计，避免早期 `users` 文档缺失时每个用户统计都为 0。
+- `marker-center.add/checkin` 更新用户统计前要确保 `users` 文档存在；只写 `where({ userId }).update(...)` 在没有文档时会静默更新 0 条。
+- 任务后台没有数据时，先点“同步默认任务”。`syncDefaultTasks()` 与本地 6 个默认任务保持一致，并按 `id` 幂等更新 `tourism_tasks`，不会写用户任务进度。
+- 后台打卡记录来自 `tourism_markers.checkedBy[]`。如果用户在云端种子点创建前已经完成本地打卡，当时 `marker-center.checkin` 返回过“打卡点不存在”，这批历史本地记录不会自动出现在后台；需要同步默认点后重新打卡，或让客户端离线队列补传。
+- H5 开发模式首次进入每个页面会按需编译，短暂慢加载是 dev server 行为；本轮后台页面只加显式 loading/error/empty 状态，不把开发模式懒编译当成生产性能问题。
+
+### 11.4 本轮验证命令
 
 ```bash
 node --test uniCloud-aliyun/cloudfunctions/admin-center/marker-service.test.js

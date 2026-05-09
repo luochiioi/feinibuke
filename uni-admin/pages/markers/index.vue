@@ -1,9 +1,32 @@
 <template>
   <view class="markers-page">
+    <AdminHeader
+      title="打卡点管理"
+      subtitle="新增、编辑、删除和同步云端打卡点"
+      @refresh="reload"
+    />
+
+    <view v-if="errorText" class="notice error">{{ errorText }}</view>
+    <view v-if="loading && markers.length === 0" class="notice">正在加载打卡点...</view>
+
+    <view class="summary-grid">
+      <view class="summary-card">
+        <text class="summary-value">{{ total }}</text>
+        <text class="summary-label">云端打卡点</text>
+      </view>
+      <view class="summary-card">
+        <text class="summary-value">{{ checkedMarkerTotal }}</text>
+        <text class="summary-label">已有打卡</text>
+      </view>
+      <view class="summary-card">
+        <text class="summary-value">{{ checkinTotal }}</text>
+        <text class="summary-label">打卡人次</text>
+      </view>
+    </view>
+
     <view class="toolbar">
-      <text class="count-text">共 {{ total }} 个打卡点</text>
       <view class="toolbar-actions">
-        <button class="btn-sm" @click="openCreate">新增</button>
+        <button class="btn-sm" @click="openCreate">新增打卡点</button>
         <button class="btn-sm ghost" @click="syncDefaults">同步默认点</button>
         <button class="btn-sm ghost" @click="showImport = !showImport">批量导入</button>
       </view>
@@ -15,18 +38,29 @@
     </view>
 
     <view v-if="showImport" class="import-panel">
-      <textarea v-model="importText" placeholder="粘贴 JSON 数组，每项: { title, latitude, longitude }" />
+      <text class="panel-title">批量导入 JSON</text>
+      <textarea v-model="importText" placeholder='例如：[{"title":"测试点","latitude":39.9,"longitude":116.3}]' />
       <button class="btn-primary" @click="doImport">确认导入</button>
     </view>
 
-    <view v-if="markers.length === 0" class="empty">暂无打卡点</view>
+    <view v-if="!loading && markers.length === 0" class="empty">
+      暂无打卡点。请先点击“同步默认点”，让本地 8 个种子点写入 tourism_markers。
+    </view>
+
     <view v-for="m in markers" :key="m._id" class="marker-card">
       <view class="card-main">
         <view class="card-info">
-          <text class="card-title">{{ m.title }}</text>
+          <view class="title-row">
+            <text class="card-title">{{ m.title }}</text>
+            <text class="badge" :class="(m.checkinCount || 0) > 0 ? 'active' : ''">
+              {{ (m.checkinCount || 0) > 0 ? '已有记录' : '未打卡' }}
+            </text>
+          </view>
           <text class="card-coords">{{ formatCoord(m.latitude) }}, {{ formatCoord(m.longitude) }}</text>
-          <text class="card-meta">创建者 {{ m.createdBy || '--' }} · 创建于 {{ formatTime(m.createdAt) }}</text>
-          <text class="card-meta">打卡人数 {{ m.checkinCount || 0 }} · 云端 ID {{ m.id }}</text>
+          <text class="card-meta">创建者：{{ m.createdBy || '--' }} · 创建于：{{ formatTime(m.createdAt) }}</text>
+          <text class="card-meta">更新于：{{ formatTime(m.updatedAt) }} · 云端 ID：{{ m.id }}</text>
+          <text class="card-meta">图标：{{ m.iconPath || '--' }} · 尺寸：{{ m.width || '--' }} x {{ m.height || '--' }}</text>
+          <text class="card-meta strong">打卡人数 / 记录数：{{ m.checkinCount || 0 }}</text>
         </view>
         <view class="card-actions">
           <text class="act-btn record" @click="viewCheckins(m)">记录</text>
@@ -37,7 +71,7 @@
     </view>
 
     <view v-if="hasMore" class="load-more" @click="loadMarkers">
-      <text>加载更多</text>
+      <text>{{ loading ? '加载中...' : '加载更多' }}</text>
     </view>
 
     <view v-if="editing" class="modal-mask" @click="editing = null">
@@ -46,6 +80,11 @@
         <input class="modal-input" v-model="editForm.title" placeholder="名称" />
         <input class="modal-input" v-model="editForm.latitude" placeholder="纬度" type="number" />
         <input class="modal-input" v-model="editForm.longitude" placeholder="经度" type="number" />
+        <input class="modal-input" v-model="editForm.iconPath" placeholder="图标路径，留空使用默认图标" />
+        <view class="modal-row">
+          <input class="modal-input half" v-model="editForm.width" placeholder="宽" type="number" />
+          <input class="modal-input half" v-model="editForm.height" placeholder="高" type="number" />
+        </view>
         <view class="modal-btns">
           <button class="btn-cancel" @click="editing = null">取消</button>
           <button class="btn-primary" @click="saveMarker">保存</button>
@@ -58,15 +97,20 @@
 <script setup>
 import { ref } from 'vue'
 import { onShow } from '@dcloudio/uni-app'
+import AdminHeader from '@/components/AdminHeader.vue'
 
 const markers = ref([])
 const total = ref(0)
+const checkedMarkerTotal = ref(0)
+const checkinTotal = ref(0)
 const hasMore = ref(false)
+const loading = ref(false)
+const errorText = ref('')
 const showImport = ref(false)
 const importText = ref('')
 const keyword = ref('')
 const editing = ref(null)
-const editForm = ref({ title: '', latitude: '', longitude: '' })
+const editForm = ref({ title: '', latitude: '', longitude: '', iconPath: '', width: '', height: '' })
 let offset = 0
 const limit = 20
 
@@ -77,23 +121,34 @@ onShow(() => { reload() })
 function reload() {
   offset = 0
   markers.value = []
+  total.value = 0
   loadMarkers()
 }
 
 async function loadMarkers() {
+  if (loading.value) return
+  loading.value = true
+  errorText.value = ''
   try {
     const res = await api.getMarkers({ offset, limit, keyword: keyword.value })
-    if (res.errCode === 0) {
-      const data = res.data || {}
-      const list = data.list || []
-      markers.value = offset === 0 ? list : [...markers.value, ...list]
-      total.value = data.total || list.length
-      hasMore.value = markers.value.length < total.value
-      offset += limit
-    }
+    if (res.errCode !== 0) throw new Error(res.errMsg || '打卡点加载失败')
+    const data = res.data || {}
+    const list = data.list || []
+    markers.value = offset === 0 ? list : [...markers.value, ...list]
+    total.value = data.total || list.length
+    hasMore.value = markers.value.length < total.value
+    offset += limit
+    recalcSummary()
   } catch (e) {
-    console.error(e)
+    errorText.value = e.message || '连接服务器失败，请确认 admin-center 已上传'
+  } finally {
+    loading.value = false
   }
+}
+
+function recalcSummary() {
+  checkedMarkerTotal.value = markers.value.filter(item => (item.checkinCount || 0) > 0).length
+  checkinTotal.value = markers.value.reduce((sum, item) => sum + Number(item.checkinCount || 0), 0)
 }
 
 function formatCoord(v) {
@@ -109,7 +164,7 @@ function formatTime(ts) {
 
 function openCreate() {
   editing.value = { _id: '' }
-  editForm.value = { title: '', latitude: '', longitude: '' }
+  editForm.value = { title: '', latitude: '', longitude: '', iconPath: '', width: '36', height: '36' }
 }
 
 function startEdit(m) {
@@ -117,7 +172,10 @@ function startEdit(m) {
   editForm.value = {
     title: m.title || '',
     latitude: String(m.latitude || ''),
-    longitude: String(m.longitude || '')
+    longitude: String(m.longitude || ''),
+    iconPath: m.iconPath || '',
+    width: String(m.width || ''),
+    height: String(m.height || '')
   }
 }
 
@@ -127,7 +185,10 @@ async function saveMarker() {
     const payload = {
       title: editForm.value.title,
       latitude: parseFloat(editForm.value.latitude),
-      longitude: parseFloat(editForm.value.longitude)
+      longitude: parseFloat(editForm.value.longitude),
+      iconPath: editForm.value.iconPath,
+      width: editForm.value.width,
+      height: editForm.value.height
     }
     const res = editing.value._id
       ? await api.updateMarker({ _id: editing.value._id, ...payload })
@@ -142,7 +203,7 @@ async function saveMarker() {
 }
 
 async function doDelete(m) {
-  const res = await uni.showModal({ title: '确认删除', content: `确定删除"${m.title}"？` })
+  const res = await uni.showModal({ title: '确认删除', content: `确定删除"${m.title}"？已有打卡记录也会一并删除。` })
   if (!res.confirm) return
   try {
     const delRes = await api.deleteMarker({ _id: m._id })
@@ -194,15 +255,52 @@ async function doImport() {
 <style>
 .markers-page { padding: 24rpx; }
 
+.notice {
+  background: #eef9f2;
+  border-radius: 12rpx;
+  color: #2e9f5f;
+  font-size: 24rpx;
+  margin-bottom: 16rpx;
+  padding: 18rpx 20rpx;
+}
+
+.notice.error {
+  background: #fff1f0;
+  color: #d93026;
+}
+
+.summary-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 12rpx;
+  margin-bottom: 18rpx;
+}
+
+.summary-card {
+  background: #fff;
+  border-radius: 14rpx;
+  padding: 22rpx 12rpx;
+  text-align: center;
+}
+
+.summary-value {
+  display: block;
+  color: #2ecc71;
+  font-size: 38rpx;
+  font-weight: 700;
+}
+
+.summary-label {
+  color: #8a9a90;
+  font-size: 22rpx;
+}
+
 .toolbar {
   display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 12rpx;
+  justify-content: flex-end;
   margin-bottom: 16rpx;
 }
 
-.count-text { font-size: 26rpx; color: #888; }
 .toolbar-actions { display: flex; gap: 10rpx; flex-wrap: wrap; justify-content: flex-end; }
 
 .btn-sm {
@@ -249,6 +347,14 @@ async function doImport() {
   margin-bottom: 16rpx;
 }
 
+.panel-title {
+  display: block;
+  font-size: 28rpx;
+  color: #333;
+  font-weight: 600;
+  margin-bottom: 12rpx;
+}
+
 .import-panel textarea {
   width: 100%;
   height: 200rpx;
@@ -269,28 +375,54 @@ async function doImport() {
 .card-main {
   display: flex;
   justify-content: space-between;
-  align-items: center;
+  align-items: flex-start;
+  gap: 16rpx;
 }
 
 .card-info { flex: 1; }
 
+.title-row {
+  display: flex;
+  align-items: center;
+  gap: 12rpx;
+  margin-bottom: 6rpx;
+}
+
 .card-title {
   font-size: 30rpx;
-  font-weight: 500;
+  font-weight: 600;
   color: #333;
 }
 
+.badge {
+  background: #f4f4f4;
+  color: #999;
+  border-radius: 999rpx;
+  font-size: 20rpx;
+  padding: 4rpx 12rpx;
+}
+
+.badge.active {
+  background: #e6f9ed;
+  color: #27ae60;
+}
+
 .card-coords {
+  display: block;
   font-size: 24rpx;
-  color: #888;
+  color: #666;
   font-family: monospace;
+  margin-bottom: 6rpx;
 }
 
 .card-meta {
+  display: block;
   font-size: 22rpx;
-  color: #aaa;
+  color: #999;
   margin-top: 4rpx;
 }
+
+.card-meta.strong { color: #2e9f5f; }
 
 .card-actions {
   display: flex;
@@ -305,7 +437,7 @@ async function doImport() {
 .act-btn.del { color: #ff3b30; }
 
 .load-more { text-align: center; padding: 24rpx; color: #2ecc71; font-size: 26rpx; }
-.empty { text-align: center; color: #999; padding: 80rpx 0; font-size: 26rpx; }
+.empty { text-align: center; color: #999; line-height: 1.7; padding: 80rpx 20rpx; font-size: 26rpx; }
 
 .modal-mask {
   position: fixed; top: 0; left: 0; right: 0; bottom: 0;
@@ -313,7 +445,7 @@ async function doImport() {
 }
 
 .modal-box {
-  width: 600rpx; background: #fff; border-radius: 16rpx; padding: 32rpx;
+  width: 640rpx; background: #fff; border-radius: 16rpx; padding: 32rpx;
 }
 
 .modal-title { font-size: 32rpx; font-weight: bold; margin-bottom: 24rpx; display: block; }
@@ -321,6 +453,9 @@ async function doImport() {
 .modal-input {
   border: 1rpx solid #e0e0e0; border-radius: 8rpx; padding: 16rpx; font-size: 28rpx; margin-bottom: 16rpx;
 }
+
+.modal-row { display: flex; gap: 12rpx; }
+.modal-input.half { flex: 1; }
 
 .modal-btns { display: flex; gap: 16rpx; margin-top: 24rpx; }
 .btn-cancel { flex:1; background: #f0f0f0; color: #666; border: none; border-radius: 8rpx; padding: 16rpx; font-size: 28rpx; }

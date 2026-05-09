@@ -2,6 +2,7 @@ const db = uniCloud.database()
 const col = db.collection('tourism_markers')
 const colTasks = db.collection('user_tasks')
 const colRewards = db.collection('rewards')
+const colUserProfiles = db.collection('users')
 const authUtil = require('auth-util')
 
 module.exports = {
@@ -41,9 +42,7 @@ module.exports = {
       createdAt: now,
       updatedAt: now
     })
-    await db.collection('users').where({ userId: this.auth.uid }).update({
-      totalCreated: db.command.inc(1)
-    })
+    await incrementUserStats(this.auth.uid, { totalCreated: 1 })
     return { errCode: 0, data: { id: res.id } }
   },
 
@@ -76,9 +75,10 @@ module.exports = {
       updatedAt: Date.now()
     })
 
-    const userUpdate = { totalCheckins: db.command.inc(1) }
-    if (photoCloudURL) userUpdate.totalPhotos = db.command.inc(1)
-    await db.collection('users').where({ userId: this.auth.uid }).update(userUpdate)
+    await incrementUserStats(this.auth.uid, {
+      totalCheckins: 1,
+      totalPhotos: photoCloudURL ? 1 : 0
+    })
 
     const completedTasks = await this._checkTasks(marker)
 
@@ -159,4 +159,26 @@ function haversine(lat1, lng1, lat2, lng2) {
   const a = Math.sin(dLat / 2) ** 2 +
     Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng / 2) ** 2
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
+}
+
+async function incrementUserStats(userId, increments) {
+  const existing = await colUserProfiles.where({ userId }).limit(1).get()
+  const now = Date.now()
+  if (!existing.data.length) {
+    await colUserProfiles.add({
+      userId,
+      totalCheckins: Number(increments.totalCheckins || 0),
+      totalPhotos: Number(increments.totalPhotos || 0),
+      totalCreated: Number(increments.totalCreated || 0),
+      createdAt: now,
+      updatedAt: now
+    })
+    return
+  }
+
+  const updates = { updatedAt: now }
+  if (increments.totalCheckins) updates.totalCheckins = db.command.inc(increments.totalCheckins)
+  if (increments.totalPhotos) updates.totalPhotos = db.command.inc(increments.totalPhotos)
+  if (increments.totalCreated) updates.totalCreated = db.command.inc(increments.totalCreated)
+  await colUserProfiles.doc(existing.data[0]._id).update(updates)
 }

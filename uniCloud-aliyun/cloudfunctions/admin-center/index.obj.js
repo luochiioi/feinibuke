@@ -2,15 +2,22 @@ const db = uniCloud.database()
 const authUtil = require('auth-util')
 const {
   DEFAULT_SEED_MARKERS,
+  DEFAULT_SEED_TASKS,
   buildSeedMarker,
   buildSeedUpdate,
+  buildSeedTask,
+  buildSeedTaskUpdate,
   sanitizeMarkerCreate,
   sanitizeMarkerUpdate,
-  flattenCheckinRecords
+  flattenCheckinRecords,
+  deriveUserStatsFromMarkers,
+  normalizeAdminUsers
 } = require('./marker-service')
 
 const colMarkers = db.collection('tourism_markers')
 const colUsers = db.collection('uni-id-users')
+const colUserProfiles = db.collection('users')
+const colTasks = db.collection('tourism_tasks')
 
 function ok(data, errMsg) {
   return { errCode: 0, errMsg: errMsg || 'ok', data }
@@ -65,11 +72,11 @@ module.exports = {
   },
 
   async getDashboard() {
-    const [users, markers, markersWithCheckins] = await Promise.all([
+    const [users, markers, markersWithCheckins, tasks] = await Promise.all([
       colUsers.count(),
       colMarkers.count(),
-      colMarkers
-        .where({ 'checkedBy.0': db.command.exists(true) }).count()
+      colMarkers.where({ 'checkedBy.0': db.command.exists(true) }).count(),
+      colTasks.count()
     ])
     const allMarkers = await colMarkers
       .field({ checkinCount: true }).get()
@@ -79,16 +86,26 @@ module.exports = {
       totalUsers: users.total,
       totalMarkers: markers.total,
       totalMarkersWithCheckins: markersWithCheckins.total,
-      totalCheckins
+      totalCheckins,
+      totalTasks: tasks.total
     })
   },
 
   async getUsers(data) {
-    const { offset = 0, limit = 20 } = data || {}
-    const res = await db.collection('users')
-      .orderBy('createdAt', 'desc')
-      .skip(offset).limit(limit).get()
-    return ok(res.data)
+    const { offset, limit } = toPageArgs(data)
+    const [totalRes, userRes, profileRes, markerRes] = await Promise.all([
+      colUsers.count(),
+      colUsers.skip(offset).limit(limit).get(),
+      colUserProfiles.get(),
+      colMarkers.field({ createdBy: true, checkedBy: true }).get()
+    ])
+
+    return ok({
+      list: normalizeAdminUsers(userRes.data, profileRes.data, deriveUserStatsFromMarkers(markerRes.data)),
+      total: totalRes.total,
+      offset,
+      limit
+    })
   },
 
   async getMarkers(data) {
@@ -248,13 +265,38 @@ module.exports = {
   },
 
   async getTasks() {
-    const res = await db.collection('tourism_tasks').get()
+    const res = await colTasks.orderBy('createdAt', 'asc').get()
     return ok(res.data)
   },
 
+  async syncDefaultTasks() {
+    const now = Date.now()
+    const created = []
+    const updated = []
+
+    for (const seed of DEFAULT_SEED_TASKS) {
+      const existing = await colTasks.where({ id: seed.id }).limit(1).get()
+      if (!existing.data.length) {
+        const task = buildSeedTask(seed, now)
+        const res = await colTasks.add(task)
+        created.push({ _id: res.id, id: seed.id, name: seed.name })
+      } else {
+        await colTasks.doc(existing.data[0]._id).update(buildSeedTaskUpdate(seed, now))
+        updated.push({ _id: existing.data[0]._id, id: seed.id, name: seed.name })
+      }
+    }
+
+    return ok({
+      total: DEFAULT_SEED_TASKS.length,
+      created,
+      updated
+    }, '默认任务同步完成')
+  },
+
   async updateTask(data) {
+    if (!data || !data._id) return fail('缺少任务 _id')
     const { _id, ...updates } = data
-    await db.collection('tourism_tasks').doc(_id).update(updates)
+    await colTasks.doc(_id).update(updates)
     return ok(null, '更新成功')
   }
 }

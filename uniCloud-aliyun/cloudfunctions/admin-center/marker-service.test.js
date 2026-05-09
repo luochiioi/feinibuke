@@ -3,10 +3,14 @@ const test = require('node:test')
 
 const {
   DEFAULT_SEED_MARKERS,
+  DEFAULT_SEED_TASKS,
   buildSeedMarker,
+  buildSeedTask,
   sanitizeMarkerCreate,
   sanitizeMarkerUpdate,
-  flattenCheckinRecords
+  flattenCheckinRecords,
+  deriveUserStatsFromMarkers,
+  normalizeAdminUsers
 } = require('./marker-service')
 
 test('default seed markers match the eight local marker ids', () => {
@@ -26,6 +30,28 @@ test('buildSeedMarker produces an idempotent cloud marker shape', () => {
   assert.equal(marker.checked, false)
   assert.equal(marker.checkinCount, 0)
   assert.deepEqual(marker.checkedBy, [])
+})
+
+test('default seed tasks match local starter tasks and stay active', () => {
+  assert.equal(DEFAULT_SEED_TASKS.length, 6)
+  assert.deepEqual(DEFAULT_SEED_TASKS.map(item => item.id), [
+    'task_001',
+    'task_002',
+    'task_003',
+    'task_004',
+    'task_005',
+    'task_006'
+  ])
+
+  const task = buildSeedTask(DEFAULT_SEED_TASKS[0], 123456)
+
+  assert.equal(task.id, 'task_001')
+  assert.equal(task.name, '故宫探索者')
+  assert.equal(task.targetMarkerId, 1)
+  assert.equal(task.status, 'active')
+  assert.equal(task.createdBy, 'system')
+  assert.equal(task.createdAt, 123456)
+  assert.equal(task.updatedAt, 123456)
 })
 
 test('sanitizeMarkerCreate accepts only safe marker fields', () => {
@@ -104,4 +130,74 @@ test('flattenCheckinRecords returns records sorted by newest checkin first', () 
   assert.equal(records[0].markerId, 1)
   assert.equal(records[0].markerTitle, '北京故宫')
   assert.equal(records[1].photoCloudURL, 'b.jpg')
+})
+
+test('normalizeAdminUsers reads accounts from uni-id-users and merges profile stats', () => {
+  const markerStats = deriveUserStatsFromMarkers([
+    {
+      createdBy: 'uid-2',
+      checkedBy: [
+        { userId: 'uid-1', photoCloudURL: 'a.jpg' },
+        { userId: 'uid-2', photoCloudURL: null }
+      ]
+    },
+    {
+      createdBy: 'uid-2',
+      checkedBy: [
+        { userId: 'uid-1', photoCloudURL: null }
+      ]
+    }
+  ])
+
+  const users = normalizeAdminUsers([
+    {
+      _id: 'uid-1',
+      username: 'admin',
+      nickname: '管理员',
+      role: 'admin',
+      register_date: 1000
+    },
+    {
+      _id: 'uid-2',
+      username: 'traveler',
+      nickname: '',
+      role: ['user']
+    }
+  ], [
+    {
+      userId: 'uid-1',
+      totalCheckins: 3,
+      totalPhotos: 2,
+      totalCreated: 1
+    },
+    {
+      userId: 'other-user',
+      totalCheckins: 4
+    }
+  ], markerStats)
+
+  assert.deepEqual(users, [
+    {
+      _id: 'uid-1',
+      uid: 'uid-1',
+      userId: 'admin',
+      nickname: '管理员',
+      role: 'admin',
+      totalCheckins: 3,
+      totalPhotos: 2,
+      totalCreated: 1,
+      createdAt: 1000
+    },
+    {
+      _id: 'uid-2',
+      uid: 'uid-2',
+      userId: 'traveler',
+      nickname: 'traveler',
+      role: ['user'],
+      totalCheckins: 1,
+      totalPhotos: 0,
+      totalCreated: 2,
+      createdAt: null
+    }
+  ])
 })

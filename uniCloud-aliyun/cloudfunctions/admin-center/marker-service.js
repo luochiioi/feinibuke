@@ -13,6 +13,57 @@ const DEFAULT_SEED_MARKERS = [
   { id: 8, title: '北京交通大学', latitude: 39.9505, longitude: 116.3474 }
 ]
 
+const DEFAULT_SEED_TASKS = [
+  {
+    id: 'task_001',
+    name: '故宫探索者',
+    description: '前往北京故宫完成一次打卡',
+    targetMarkerId: 1,
+    targetTitle: '北京故宫',
+    reward: '10 积分'
+  },
+  {
+    id: 'task_002',
+    name: '魔都奇遇',
+    description: '前往上海迪士尼完成一次打卡',
+    targetMarkerId: 2,
+    targetTitle: '上海迪士尼',
+    reward: '15 积分'
+  },
+  {
+    id: 'task_003',
+    name: '湖湘文化之旅',
+    description: '前往长沙岳麓书院完成一次打卡',
+    targetMarkerId: 3,
+    targetTitle: '长沙岳麓书院',
+    reward: '12 积分'
+  },
+  {
+    id: 'task_004',
+    name: '澳门印象',
+    description: '前往澳门大三巴完成一次打卡',
+    targetMarkerId: 4,
+    targetTitle: '澳门大三巴',
+    reward: '12 积分'
+  },
+  {
+    id: 'task_005',
+    name: '橘洲打卡',
+    description: '前往长沙橘子洲完成一次打卡',
+    targetMarkerId: 5,
+    targetTitle: '长沙橘子洲',
+    reward: '10 积分'
+  },
+  {
+    id: 'task_006',
+    name: '广州塔挑战',
+    description: '前往广州塔完成一次打卡',
+    targetMarkerId: 6,
+    targetTitle: '广州塔',
+    reward: '10 积分'
+  }
+]
+
 function toNumber(value, fieldName) {
   const n = typeof value === 'number' ? value : Number(value)
   if (!Number.isFinite(n)) {
@@ -95,6 +146,33 @@ function buildSeedUpdate(seed, now) {
   }
 }
 
+function buildSeedTask(seed, now) {
+  return {
+    id: seed.id,
+    name: normalizeTitle(seed.name),
+    description: String(seed.description || '').trim(),
+    targetMarkerId: seed.targetMarkerId,
+    targetTitle: normalizeTitle(seed.targetTitle),
+    reward: String(seed.reward || '').trim(),
+    status: 'active',
+    createdBy: SYSTEM_CREATOR,
+    createdAt: now,
+    updatedAt: now
+  }
+}
+
+function buildSeedTaskUpdate(seed, now) {
+  return {
+    name: normalizeTitle(seed.name),
+    description: String(seed.description || '').trim(),
+    targetMarkerId: seed.targetMarkerId,
+    targetTitle: normalizeTitle(seed.targetTitle),
+    reward: String(seed.reward || '').trim(),
+    status: 'active',
+    updatedAt: now
+  }
+}
+
 function sanitizeMarkerCreate(data, creatorId, now) {
   return {
     id: now,
@@ -158,11 +236,68 @@ function flattenCheckinRecords(markers) {
   return records
 }
 
+function ensureStats(map, userId) {
+  const key = String(userId || '')
+  if (!key) return null
+  if (!map.has(key)) {
+    map.set(key, { totalCheckins: 0, totalPhotos: 0, totalCreated: 0 })
+  }
+  return map.get(key)
+}
+
+function deriveUserStatsFromMarkers(markers) {
+  const statsByUserId = new Map()
+  ;(markers || []).forEach(marker => {
+    const creator = ensureStats(statsByUserId, marker && marker.createdBy)
+    if (creator) creator.totalCreated += 1
+
+    ;((marker && marker.checkedBy) || []).forEach(entry => {
+      const stats = ensureStats(statsByUserId, entry && entry.userId)
+      if (!stats) return
+      stats.totalCheckins += 1
+      if (entry.photoCloudURL) stats.totalPhotos += 1
+    })
+  })
+  return statsByUserId
+}
+
+function normalizeAdminUsers(uniUsers, profileUsers, markerStats) {
+  const statsByUserId = new Map()
+  ;(profileUsers || []).forEach(item => {
+    if (item && item.userId) statsByUserId.set(String(item.userId), item)
+  })
+
+  return (uniUsers || []).map(user => {
+    const uid = String((user && user._id) || '')
+    const username = String((user && user.username) || uid)
+    const stats = statsByUserId.get(uid) || statsByUserId.get(username) ||
+      (markerStats && (markerStats.get(uid) || markerStats.get(username))) || {}
+    const nickname = String((user && user.nickname) || username || uid)
+
+    return {
+      _id: uid,
+      uid,
+      userId: username,
+      nickname,
+      role: user && user.role != null ? user.role : null,
+      totalCheckins: Number(stats.totalCheckins || 0),
+      totalPhotos: Number(stats.totalPhotos || 0),
+      totalCreated: Number(stats.totalCreated || 0),
+      createdAt: (user && (user.createdAt || user.register_date)) || null
+    }
+  })
+}
+
 module.exports = {
   DEFAULT_SEED_MARKERS,
+  DEFAULT_SEED_TASKS,
   buildSeedMarker,
   buildSeedUpdate,
+  buildSeedTask,
+  buildSeedTaskUpdate,
   sanitizeMarkerCreate,
   sanitizeMarkerUpdate,
-  flattenCheckinRecords
+  flattenCheckinRecords,
+  deriveUserStatsFromMarkers,
+  normalizeAdminUsers
 }
