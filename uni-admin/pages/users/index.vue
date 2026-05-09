@@ -47,7 +47,8 @@
 </template>
 
 <script setup>
-import { ref, onShow } from 'vue'
+import { ref } from 'vue'
+import { onShow } from '@dcloudio/uni-app'
 
 const users = ref([])
 const selected = ref(null)
