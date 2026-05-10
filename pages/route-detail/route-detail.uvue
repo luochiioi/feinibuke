@@ -137,7 +137,12 @@ function goMarker(step: RouteStep): void {
     return
   }
   requestFocus(local!!)
-  uni.switchTab({ url: '/pages/index/index' })
+  const pages = getCurrentPages()
+  if (pages.length > 1) {
+    uni.navigateBack()
+  } else {
+    uni.reLaunch({ url: '/pages/index/index' })
+  }
 }
 
 // PITFALLS §规则 16：onLoad / onShow 用 uni-app x 全局钩子，不要从 vue import
