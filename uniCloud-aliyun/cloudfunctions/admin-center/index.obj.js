@@ -19,6 +19,13 @@ const {
   buildSyncDiagnostics
 } = require('./marker-service')
 const { buildAuditLogEntry, ALLOWED_TYPES: AUDIT_TYPES } = require('./audit-service')
+const {
+  ROUTE_STATUSES,
+  sanitizeRouteCreate,
+  sanitizeRouteUpdate,
+  validateRouteMarkerIds,
+  calcRouteProgress
+} = require('./route-service')
 
 const colMarkers = db.collection('tourism_markers')
 const colUsers = db.collection('uni-id-users')
@@ -27,6 +34,7 @@ const colTasks = db.collection('tourism_tasks')
 const colUserTasks = db.collection('user_tasks')
 const colRewards = db.collection('rewards')
 const colAuditLogs = db.collection('tourism_audit_logs')
+const colRoutes = db.collection('tourism_routes')
 
 async function appendAuditLog(input) {
   const row = buildAuditLogEntry(input)
@@ -573,5 +581,107 @@ module.exports = {
     const { _id, ...updates } = data
     await colTasks.doc(_id).update(updates)
     return ok(null, '更新成功')
+  },
+
+  // P4 主题路线 P0 —— admin CRUD。tourism_routes 是 admin 维护的纯配置集合；
+  // App 端公开读路由走 marker-center.getActiveRoutes（与本接口隔离权限边界）。
+  async getRoutes(data) {
+    const { offset, limit } = toPageArgs(data)
+    const status = data && data.status
+    const keyword = String((data && data.keyword) || '').trim()
+    const where = {}
+    if (status && ROUTE_STATUSES.has(String(status))) {
+      where.status = String(status)
+    }
+    if (keyword.length > 0) {
+      where.name = db.RegExp({
+        regexp: keyword.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'),
+        options: 'i'
+      })
+    }
+    const baseQuery = Object.keys(where).length === 0 ? colRoutes : colRoutes.where(where)
+    const [totalRes, listRes] = await Promise.all([
+      baseQuery.count(),
+      baseQuery.orderBy('createdAt', 'desc').skip(offset).limit(limit).get()
+    ])
+    return ok({ list: listRes.data, total: totalRes.total, offset, limit })
+  },
+
+  async createRoute(data) {
+    try {
+      const now = Date.now()
+      const route = sanitizeRouteCreate(data, this.auth.uid, now)
+      const markerSnapshot = await colMarkers.field({ id: true }).get()
+      const allIds = (markerSnapshot.data || []).map(item => Number(item.id))
+      const validation = validateRouteMarkerIds(route.markerIds, allIds)
+      if (!validation.ok) {
+        return fail(`markerIds 中存在无效打卡点：${validation.missing.join(', ')}`)
+      }
+      const res = await colRoutes.add(route)
+      return ok({ _id: res.id, route }, '创建成功')
+    } catch (e) {
+      return fail(e.message || '创建失败')
+    }
+  },
+
+  async updateRoute(data) {
+    if (!data || !data._id) return fail('缺少路线 _id')
+    try {
+      const now = Date.now()
+      const updates = sanitizeRouteUpdate(data, now)
+      if (updates.markerIds) {
+        const markerSnapshot = await colMarkers.field({ id: true }).get()
+        const allIds = (markerSnapshot.data || []).map(item => Number(item.id))
+        const validation = validateRouteMarkerIds(updates.markerIds, allIds)
+        if (!validation.ok) {
+          return fail(`markerIds 中存在无效打卡点：${validation.missing.join(', ')}`)
+        }
+      }
+      await colRoutes.doc(data._id).update(updates)
+      return ok(null, '更新成功')
+    } catch (e) {
+      return fail(e.message || '更新失败')
+    }
+  },
+
+  async deleteRoute(data) {
+    if (!data || !data._id) return fail('缺少路线 _id')
+    await colRoutes.doc(data._id).remove()
+    return ok(null, '删除成功')
+  },
+
+  // 后台排查工具：给定 (userId, routeId) 返回该用户在该路线上的进度详情。
+  // 不写库，只读 tourism_routes + tourism_markers.checkedBy[]。
+  async getRouteProgressByUser(data) {
+    const userId = String((data && data.userId) || '').trim()
+    if (userId.length === 0) return fail('缺少 userId')
+    const routeId = data && data.routeId
+    if (routeId == null || !Number.isFinite(Number(routeId))) {
+      return fail('缺少 routeId')
+    }
+    const routeRes = await colRoutes.where({ id: Number(routeId) }).limit(1).get()
+    if (!routeRes.data.length) return fail('路线不存在')
+    const route = routeRes.data[0]
+
+    const markerRes = await colMarkers
+      .where({ 'checkedBy.userId': userId })
+      .field({ id: true, checkedBy: true })
+      .get()
+    const userCheckedMarkerIds = (markerRes.data || [])
+      .filter(marker => (marker.checkedBy || []).some(entry => String(entry && entry.userId || '') === userId))
+      .map(marker => Number(marker.id))
+
+    const progress = calcRouteProgress(route, userCheckedMarkerIds)
+    return ok({
+      route: {
+        _id: route._id,
+        id: route.id,
+        name: route.name,
+        markerIds: route.markerIds,
+        status: route.status
+      },
+      userId,
+      progress
+    })
   }
 }
