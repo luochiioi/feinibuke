@@ -22,7 +22,8 @@
 const ALLOWED_TYPES = new Set([
   'admin.deleteCheckinRecord',
   'admin.deleteUser',
-  'user.deleteCheckin'
+  'user.deleteCheckin',
+  'user.claimReward'
 ])
 
 function s(value) {

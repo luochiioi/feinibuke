@@ -6,6 +6,7 @@ const colUserProfiles = db.collection('users')
 const colAuditLogs = db.collection('tourism_audit_logs')
 const colRoutes = db.collection('tourism_routes')
 const colUserRoutes = db.collection('user_routes')
+const colTaskDefs = db.collection('tourism_tasks')
 const authUtil = require('auth-util')
 const { createRepairCheckinPlan, createDeleteCheckinPlan } = require('./repair-service')
 const {
@@ -14,6 +15,8 @@ const {
   buildUserRouteEntry,
   buildRouteRewardEntry
 } = require('./route-completion')
+const { buildClaimedReward, enrichRewardWithSource } = require('./reward-service')
+const { buildAuditLogEntry } = require('./audit-service')
 
 // 拉当前 uid 在所有 marker 中的"已打卡 markerId 集合"。
 // 嵌套字段查询 'checkedBy.userId': uid 复用 §规则 29 的索引友好写法。
@@ -69,25 +72,46 @@ async function detectAndRecordCompletedRoutes(uid, now) {
 // 仅记录用户自删事件；admin-center.audit-service 持有规范化 helper，本文件
 // 不跨 cloudfunction require，只复刻最小写法保持表结构一致（参见
 // admin-center/audit-service.js 的 buildAuditLogEntry）。
-async function appendUserDeleteAudit(input) {
+async function appendAuditLog(input) {
   try {
-    const occurredAt = Date.now()
-    await colAuditLogs.add({
-      type: 'user.deleteCheckin',
-      actorUid: String(input.actorUid || ''),
-      targetUid: String(input.actorUid || ''),
-      markerId: input.markerId != null ? Number(input.markerId) : null,
-      markerTitle: String(input.markerTitle || ''),
-      photoCloudURL: input.photoCloudURL ? String(input.photoCloudURL) : null,
-      checkedAt: input.checkedAt != null ? Number(input.checkedAt) : null,
-      reason: '',
-      purgePhoto: false,
-      purgeError: '',
-      occurredAt
-    })
+    const row = buildAuditLogEntry(input)
+    if (!row) return
+    await colAuditLogs.add(row)
   } catch (e) {
-    console.log('[audit] user.deleteCheckin append failed', e && e.message ? e.message : e)
+    console.log('[audit] append failed', e && e.message ? e.message : e)
   }
+}
+
+async function appendUserDeleteAudit(input) {
+  await appendAuditLog({
+    type: 'user.deleteCheckin',
+    actorUid: input.actorUid,
+    targetUid: input.actorUid,
+    markerId: input.markerId,
+    markerTitle: input.markerTitle,
+    photoCloudURL: input.photoCloudURL,
+    checkedAt: input.checkedAt,
+    reason: '',
+    purgePhoto: false,
+    purgeError: '',
+    occurredAt: Date.now()
+  })
+}
+
+async function appendClaimRewardAudit(input) {
+  await appendAuditLog({
+    type: 'user.claimReward',
+    actorUid: input.actorUid,
+    targetUid: input.actorUid,
+    markerId: null,
+    markerTitle: '',
+    photoCloudURL: null,
+    checkedAt: null,
+    reason: `reward:${String(input.rewardId || '')}`,
+    purgePhoto: false,
+    purgeError: '',
+    occurredAt: Date.now()
+  })
 }
 
 module.exports = {
@@ -346,8 +370,50 @@ module.exports = {
 
   async getRewards() {
     if (!this.auth.uid) return { errCode: -1, errMsg: '请先登录' }
-    const res = await colRewards.where({ userId: this.auth.uid }).orderBy('earnedAt', 'desc').get()
-    return { errCode: 0, data: res.data }
+    const [rewardRes, routesRes, tasksRes] = await Promise.all([
+      colRewards.where({ userId: this.auth.uid }).orderBy('earnedAt', 'desc').get(),
+      colRoutes.where({ status: 'active' }).field({ id: true, name: true }).get(),
+      colTaskDefs.where({ status: 'active' }).field({ id: true, name: true }).get()
+    ])
+    const rewards = rewardRes.data || []
+    const routes = routesRes.data || []
+    const tasks = tasksRes.data || []
+    return {
+      errCode: 0,
+      data: rewards.map(reward => enrichRewardWithSource(reward, routes, tasks))
+    }
+  },
+
+  async claimReward(data) {
+    if (!this.auth.uid) return { errCode: -1, errMsg: '请先登录' }
+    const payload = data || {}
+    const rewardId = String(payload.rewardId || '')
+    if (!rewardId) return { errCode: -1, errMsg: '缺少奖励 ID' }
+
+    const uid = String(this.auth.uid)
+    const rewardRes = await colRewards.where({ _id: rewardId, userId: uid }).limit(1).get()
+    if (!rewardRes.data.length) {
+      return { errCode: -1, errMsg: '奖励不存在或无权兑换' }
+    }
+
+    const reward = rewardRes.data[0]
+    if (reward.rewardClaimed === true) {
+      return {
+        errCode: 0,
+        errMsg: '奖励已兑换',
+        data: { rewardId, claimed: false, rewardClaimed: true, claimedAt: reward.claimedAt || null }
+      }
+    }
+
+    const now = Date.now()
+    await colRewards.doc(reward._id).update(buildClaimedReward(reward, now))
+    await appendClaimRewardAudit({ actorUid: uid, rewardId })
+
+    return {
+      errCode: 0,
+      errMsg: '兑换成功',
+      data: { rewardId, claimed: true, rewardClaimed: true, claimedAt: now }
+    }
   },
 
   // P4 主题路线公开读：列出所有 active 路线 + 当前 uid 的进度；不强制登录

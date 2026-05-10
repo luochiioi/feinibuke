@@ -79,7 +79,8 @@ function buildRouteRewardEntry(userId, route, now) {
     routeName: String((route && route.name) || ''),
     reward: String((route && route.reward) || ''),
     source: 'route',
-    earnedAt: Number(now)
+    earnedAt: Number(now),
+    rewardClaimed: false
   }
 }
 

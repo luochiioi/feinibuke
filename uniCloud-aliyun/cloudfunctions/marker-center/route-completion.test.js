@@ -27,6 +27,11 @@ test('calcRouteProgress matches admin-center/route-service shape', () => {
   })
 })
 
+test('buildRouteRewardEntry starts route rewards unclaimed', () => {
+  const reward = buildRouteRewardEntry('uid-1', { id: 100, name: 'Route', reward: '20 points' }, 1700000000)
+  assert.equal(reward.rewardClaimed, false)
+})
+
 test('isRouteCompleted requires every marker checked and at least one marker', () => {
   const route = { markerIds: [3, 5, 7] }
   assert.equal(isRouteCompleted(route, [3, 5, 7]), true)
@@ -83,6 +88,7 @@ test('buildRouteRewardEntry tags source=route and keeps userId/reward/earnedAt �
     routeName: '湖湘文化之旅',
     reward: '20 积分',
     source: 'route',
-    earnedAt: 1700000000
+    earnedAt: 1700000000,
+    rewardClaimed: false
   })
 })

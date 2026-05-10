@@ -53,6 +53,22 @@ test('buildAuditLogEntry stamps occurredAt when missing', () => {
   assert.equal(row.reason, '')
 })
 
+test('buildAuditLogEntry accepts user.claimReward row', () => {
+  const row = buildAuditLogEntry({
+    type: 'user.claimReward',
+    actorUid: 'u1',
+    targetUid: 'u1',
+    reason: 'reward:rw-1',
+    occurredAt: 1800000000000
+  })
+
+  assert.equal(row.type, 'user.claimReward')
+  assert.equal(row.actorUid, 'u1')
+  assert.equal(row.targetUid, 'u1')
+  assert.equal(row.reason, 'reward:rw-1')
+  assert.equal(row.occurredAt, 1800000000000)
+})
+
 test('buildAuditLogEntry coerces non-finite numbers safely', () => {
   const row = buildAuditLogEntry({
     type: 'admin.deleteUser',
