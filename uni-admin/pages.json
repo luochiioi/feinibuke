@@ -25,6 +25,12 @@
       }
     },
     {
+      "path": "pages/rewards/index",
+      "style": {
+        "navigationBarTitleText": "奖励记录"
+      }
+    },
+    {
       "path": "pages/users/index",
       "style": {
         "navigationBarTitleText": "用户管理"

@@ -3,7 +3,8 @@ const test = require('node:test')
 
 const {
   parseRewardPoints,
-  aggregateRewardStatsByUser
+  aggregateRewardStatsByUser,
+  normalizeRewardRecords
 } = require('./reward-service')
 
 test('parseRewardPoints extracts integer points from common reward text', () => {
@@ -43,4 +44,42 @@ test('aggregateRewardStatsByUser groups points and claim counts per user', () =>
     pendingCount: 0
   })
   assert.equal(stats.has(''), false)
+})
+
+test('normalizeRewardRecords joins user names and exposes claim status', () => {
+  const rows = normalizeRewardRecords([
+    {
+      _id: 'rw-1',
+      userId: 'u1',
+      source: 'route',
+      routeName: 'Macau Walk',
+      reward: '20 绉垎',
+      rewardClaimed: true,
+      claimedAt: 2000,
+      earnedAt: 1000
+    },
+    {
+      _id: 'rw-2',
+      userId: 'u2',
+      taskName: 'Palace',
+      reward: '10 points',
+      rewardClaimed: false,
+      earnedAt: 1500
+    }
+  ], [
+    { _id: 'u1', username: 'alice', nickname: 'Alice' }
+  ])
+
+  assert.equal(rows[0].userName, 'Alice')
+  assert.equal(rows[0].sourceType, 'route')
+  assert.equal(rows[0].sourceTitle, 'Macau Walk')
+  assert.equal(rows[0].rewardPoints, 20)
+  assert.equal(rows[0].statusText, '已兑')
+  assert.equal(rows[0].claimedAt, 2000)
+  assert.equal(rows[1].userName, 'u2')
+  assert.equal(rows[1].sourceType, 'task')
+  assert.equal(rows[1].sourceTitle, 'Palace')
+  assert.equal(rows[1].rewardPoints, 10)
+  assert.equal(rows[1].statusText, '待兑')
+  assert.equal(rows[1].claimedAt, null)
 })

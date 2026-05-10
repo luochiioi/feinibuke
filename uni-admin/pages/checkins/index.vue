@@ -13,6 +13,9 @@
       <view class="quick-chip" @click="goAudit">
         <text class="quick-chip-text">🛡 审计日志</text>
       </view>
+      <view class="quick-chip" @click="goRewards">
+        <text class="quick-chip-text">奖励记录</text>
+      </view>
       <view class="quick-chip" @click="goDashboard">
         <text class="quick-chip-text">📊 同步诊断</text>
       </view>
@@ -135,6 +138,10 @@ const api = uniCloud.importObject('admin-center')
 
 function goAudit() {
   uni.navigateTo({ url: '/pages/audit/index' })
+}
+
+function goRewards() {
+  uni.navigateTo({ url: '/pages/rewards/index' })
 }
 
 // "同步诊断" 与 "最近打卡" 都活在 dashboard。tabBar 切回去比新建独立页便宜，

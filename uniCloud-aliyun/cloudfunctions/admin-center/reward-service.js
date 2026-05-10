@@ -55,7 +55,42 @@ function aggregateRewardStatsByUser(rewards) {
   return statsByUserId
 }
 
+function normalizeRewardRecords(rewards, uniUsers) {
+  const lookup = new Map()
+  ;(uniUsers || []).forEach(user => {
+    const uid = String((user && (user._id || user.uid)) || '')
+    if (!uid) return
+    lookup.set(uid, String((user && (user.nickname || user.username)) || uid))
+  })
+
+  return (rewards || []).map(row => {
+    const userId = String((row && row.userId) || '')
+    const sourceType = row && (row.source === 'route' || row.routeId != null) ? 'route' : 'task'
+    const rewardPoints = resolveRewardPoints(row)
+    const rewardClaimed = row && row.rewardClaimed === true
+    const earnedAt = Number((row && row.earnedAt) || 0)
+    const claimedAtRaw = row && row.claimedAt != null ? Number(row.claimedAt) : null
+    const claimedAt = claimedAtRaw != null && Number.isFinite(claimedAtRaw) ? claimedAtRaw : null
+    return {
+      _id: row && row._id ? String(row._id) : '',
+      userId,
+      userName: lookup.get(userId) || userId,
+      sourceType,
+      sourceTitle: sourceType === 'route'
+        ? String((row && (row.routeName || row.sourceTitle)) || '')
+        : String((row && (row.taskName || row.sourceTitle)) || ''),
+      reward: String((row && row.reward) || ''),
+      rewardPoints,
+      rewardClaimed,
+      statusText: rewardClaimed ? '已兑' : '待兑',
+      earnedAt: Number.isFinite(earnedAt) ? earnedAt : 0,
+      claimedAt
+    }
+  })
+}
+
 module.exports = {
   parseRewardPoints,
-  aggregateRewardStatsByUser
+  aggregateRewardStatsByUser,
+  normalizeRewardRecords
 }

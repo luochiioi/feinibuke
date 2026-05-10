@@ -19,7 +19,7 @@ const {
   normalizeAdminUsers,
   buildSyncDiagnostics
 } = require('./marker-service')
-const { aggregateRewardStatsByUser } = require('./reward-service')
+const { aggregateRewardStatsByUser, normalizeRewardRecords } = require('./reward-service')
 const { buildAuditLogEntry, ALLOWED_TYPES: AUDIT_TYPES } = require('./audit-service')
 const {
   ROUTE_STATUSES,
@@ -161,6 +161,49 @@ module.exports = {
         deriveActiveCheckinsFromMarkers(markerRes.data),
         aggregateRewardStatsByUser(rewardRes.data)
       ),
+      total: totalRes.total,
+      offset,
+      limit
+    })
+  },
+
+  async getRewardRecords(data) {
+    const { offset, limit } = toPageArgs(data)
+    const where = {}
+    const userId = String((data && data.userId) || '').trim()
+    const source = String((data && data.source) || '').trim()
+    const status = String((data && data.status) || '').trim()
+    if (userId.length > 0) where.userId = userId
+    if (source === 'route' || source === 'task') where.source = source
+    if (status === 'claimed') where.rewardClaimed = true
+    if (status === 'pending') where.rewardClaimed = false
+
+    const query = Object.keys(where).length === 0 ? colRewards : colRewards.where(where)
+    const [totalRes, listRes, userRes] = await Promise.all([
+      query.count(),
+      query
+        .field({
+          userId: true,
+          source: true,
+          routeId: true,
+          routeName: true,
+          taskId: true,
+          taskName: true,
+          reward: true,
+          rewardPoints: true,
+          rewardClaimed: true,
+          earnedAt: true,
+          claimedAt: true
+        })
+        .orderBy('earnedAt', 'desc')
+        .skip(offset)
+        .limit(limit)
+        .get(),
+      colUsers.field({ _id: true, username: true, nickname: true }).get()
+    ])
+
+    return ok({
+      list: normalizeRewardRecords(listRes.data, userRes.data),
       total: totalRes.total,
       offset,
       limit
