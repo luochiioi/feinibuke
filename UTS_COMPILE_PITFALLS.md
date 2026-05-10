@@ -1270,3 +1270,37 @@ function extractCompletedRoutes(res: UTSJSONObject): CompletedRouteNotice[] {
 1. `as Foo[]` —— 编译过但运行炸
 2. `(res as UTSJSONObject)["data"] as Foo[]` —— 同上
 3. 用 `for (const item of arr)` 遍历未 typed parse 的数组 —— 访问 `.id / .name` 属性时随机崩
+
+### 规则 34：UTS 5.07 禁止 `Number(value)` / `Number.isFinite()`，用 parseInt / parseFloat / isNaN
+
+P4 Task 3 的 `pages/route-detail/route-detail.uvue` 真机编译报错：
+```
+error: Cannot create an instance of an abstract class.
+  if (Number(r.id) === routeId.value && found == null) {
+       ^
+error: Too many arguments for 'constructor(): Number'.
+  const n = Number(idStr)
+                  ^
+```
+
+**根因**：UTS 5.07 把 web JS 的 `Number(value)` 全局函数映射到 Kotlin 的 `Number` 类，并且这个类被声明为 abstract + 零参 constructor。任何 `Number(...)` 调用形式都会被编译器解析成"实例化抽象类"+"参数过多"双错。
+
+**正解**：
+| Web JS 写法 | UTS 5.07 替代 |
+|---|---|
+| `Number(str)` 把字符串转 int | `parseInt(str)` |
+| `Number(str)` 把字符串转 float | `parseFloat(str)` |
+| `Number.isFinite(n)` 检查数字有限 | `!isNaN(n)` |
+| `Number.isInteger(n)` | 自己写 `n === Math.floor(n) && !isNaN(n)` |
+| `Number(num)` 已经是 number 类型 | 直接用，**不需要任何转换** |
+
+**同款审计**：写 .uvue / .uts 之前 grep `Number\(` 检查全仓库；admin .vue / cloudfunctions .js 不受影响（H5/Node 是真 JS 引擎，原生支持 Number 全局函数）。
+
+**P4 Task 3 落地证据**：
+- `pages/route-detail/route-detail.uvue` 真机编译失败，hotfix commit `1da9026` 把 `Number(r.id)` 删掉（r.id 已是 number），`Number(idStr)` 改为 `parseInt(idStr!!)`，`Number.isFinite(n)` 改为 `!isNaN(n)`。
+- `cloudSync.uts` 里没有 Number() 调用（只用了 `as number` 类型断言，那是另一回事 OK 的）。
+
+**反模式**：
+1. `Number(stringValue)` —— 编译炸
+2. `Number.isFinite(n)` / `Number.isInteger(n)` / `Number.parseFloat(s)` —— Number 静态成员在 UTS 里也不可用，统统换全局 `parseInt` / `parseFloat` / `isNaN`
+3. 想"保险一点"双重转换 `parseInt(String(n))` —— 多此一举且 `String()` 在 5.07 同样有概率被解析成抽象类 constructor。直接用 `n.toString()` 实例方法

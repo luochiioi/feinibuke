@@ -3515,3 +3515,26 @@ P4 工作量预估：5 commits / 1-2 天。每个 task 都要单独 `node --test
 - "我的奖励" 页（rewards 集合已经在写，但还没有专门的 App 页面展示）。
 
 **下一轮（P5）候选起点**：根据真机反馈决定优先级——奖励兑换商城（rewards.rewardClaimed 给前端用）、推送通知（路线完成 push）、或路线推荐（基于位置 / 已完成 markers 推路线）。计划入口在 `docs/superpowers/plans/` 起新文件。
+
+## 2026-05-10 P4 真机编译 hotfix（commit `1da9026`）
+
+**报错**：`pages/route-detail/route-detail.uvue:115 / :144` 报 `Cannot create an instance of an abstract class` 与 `Too many arguments for 'constructor(): Number'`。
+
+**根因**：UTS 5.07 不支持 web JS 的 `Number(value)` 全局函数 —— Number 在 Kotlin 侧被当成 abstract 类、零参 constructor。
+
+**修法**（已落地）：
+- `Number(r.id)` → 删掉，r.id 已是 number 类型直接 `===` 比较
+- `Number(idStr)` → `parseInt(idStr!!)`
+- `Number.isFinite(n)` → `!isNaN(n)`
+
+PITFALLS §规则 34 已登记（同时给出 web JS → UTS 5.07 的转换映射表，含 `Number.isInteger` / `Number.parseFloat` / `String()` 等同源踩坑）。下次写 .uvue / .uts 之前 grep `Number\(` 自检即可。
+
+## 2026-05-10 P4.1 下一轮候选：admin UX 二级入口收纳
+
+P4 主功能验证后，用户对 uni-admin 的两个 UX 调整提出需求（已规划，未实施）：
+
+1. **主题路线入口位置**：从 dashboard `section-actions`（"最近打卡记录"段右上角）移到 `pages/tasks/index.vue` 的"同步默认任务"按钮右侧 —— 把"任务"和"路线"两个**配置型管理页**放一起（语义同源，都是 admin 在维护 App 用户的玩法配置），而不是和"审计日志/查看全部记录"放一起（那两个是**审阅型查询**）。
+
+2. **打卡记录页改造为入口集合**：当前 `uni-admin/pages/checkins/index.vue` 是单一打卡记录列表 + 违规审核入口；改造成"分类按钮卡片墙"，常见入口（打卡记录列表 / 审计日志 / 最近打卡 / 同步诊断 等）每个一张卡片，点击进对应详情页。
+
+详细规划见对应 plan 文档（待新建：`docs/superpowers/plans/2026-05-1X-p4.1-admin-ux-refactor.md`）。
