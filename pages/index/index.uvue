@@ -178,7 +178,15 @@ type MarkerInput = {
   height: number
 }
 
+function markerSizeForScale(currentScale: number): number {
+  if (currentScale <= 10) return 22
+  if (currentScale <= 13) return 28
+  if (currentScale <= 16) return 34
+  return 40
+}
+
 const markersJson = computed((): string => {
+  const size = markerSizeForScale(scale.value)
   const arr = markers.value.map((m: CheckinMarker): MarkerInput => {
     return {
       id: m.id,
@@ -186,8 +194,8 @@ const markersJson = computed((): string => {
       longitude: m.longitude,
       title: m.title,
       iconPath: m.iconPath,
-      width: m.width,
-      height: m.height
+      width: size,
+      height: size
     } as MarkerInput
   })
   return JSON.stringify(arr)
