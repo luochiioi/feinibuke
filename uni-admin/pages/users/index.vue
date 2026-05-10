@@ -7,6 +7,7 @@
     />
 
     <view v-if="errorText" class="notice error">{{ errorText }}</view>
+    <button v-if="needsLogin" class="login-cta" @click="goLogin">去登录</button>
     <view v-if="loading && users.length === 0" class="notice">正在加载用户...</view>
 
     <text class="page-desc">共 {{ total }} 个用户</text>
@@ -99,6 +100,7 @@
 import { ref } from 'vue'
 import { onShow } from '@dcloudio/uni-app'
 import AdminHeader from '@/components/AdminHeader.vue'
+import { getErrorMessage, goAdminLogin, isAuthError } from '@/utils/adminAuth.js'
 
 const users = ref([])
 const total = ref(0)
@@ -108,6 +110,7 @@ const loading = ref(false)
 const deleting = ref(false)
 const currentUid = ref('')
 const errorText = ref('')
+const needsLogin = ref(false)
 let offset = 0
 const limit = 20
 const api = uniCloud.importObject('admin-center')
@@ -149,6 +152,7 @@ async function runDelete(u) {
   if (!u || deleting.value) return
   deleting.value = true
   errorText.value = ''
+  needsLogin.value = false
   try {
     const res = await api.deleteUser({ _id: u._id })
     if (res.errCode !== 0) throw new Error(res.errMsg || '删除失败')
@@ -158,7 +162,8 @@ async function runDelete(u) {
     if (selected.value && selected.value._id === u._id) selected.value = null
     reload()
   } catch (e) {
-    errorText.value = e.message || '删除失败'
+    needsLogin.value = isAuthError(e)
+    errorText.value = getErrorMessage(e, '删除失败')
     uni.showToast({ title: errorText.value, icon: 'none' })
   } finally {
     deleting.value = false
@@ -176,6 +181,7 @@ async function fetchUsers() {
   if (loading.value) return
   loading.value = true
   errorText.value = ''
+  needsLogin.value = false
   try {
     const res = await api.getUsers({ offset, limit })
     if (res.errCode !== 0) throw new Error(res.errMsg || '用户加载失败')
@@ -186,10 +192,15 @@ async function fetchUsers() {
     hasMore.value = users.value.length < total.value
     offset += limit
   } catch (e) {
-    errorText.value = e.message || '连接服务器失败，请确认 admin-center 已上传'
+    needsLogin.value = isAuthError(e)
+    errorText.value = getErrorMessage(e, '连接服务器失败，请确认 admin-center 已上传')
   } finally {
     loading.value = false
   }
+}
+
+function goLogin() {
+  goAdminLogin()
 }
 
 function firstLetter(value) {
@@ -233,6 +244,16 @@ function selectUser(u) {
 .notice.error {
   background: #fff1f0;
   color: #d93026;
+}
+
+.login-cta {
+  background: #2ecc71;
+  border: none;
+  border-radius: 999rpx;
+  color: #fff;
+  font-size: 24rpx;
+  margin: 0 0 16rpx 0;
+  padding: 12rpx 28rpx;
 }
 
 .page-desc {

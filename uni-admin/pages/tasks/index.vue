@@ -7,6 +7,7 @@
     />
 
     <view v-if="errorText" class="notice error">{{ errorText }}</view>
+    <button v-if="needsLogin" class="login-cta" @click="goLogin">去登录</button>
     <view v-if="loading" class="notice">正在加载任务...</view>
 
     <view class="toolbar">
@@ -48,10 +49,12 @@
 import { ref } from 'vue'
 import { onShow } from '@dcloudio/uni-app'
 import AdminHeader from '@/components/AdminHeader.vue'
+import { getErrorMessage, goAdminLogin, isAuthError } from '@/utils/adminAuth.js'
 
 const tasks = ref([])
 const loading = ref(false)
 const errorText = ref('')
+const needsLogin = ref(false)
 const api = uniCloud.importObject('admin-center')
 
 onShow(() => { fetchTasks() })
@@ -59,15 +62,21 @@ onShow(() => { fetchTasks() })
 async function fetchTasks() {
   loading.value = true
   errorText.value = ''
+  needsLogin.value = false
   try {
     const res = await api.getTasks()
     if (res.errCode !== 0) throw new Error(res.errMsg || '任务加载失败')
     tasks.value = res.data || []
   } catch (e) {
-    errorText.value = e.message || '连接服务器失败，请确认 admin-center 已上传'
+    needsLogin.value = isAuthError(e)
+    errorText.value = getErrorMessage(e, '连接服务器失败，请确认 admin-center 已上传')
   } finally {
     loading.value = false
   }
+}
+
+function goLogin() {
+  goAdminLogin()
 }
 
 async function syncTasks() {
@@ -78,7 +87,9 @@ async function syncTasks() {
     uni.showToast({ title: `新增 ${data.created.length}，更新 ${data.updated.length}`, icon: 'none' })
     fetchTasks()
   } catch (e) {
-    uni.showToast({ title: e.message || '同步失败', icon: 'none' })
+    needsLogin.value = isAuthError(e)
+    errorText.value = needsLogin.value ? getErrorMessage(e, '同步失败') : errorText.value
+    uni.showToast({ title: getErrorMessage(e, '同步失败'), icon: 'none' })
   }
 }
 
@@ -94,7 +105,9 @@ async function toggleStatus(t) {
     t.status = newStatus
     uni.showToast({ title: newStatus === 'active' ? '已激活' : '已归档', icon: 'success' })
   } catch (e) {
-    uni.showToast({ title: e.message || '操作失败', icon: 'none' })
+    needsLogin.value = isAuthError(e)
+    errorText.value = needsLogin.value ? getErrorMessage(e, '操作失败') : errorText.value
+    uni.showToast({ title: getErrorMessage(e, '操作失败'), icon: 'none' })
   }
 }
 </script>
@@ -114,6 +127,16 @@ async function toggleStatus(t) {
 .notice.error {
   background: #fff1f0;
   color: #d93026;
+}
+
+.login-cta {
+  background: #2ecc71;
+  border: none;
+  border-radius: 999rpx;
+  color: #fff;
+  font-size: 24rpx;
+  margin: 0 0 16rpx 0;
+  padding: 12rpx 28rpx;
 }
 
 .toolbar {

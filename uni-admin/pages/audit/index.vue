@@ -7,6 +7,7 @@
     />
 
     <view v-if="errorText" class="notice error">{{ errorText }}</view>
+    <button v-if="needsLogin" class="login-cta" @click="goLogin">去登录</button>
     <view v-if="loading && list.length === 0" class="notice">正在加载审计日志...</view>
 
     <view class="filter-bar">
@@ -54,12 +55,14 @@
 import { ref } from 'vue'
 import { onShow } from '@dcloudio/uni-app'
 import AdminHeader from '@/components/AdminHeader.vue'
+import { getErrorMessage, goAdminLogin, isAuthError } from '@/utils/adminAuth.js'
 
 const list = ref([])
 const total = ref(0)
 const hasMore = ref(false)
 const loading = ref(false)
 const errorText = ref('')
+const needsLogin = ref(false)
 const filterType = ref('')
 let offset = 0
 const limit = 20
@@ -91,6 +94,7 @@ async function fetchData() {
   if (loading.value) return
   loading.value = true
   errorText.value = ''
+  needsLogin.value = false
   try {
     const res = await api.getAuditLogs({
       offset,
@@ -105,10 +109,15 @@ async function fetchData() {
     hasMore.value = list.value.length < total.value
     offset += limit
   } catch (e) {
-    errorText.value = e.message || '连接服务器失败，请确认 admin-center 已上传'
+    needsLogin.value = isAuthError(e)
+    errorText.value = getErrorMessage(e, '连接服务器失败，请确认 admin-center 已上传')
   } finally {
     loading.value = false
   }
+}
+
+function goLogin() {
+  goAdminLogin()
 }
 
 function typeLabel(t) {
@@ -148,6 +157,16 @@ function formatTime(ts) {
 .notice.error {
   background: #fff1f0;
   color: #d93026;
+}
+
+.login-cta {
+  background: #2ecc71;
+  border: none;
+  border-radius: 999rpx;
+  color: #fff;
+  font-size: 24rpx;
+  margin: 0 0 16rpx 0;
+  padding: 12rpx 28rpx;
 }
 
 .filter-bar {

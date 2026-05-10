@@ -7,6 +7,7 @@
     />
 
     <view v-if="errorText" class="notice error">{{ errorText }}</view>
+    <button v-if="needsLogin" class="login-cta" @click="goLogin">去登录</button>
     <view v-if="loading" class="notice">正在加载云端数据...</view>
 
     <view class="stats-grid">
@@ -94,6 +95,7 @@
 import { ref } from 'vue'
 import { onShow } from '@dcloudio/uni-app'
 import AdminHeader from '@/components/AdminHeader.vue'
+import { getErrorMessage, goAdminLogin, isAuthError } from '@/utils/adminAuth.js'
 
 const dashboard = ref({
   totalUsers: 0,
@@ -111,6 +113,7 @@ const diagnostics = ref({
 const checkins = ref([])
 const loading = ref(false)
 const errorText = ref('')
+const needsLogin = ref(false)
 const api = uniCloud.importObject('admin-center')
 
 onShow(() => { loadDashboard() })
@@ -118,6 +121,7 @@ onShow(() => { loadDashboard() })
 async function loadDashboard() {
   loading.value = true
   errorText.value = ''
+  needsLogin.value = false
   try {
     const res = await api.getDashboard()
     if (res.errCode !== 0) throw new Error(res.errMsg || '仪表盘加载失败')
@@ -131,10 +135,15 @@ async function loadDashboard() {
     if (cres.errCode !== 0) throw new Error(cres.errMsg || '打卡记录加载失败')
     checkins.value = (cres.data && cres.data.list) || []
   } catch (e) {
-    errorText.value = e.message || '连接服务器失败，请确认云对象已上传并已登录管理员账号'
+    needsLogin.value = isAuthError(e)
+    errorText.value = getErrorMessage(e, '连接服务器失败，请确认云对象已上传并已登录管理员账号')
   } finally {
     loading.value = false
   }
+}
+
+function goLogin() {
+  goAdminLogin()
 }
 
 function formatTime(ts) {
@@ -168,6 +177,16 @@ function goToAudit() {
 .notice.error {
   background: #fff1f0;
   color: #d93026;
+}
+
+.login-cta {
+  background: #2ecc71;
+  border: none;
+  border-radius: 999rpx;
+  color: #fff;
+  font-size: 24rpx;
+  margin: 0 0 16rpx 0;
+  padding: 12rpx 28rpx;
 }
 
 .stats-grid {

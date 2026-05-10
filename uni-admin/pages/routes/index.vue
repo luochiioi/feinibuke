@@ -7,6 +7,7 @@
     />
 
     <view v-if="errorText" class="notice error">{{ errorText }}</view>
+    <button v-if="needsLogin" class="login-cta" @click="goLogin">去登录</button>
     <view v-if="loading && routes.length === 0" class="notice">正在加载路线...</view>
 
     <view class="summary-grid">
@@ -114,12 +115,14 @@
 import { ref, computed } from 'vue'
 import { onShow } from '@dcloudio/uni-app'
 import AdminHeader from '@/components/AdminHeader.vue'
+import { getErrorMessage, goAdminLogin, isAuthError } from '@/utils/adminAuth.js'
 
 const routes = ref([])
 const total = ref(0)
 const hasMore = ref(false)
 const loading = ref(false)
 const errorText = ref('')
+const needsLogin = ref(false)
 const keyword = ref('')
 const statusFilter = ref('all')
 const editing = ref(null)
@@ -158,6 +161,7 @@ async function loadRoutes() {
   if (loading.value) return
   loading.value = true
   errorText.value = ''
+  needsLogin.value = false
   try {
     const payload = { offset, limit, keyword: keyword.value }
     if (statusFilter.value !== 'all') payload.status = statusFilter.value
@@ -170,10 +174,15 @@ async function loadRoutes() {
     hasMore.value = routes.value.length < total.value
     offset += limit
   } catch (e) {
-    errorText.value = e.message || '连接服务器失败，请确认 admin-center 已上传'
+    needsLogin.value = isAuthError(e)
+    errorText.value = getErrorMessage(e, '连接服务器失败，请确认 admin-center 已上传')
   } finally {
     loading.value = false
   }
+}
+
+function goLogin() {
+  goAdminLogin()
 }
 
 async function loadMarkerOptions() {
@@ -182,7 +191,8 @@ async function loadMarkerOptions() {
     if (res.errCode !== 0) throw new Error(res.errMsg || '打卡点加载失败')
     availableMarkers.value = (res.data && res.data.list) || []
   } catch (e) {
-    errorText.value = e.message || '打卡点选项加载失败'
+    needsLogin.value = isAuthError(e)
+    errorText.value = getErrorMessage(e, '打卡点选项加载失败')
   }
 }
 
@@ -277,7 +287,9 @@ async function saveRoute() {
     editing.value = null
     reload()
   } catch (e) {
-    uni.showToast({ title: e.message || '保存失败', icon: 'none' })
+    needsLogin.value = isAuthError(e)
+    errorText.value = needsLogin.value ? getErrorMessage(e, '保存失败') : errorText.value
+    uni.showToast({ title: getErrorMessage(e, '保存失败'), icon: 'none' })
   }
 }
 
@@ -289,7 +301,9 @@ async function toggleStatus(r) {
     r.status = newStatus
     uni.showToast({ title: newStatus === 'active' ? '已激活' : '已归档', icon: 'success' })
   } catch (e) {
-    uni.showToast({ title: e.message || '操作失败', icon: 'none' })
+    needsLogin.value = isAuthError(e)
+    errorText.value = needsLogin.value ? getErrorMessage(e, '操作失败') : errorText.value
+    uni.showToast({ title: getErrorMessage(e, '操作失败'), icon: 'none' })
   }
 }
 
@@ -307,7 +321,9 @@ async function doDelete(r) {
     uni.showToast({ title: '已删除', icon: 'success' })
     reload()
   } catch (e) {
-    uni.showToast({ title: e.message || '删除失败', icon: 'none' })
+    needsLogin.value = isAuthError(e)
+    errorText.value = needsLogin.value ? getErrorMessage(e, '删除失败') : errorText.value
+    uni.showToast({ title: getErrorMessage(e, '删除失败'), icon: 'none' })
   }
 }
 </script>
@@ -325,6 +341,16 @@ async function doDelete(r) {
 }
 
 .notice.error { background: #fff1f0; color: #d93026; }
+
+.login-cta {
+  background: #2ecc71;
+  border: none;
+  border-radius: 999rpx;
+  color: #fff;
+  font-size: 24rpx;
+  margin: 0 0 16rpx 0;
+  padding: 12rpx 28rpx;
+}
 
 .summary-grid {
   display: grid;

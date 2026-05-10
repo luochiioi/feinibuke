@@ -22,6 +22,7 @@
     </view>
 
     <view v-if="errorText" class="notice error">{{ errorText }}</view>
+    <button v-if="needsLogin" class="login-cta" @click="goLogin">去登录</button>
     <view v-if="loading && list.length === 0" class="notice">正在加载打卡记录...</view>
 
     <view v-if="selectedMarkerId" class="filter-card">
@@ -103,12 +104,14 @@ import { ref } from 'vue'
 import { onShow } from '@dcloudio/uni-app'
 import AdminHeader from '@/components/AdminHeader.vue'
 import { mergeCheckinGroups, normalizeCheckinGroups } from './checkin-groups.mjs'
+import { getErrorMessage, goAdminLogin, isAuthError } from '@/utils/adminAuth.js'
 
 const list = ref([])
 const searchQuery = ref('')
 const hasMore = ref(false)
 const loading = ref(false)
 const errorText = ref('')
+const needsLogin = ref(false)
 const selectedMarkerId = ref(null)
 const selectedMarkerTitle = ref('')
 const markerInfo = ref({})
@@ -164,6 +167,7 @@ async function fetchData() {
   if (loading.value) return
   loading.value = true
   errorText.value = ''
+  needsLogin.value = false
   try {
     const res = selectedMarkerId.value
       ? await api.getMarkerCheckins({ markerId: selectedMarkerId.value, offset, limit })
@@ -182,10 +186,15 @@ async function fetchData() {
     hasMore.value = groupedResponse ? list.value.length < total.value : rawItems.length === limit
     offset += limit
   } catch (e) {
-    errorText.value = e.message || '连接服务器失败，请确认 admin-center 已上传'
+    needsLogin.value = isAuthError(e)
+    errorText.value = getErrorMessage(e, '连接服务器失败，请确认 admin-center 已上传')
   } finally {
     loading.value = false
   }
+}
+
+function goLogin() {
+  goAdminLogin()
 }
 
 function clearMarkerFilter() {
@@ -310,7 +319,9 @@ async function doDeleteRecord(record, group, fromPreview, purgePhoto) {
     if (fromPreview) closePhotoPreview()
     reload()
   } catch (e) {
-    uni.showToast({ title: e.message || '删除失败', icon: 'none' })
+    needsLogin.value = isAuthError(e)
+    errorText.value = needsLogin.value ? getErrorMessage(e, '删除失败') : errorText.value
+    uni.showToast({ title: getErrorMessage(e, '删除失败'), icon: 'none' })
   } finally {
     deletingKey.value = ''
   }
@@ -332,6 +343,16 @@ async function doDeleteRecord(record, group, fromPreview, purgePhoto) {
 .notice.error {
   background: #fff1f0;
   color: #d93026;
+}
+
+.login-cta {
+  background: #2ecc71;
+  border: none;
+  border-radius: 999rpx;
+  color: #fff;
+  font-size: 24rpx;
+  margin: 0 0 16rpx 0;
+  padding: 12rpx 28rpx;
 }
 
 .filter-card {

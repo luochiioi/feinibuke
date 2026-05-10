@@ -7,6 +7,7 @@
     />
 
     <view v-if="errorText" class="notice error">{{ errorText }}</view>
+    <button v-if="needsLogin" class="login-cta" @click="goLogin">去登录</button>
     <view v-if="loading && markers.length === 0" class="notice">正在加载打卡点...</view>
 
     <view class="summary-grid">
@@ -98,6 +99,7 @@
 import { ref } from 'vue'
 import { onShow } from '@dcloudio/uni-app'
 import AdminHeader from '@/components/AdminHeader.vue'
+import { getErrorMessage, goAdminLogin, isAuthError } from '@/utils/adminAuth.js'
 
 const markers = ref([])
 const total = ref(0)
@@ -106,6 +108,7 @@ const checkinTotal = ref(0)
 const hasMore = ref(false)
 const loading = ref(false)
 const errorText = ref('')
+const needsLogin = ref(false)
 const showImport = ref(false)
 const importText = ref('')
 const keyword = ref('')
@@ -129,6 +132,7 @@ async function loadMarkers() {
   if (loading.value) return
   loading.value = true
   errorText.value = ''
+  needsLogin.value = false
   try {
     const res = await api.getMarkers({ offset, limit, keyword: keyword.value })
     if (res.errCode !== 0) throw new Error(res.errMsg || '打卡点加载失败')
@@ -140,10 +144,15 @@ async function loadMarkers() {
     offset += limit
     recalcSummary()
   } catch (e) {
-    errorText.value = e.message || '连接服务器失败，请确认 admin-center 已上传'
+    needsLogin.value = isAuthError(e)
+    errorText.value = getErrorMessage(e, '连接服务器失败，请确认 admin-center 已上传')
   } finally {
     loading.value = false
   }
+}
+
+function goLogin() {
+  goAdminLogin()
 }
 
 function recalcSummary() {
@@ -198,7 +207,9 @@ async function saveMarker() {
     editing.value = null
     reload()
   } catch (e) {
-    uni.showToast({ title: e.message || '保存失败', icon: 'none' })
+    needsLogin.value = isAuthError(e)
+    errorText.value = needsLogin.value ? getErrorMessage(e, '保存失败') : errorText.value
+    uni.showToast({ title: getErrorMessage(e, '保存失败'), icon: 'none' })
   }
 }
 
@@ -211,7 +222,9 @@ async function doDelete(m) {
     uni.showToast({ title: '已删除', icon: 'success' })
     reload()
   } catch (e) {
-    uni.showToast({ title: e.message || '删除失败', icon: 'none' })
+    needsLogin.value = isAuthError(e)
+    errorText.value = needsLogin.value ? getErrorMessage(e, '删除失败') : errorText.value
+    uni.showToast({ title: getErrorMessage(e, '删除失败'), icon: 'none' })
   }
 }
 
@@ -223,7 +236,9 @@ async function syncDefaults() {
     uni.showToast({ title: `新增 ${data.created.length}，更新 ${data.updated.length}`, icon: 'none' })
     reload()
   } catch (e) {
-    uni.showToast({ title: e.message || '同步失败', icon: 'none' })
+    needsLogin.value = isAuthError(e)
+    errorText.value = needsLogin.value ? getErrorMessage(e, '同步失败') : errorText.value
+    uni.showToast({ title: getErrorMessage(e, '同步失败'), icon: 'none' })
   }
 }
 
@@ -247,7 +262,9 @@ async function doImport() {
     importText.value = ''
     reload()
   } catch (e) {
-    uni.showToast({ title: e.message || '导入失败，检查 JSON 格式', icon: 'none' })
+    needsLogin.value = isAuthError(e)
+    errorText.value = needsLogin.value ? getErrorMessage(e, '导入失败，检查 JSON 格式') : errorText.value
+    uni.showToast({ title: getErrorMessage(e, '导入失败，检查 JSON 格式'), icon: 'none' })
   }
 }
 </script>
@@ -267,6 +284,16 @@ async function doImport() {
 .notice.error {
   background: #fff1f0;
   color: #d93026;
+}
+
+.login-cta {
+  background: #2ecc71;
+  border: none;
+  border-radius: 999rpx;
+  color: #fff;
+  font-size: 24rpx;
+  margin: 0 0 16rpx 0;
+  padding: 12rpx 28rpx;
 }
 
 .summary-grid {
