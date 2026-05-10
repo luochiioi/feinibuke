@@ -350,7 +350,7 @@ async function consumePendingFocus(): Promise<boolean> {
       setActiveMarker(fresh)
       repairAndRefreshForUser(fresh.id)
     } else {
-      uni.showToast({ title: '璇ユ墦鍗＄偣鏆傛湭鍚屾鍒版湰鍦?, icon: 'none' })
+      uni.showToast({ title: 'Marker not synced yet', icon: 'none' })
     }
     return true
   }
@@ -413,7 +413,7 @@ function onMarkerTap(e: UniMapMarkerTapEvent): void {
     return
   }
   console.log('[map] marker tap id not found', markerId.toString())
-  uni.showToast({ title: '鎵撳崱鐐规鍦ㄥ悓姝ワ紝璇风◢鍚庡啀鐐?, icon: 'none' })
+  uni.showToast({ title: 'Marker syncing, try again', icon: 'none' })
 }
 
 function navigateToAddMarkerAt(centerLat: number, centerLng: number): void {
