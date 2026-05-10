@@ -1,0 +1,204 @@
+<template>
+  <scroll-view class="rewards-page" scroll-y direction="vertical" :show-scrollbar="false">
+    <view class="hero">
+      <text class="hero-title">我的奖励</text>
+      <text class="hero-sub">共 {{ totalCount.toString() }} 条奖励 · 已兑 {{ claimedCount.toString() }} / 待兑 {{ pendingCount.toString() }}</text>
+    </view>
+
+    <view v-if="errorText.length > 0" class="notice notice-error">
+      <text class="notice-text">{{ errorText }}</text>
+    </view>
+
+    <view v-if="loading" class="notice">
+      <text class="notice-text">正在加载我的奖励...</text>
+    </view>
+
+    <view v-if="!loading && needsLogin" class="empty-state">
+      <text class="empty-text">登录后才能查看自己的路线和任务奖励。</text>
+      <view class="action-btn primary" @click="goLogin">
+        <text class="action-btn-text light">去登录</text>
+      </view>
+    </view>
+
+    <view v-if="!loading && !needsLogin && rewards.length === 0" class="empty-state">
+      <text class="empty-text">还没有奖励。完成主题路线或任务后，这里会出现可兑换卡片。</text>
+    </view>
+
+    <view v-if="!loading && !needsLogin && routeRewards.length > 0" class="section">
+      <text class="section-title">路线奖励</text>
+      <view class="card-grid">
+        <view v-for="(entry, idx) in routeRewards" :key="entry._id + '_route_' + idx.toString()" :class="entry.rewardClaimed ? 'reward-card card-claimed' : 'reward-card card-pending'">
+          <view class="card-head">
+            <text class="card-title">{{ titleFor(entry) }}</text>
+            <view :class="entry.rewardClaimed ? 'status-badge badge-claimed' : 'status-badge badge-pending'">
+              <text :class="entry.rewardClaimed ? 'status-text text-claimed' : 'status-text text-pending'">{{ entry.rewardClaimed ? '已兑' : '待兑' }}</text>
+            </view>
+          </view>
+          <text class="reward-text">{{ entry.reward }}</text>
+          <text class="time-text">{{ fmtTime(entry.earnedAt) }}</text>
+          <view v-if="entry.rewardClaimed == false" class="claim-btn" @click="confirmClaim(entry)">
+            <text class="claim-btn-text">兑换</text>
+          </view>
+        </view>
+      </view>
+    </view>
+
+    <view v-if="!loading && !needsLogin && taskRewards.length > 0" class="section">
+      <text class="section-title">任务奖励</text>
+      <view class="card-grid">
+        <view v-for="(entry, idx) in taskRewards" :key="entry._id + '_task_' + idx.toString()" :class="entry.rewardClaimed ? 'reward-card card-claimed' : 'reward-card card-pending'">
+          <view class="card-head">
+            <text class="card-title">{{ titleFor(entry) }}</text>
+            <view :class="entry.rewardClaimed ? 'status-badge badge-claimed' : 'status-badge badge-pending'">
+              <text :class="entry.rewardClaimed ? 'status-text text-claimed' : 'status-text text-pending'">{{ entry.rewardClaimed ? '已兑' : '待兑' }}</text>
+            </view>
+          </view>
+          <text class="reward-text">{{ entry.reward }}</text>
+          <text class="time-text">{{ fmtTime(entry.earnedAt) }}</text>
+          <view v-if="entry.rewardClaimed == false" class="claim-btn" @click="confirmClaim(entry)">
+            <text class="claim-btn-text">兑换</text>
+          </view>
+        </view>
+      </view>
+    </view>
+  </scroll-view>
+</template>
+
+<script setup lang="uts">
+import { ref, computed } from 'vue'
+import type { RewardEntry } from '@/utils/cloudSync'
+import { pullRewards, claimReward } from '@/utils/cloudSync'
+import { state as userState, refreshUserIdFromAuth } from '@/user/index.uts'
+import { formatDateTime } from '@/utils/format'
+
+const rewards = ref<RewardEntry[]>([] as RewardEntry[])
+const loading = ref<boolean>(false)
+const errorText = ref<string>('')
+const needsLogin = ref<boolean>(false)
+
+const totalCount = computed((): number => rewards.value.length)
+const claimedCount = computed((): number => {
+  let count = 0
+  rewards.value.forEach((entry: RewardEntry): void => {
+    if (entry.rewardClaimed) count += 1
+  })
+  return count
+})
+const pendingCount = computed((): number => totalCount.value - claimedCount.value)
+
+const routeRewards = computed((): RewardEntry[] => {
+  return rewards.value.filter((entry: RewardEntry): boolean => entry.sourceType == 'route')
+})
+
+const taskRewards = computed((): RewardEntry[] => {
+  return rewards.value.filter((entry: RewardEntry): boolean => entry.sourceType != 'route')
+})
+
+function fmtTime(ts: number): string {
+  return formatDateTime(ts)
+}
+
+function titleFor(entry: RewardEntry): string {
+  if (entry.sourceTitle.length > 0) return entry.sourceTitle
+  if (entry.routeName.length > 0) return entry.routeName
+  if (entry.taskName.length > 0) return entry.taskName
+  return entry.sourceType == 'route' ? '主题路线' : '任务奖励'
+}
+
+async function reload(): Promise<void> {
+  loading.value = true
+  errorText.value = ''
+  try {
+    await refreshUserIdFromAuth()
+    const u = userState.userInfo
+    if (u == null) {
+      needsLogin.value = true
+      rewards.value = [] as RewardEntry[]
+      return
+    }
+    needsLogin.value = false
+    rewards.value = await pullRewards()
+  } catch (e) {
+    console.log('[rewards] reload failed', e)
+    const err = e as Error
+    const msg = err.message
+    errorText.value = msg.length > 0 ? msg : '加载失败，请稍后重试'
+  } finally {
+    loading.value = false
+  }
+}
+
+async function runClaim(entry: RewardEntry): Promise<void> {
+  if (entry.rewardClaimed) return
+  const ok = await claimReward(entry._id)
+  if (ok) {
+    uni.showToast({ title: '兑换成功', icon: 'success' })
+    await reload()
+  } else {
+    uni.showToast({ title: '兑换失败，请稍后重试', icon: 'none' })
+  }
+}
+
+function confirmClaim(entry: RewardEntry): void {
+  uni.showActionSheet({
+    itemList: ['兑换奖励'],
+    success: (res: ShowActionSheetSuccess): void => {
+      if (res.tapIndex == 0) {
+        runClaim(entry)
+      }
+    }
+  })
+}
+
+function goLogin(): void {
+  uni.navigateTo({ url: '/pages/login/login' })
+}
+
+onShow((): void => {
+  reload()
+})
+</script>
+
+<style>
+.rewards-page { flex: 1; width: 750rpx; height: 100%; background-color: #f5f7f6; }
+
+.hero { padding: 32rpx 28rpx 16rpx 28rpx; display: flex; flex-direction: column; }
+.hero-title { font-size: 40rpx; font-weight: bold; color: #1a1a1a; }
+.hero-sub { font-size: 24rpx; color: #7f8c8d; margin-top: 6rpx; }
+
+.notice { background-color: #eef9f2; border-radius: 12rpx; padding: 18rpx 20rpx; margin: 0 24rpx 16rpx 24rpx; }
+.notice-error { background-color: #fff1f0; }
+.notice-text { font-size: 24rpx; color: #2e9f5f; }
+.notice-error .notice-text { color: #d93026; }
+
+.empty-state { padding: 80rpx 40rpx; display: flex; flex-direction: column; align-items: center; }
+.empty-text { font-size: 26rpx; color: #999999; line-height: 40rpx; text-align: center; }
+
+.section { padding: 0 24rpx; margin-bottom: 20rpx; display: flex; flex-direction: column; }
+.section-title { font-size: 28rpx; color: #1a1a1a; font-weight: 600; margin: 14rpx 4rpx 12rpx 4rpx; }
+
+.card-grid { display: flex; flex-direction: row; flex-wrap: wrap; }
+.reward-card { width: 338rpx; min-height: 236rpx; border-radius: 16rpx; padding: 20rpx; margin-right: 14rpx; margin-bottom: 14rpx; display: flex; flex-direction: column; box-shadow: 0 4rpx 12rpx rgba(0,0,0,0.04); }
+.card-pending { background-color: #ffffff; border: 2rpx solid #dff5e8; }
+.card-claimed { background-color: #f1f3f4; border: 2rpx solid #e1e4e8; }
+
+.card-head { display: flex; flex-direction: row; align-items: center; }
+.card-title { flex: 1; font-size: 26rpx; font-weight: 600; color: #1a1a1a; lines: 2; }
+.status-badge { border-radius: 999rpx; padding: 4rpx 12rpx; margin-left: 8rpx; }
+.badge-pending { background-color: #e6f9ed; }
+.badge-claimed { background-color: #e3e6e8; }
+.status-text { font-size: 20rpx; font-weight: 600; }
+.text-pending { color: #2ecc71; }
+.text-claimed { color: #7f8c8d; }
+
+.reward-text { font-size: 28rpx; color: #2e3a34; font-weight: 600; margin-top: 18rpx; line-height: 38rpx; }
+.time-text { font-size: 22rpx; color: #9aa4a8; margin-top: 8rpx; }
+
+.claim-btn { height: 58rpx; border-radius: 29rpx; background-color: #2ecc71; display: flex; align-items: center; justify-content: center; margin-top: 18rpx; }
+.claim-btn-text { font-size: 24rpx; color: #ffffff; font-weight: 600; }
+
+.action-btn { height: 64rpx; border-radius: 32rpx; padding: 0 24rpx; display: flex; align-items: center; justify-content: center; margin-top: 22rpx; }
+.action-btn.primary { background-color: #2ecc71; }
+.action-btn-text { font-size: 24rpx; font-weight: 500; }
+.action-btn-text.light { color: #ffffff; }
+</style>

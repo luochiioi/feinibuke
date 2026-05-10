@@ -58,6 +58,12 @@
       }
     },
     {
+      "path": "pages/rewards/rewards",
+      "style": {
+        "navigationBarTitleText": "我的奖励"
+      }
+    },
+    {
       "path": "pages/routes/routes",
       "style": {
         "navigationBarTitleText": "主题路线"

@@ -129,16 +129,18 @@ function goAuth(): void {
     return
   }
   uni.showActionSheet({
-    itemList: ['我的打卡', '退出登录'],
+    itemList: ['我的打卡', '我的奖励', '退出登录'],
     success: (res: ShowActionSheetSuccess): void => {
       if (res.tapIndex == 0) {
         uni.navigateTo({ url: '/pages/my-checkins/my-checkins' })
         return
       }
       if (res.tapIndex == 1) {
+        uni.navigateTo({ url: '/pages/rewards/rewards' })
+        return
+      }
+      if (res.tapIndex == 2) {
         clearUserInfo()
-        // clearUserInfo 已清掉 storage 里的业务数据；这里立刻重 load
-        // reactive ref，UI 就不会再显示上一个账号的 markers / tasks
         loadMarkers()
         loadTasks()
         setActiveMarker(null)
@@ -147,7 +149,6 @@ function goAuth(): void {
     }
   })
 }
-
 function ensureMapCtx(): MapContext | null {
   return uni.createMapContext('mainMap')
 }
