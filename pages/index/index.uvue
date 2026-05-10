@@ -402,7 +402,20 @@ function closeSheet(): void {
 }
 
 function goTasks(): void {
-  uni.navigateTo({ url: '/pages/tasks/tasks' })
+  // P4：底部"任务"按钮改 actionSheet 入口，让"任务"和"主题路线"共用同一个
+  // 工具按钮，避免在底栏挤一个新按钮（底部 4 个 slot 已经占满）。
+  uni.showActionSheet({
+    itemList: ['任务', '主题路线'],
+    success: (res: ShowActionSheetSuccess): void => {
+      if (res.tapIndex == 0) {
+        uni.navigateTo({ url: '/pages/tasks/tasks' })
+        return
+      }
+      if (res.tapIndex == 1) {
+        uni.navigateTo({ url: '/pages/routes/routes' })
+      }
+    }
+  })
 }
 
 function doZoomIn(): void {

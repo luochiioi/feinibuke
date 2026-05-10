@@ -314,6 +314,11 @@ export async function deleteCloudCheckin(markerId: number): Promise<boolean> {
 
 // 我的打卡页用：拉取当前 uid 的所有 entry 切片。云端已经按 checkedAt 倒序，
 // 这里只做 JSON.parse<T>() 边界并保留为 typed 对象列表，避免 UTSJSONObject 假 cast。
+export type MyCheckinRouteRef = {
+  id: number
+  name: string
+}
+
 export type MyCheckinEntry = {
   markerDocId: string
   markerId: number
@@ -325,6 +330,9 @@ export type MyCheckinEntry = {
   photoCloudURL: string | null
   note: string | null
   repaired: boolean
+  // P4：该 marker 属于的 active 路线列表（服务端按 markerIds join 后挂在
+  // 每条 entry 上）。归档路线不会出现。
+  routes: MyCheckinRouteRef[]
 }
 
 export async function pullMyCheckins(): Promise<MyCheckinEntry[]> {

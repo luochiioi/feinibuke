@@ -289,13 +289,35 @@ module.exports = {
   async getMyCheckins() {
     if (!this.auth.uid) return { errCode: -1, errMsg: '请先登录' }
     const uid = String(this.auth.uid)
-    const res = await col
-      .where({ 'checkedBy.userId': uid })
-      .field({ id: true, title: true, latitude: true, longitude: true, iconPath: true, width: true, height: true, checkedBy: true, checkinCount: true })
-      .get()
+    // P4：服务端 join active 路线，按 markerId 找到 marker 所属的路线集合，
+    // 让 my-checkins 卡片直接渲染"属于 X 路线"小 tag。归档路线不参与匹配
+    // （admin 把路线归档后不应再出现在用户历史卡片上）。
+    const [markerRes, routesRes] = await Promise.all([
+      col
+        .where({ 'checkedBy.userId': uid })
+        .field({ id: true, title: true, latitude: true, longitude: true, iconPath: true, width: true, height: true, checkedBy: true, checkinCount: true })
+        .get(),
+      colRoutes
+        .where({ status: 'active' })
+        .field({ id: true, name: true, markerIds: true })
+        .get()
+    ])
+
+    // markerId → [{id, name}] 的反向索引
+    const routesByMarkerId = new Map()
+    ;(routesRes.data || []).forEach(route => {
+      const ids = Array.isArray(route.markerIds) ? route.markerIds : []
+      ids.forEach(mid => {
+        const key = Number(mid)
+        if (!routesByMarkerId.has(key)) routesByMarkerId.set(key, [])
+        routesByMarkerId.get(key).push({ id: Number(route.id), name: String(route.name || '') })
+      })
+    })
+
     const list = []
-    ;(res.data || []).forEach(marker => {
+    ;(markerRes.data || []).forEach(marker => {
       const entries = (marker.checkedBy || []).filter(entry => entry && String(entry.userId || '') === uid)
+      const routesForMarker = routesByMarkerId.get(Number(marker.id)) || []
       entries.forEach(entry => {
         list.push({
           markerDocId: marker._id || '',
@@ -307,7 +329,8 @@ module.exports = {
           checkedAt: entry.checkedAt || 0,
           photoCloudURL: entry.photoCloudURL || null,
           note: entry.note || null,
-          repaired: entry.repaired === true
+          repaired: entry.repaired === true,
+          routes: routesForMarker
         })
       })
     })

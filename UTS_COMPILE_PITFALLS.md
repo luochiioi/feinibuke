@@ -1216,3 +1216,57 @@ node --check uniCloud-aliyun/cloudfunctions/user-center/index.obj.js
 **§规则 28 (跨 cloudfunction require) 提醒**：Task 4 的 `marker-center/route-completion.js` 不能 `require('../admin-center/route-service')`。需要在 marker-center 内复刻 `isRouteCompleted` / `calcRouteProgress` 最小写法，并由 `admin-center/route-service.test.js` + `marker-center/route-completion.test.js` 双侧测试守住 schema 一致。
 
 **§规则 32 占位**：如果 Task 3-5 真机验证踩出新坑（如 actionSheet 多入口冲突、scroll-view 嵌套滑动失效新场景、tag 容器换行异常等），在此 §十二 之后追加 §规则 32。本轮无新规则。
+
+### 规则 32：复合操作入口用 actionSheet 而不是新增底栏按钮
+
+P4 Task 5 给主地图加"主题路线"入口时，底部工具栏已经被 4 个 slot（任务 / 缩小 / 放大 / 定位）占满。再加一个按钮会挤压触控热区，且 uvue Android 上 flex 子元素超过容器宽度会出现"最后一个被切掉"现象（参 §10.4 / §规则 23 的同源根因：layout 不会折行）。
+
+正解：把"任务"按钮改成 actionSheet 入口：
+```ts
+function goTasks(): void {
+  uni.showActionSheet({
+    itemList: ['任务', '主题路线'],
+    success: (res: ShowActionSheetSuccess): void => {
+      if (res.tapIndex == 0) uni.navigateTo({ url: '/pages/tasks/tasks' })
+      if (res.tapIndex == 1) uni.navigateTo({ url: '/pages/routes/routes' })
+    }
+  })
+}
+```
+
+收益：
+1. 底栏 slot 数量不变，不破坏触控热区与视觉节奏。
+2. 未来增加"奖励兑换" / "我的徽章"等同类入口时，只需 itemList 多加一项，不动模板。
+3. actionSheet 5.07 真机稳定（与 §10.4 四次调整里 `showModal` ClassCastException 不同源），可以放心承担次级导航。
+
+**反模式**：在底栏挤新按钮、把"路线"塞进登录态 actionSheet 里（未登录用户也应该能看路线）、为单一新页面新建 tabBar 项（tabBar 只装真正的 4-5 个一级目的地）。
+
+### 规则 33：跨页响应载荷必须用 JSON.parse<T[]>() 解嵌套对象列表
+
+P4 Task 5 的 checkin.uvue 里有这一段：
+```ts
+const completedRoutes = extractCompletedRoutes(checkinResult!!)
+
+function extractCompletedRoutes(res: UTSJSONObject): CompletedRouteNotice[] {
+  const rawList = (res["data"] as UTSJSONObject)["completedRoutes"]
+  if (rawList == null) return []
+  // 必须 JSON.parse<T[]>()，不能 as CompletedRouteNotice[]
+  const jsonStr = JSON.stringify(rawList)
+  const parsed = JSON.parse<CompletedRouteNotice[]>(jsonStr)
+  return parsed ?? []
+}
+```
+
+**根因**（与 §九 法则 8 / §Phase 1.5/D 同源）：marker-center.checkin 的 `data.completedRoutes` 在 UTS 边界是 `Any`，强转 `as CompletedRouteNotice[]` 后访问 `.name / .reward` 属性时会触发 `ClassCastException: UTSJSONObject cannot be cast to CompletedRouteNotice`。
+
+**唯一安全写法**：先 `JSON.stringify(raw)` 再 `JSON.parse<T[]>(jsonStr)`，泛型 parse 会真实构造 typed 实例。同款模式已在 `cloudSync.pullActiveRoutes` / `cloudSync.pullMyCheckins` / `storage.uts` 等 5 处使用。
+
+**P4 Task 5 落地证据**：
+- `pages/checkin/checkin.uvue` 弹"路线完成"toast 走的就是这条边界
+- `utils/cloudSync.uts` 新增 `MyCheckinEntry.routes: MyCheckinRouteRef[]`，my-checkins 卡片渲染"属于 X 路线"小 tag 之前必须经过同款解析
+- `pages/route-detail/route-detail.uvue` 通过 `pullActiveRoutes` 拿到的 `progress.doneMarkerIds` 也是嵌套 number[]，必须 typed parse
+
+**反模式**：
+1. `as Foo[]` —— 编译过但运行炸
+2. `(res as UTSJSONObject)["data"] as Foo[]` —— 同上
+3. 用 `for (const item of arr)` 遍历未 typed parse 的数组 —— 访问 `.id / .name` 属性时随机崩

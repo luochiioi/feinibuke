@@ -3467,3 +3467,51 @@ P4 工作量预估：5 commits / 1-2 天。每个 task 都要单独 `node --test
 - Task 5：首页 actionSheet 加"主题路线" + my-checkins 卡片"属于 X 路线" tag（getMyCheckins 服务端 join routeIds）+ PITFALLS §规则 32（如果新踩坑）+ prompt 加 P4 完整落地段。
 
 **Task 3 真机验收前置**：写完 `routes.uvue` / `route-detail.uvue` 单页后必须先单独跑一次 HBuilderX 编译确认无 error 18 / display 报错，不要堆到 Task 4-5 才发现要回头改。
+
+## 2026-05-10 P4 全部 5 个 Task 落地（admin + App 端 P0 闭环）
+
+**落地 commits**：
+- `523e272` Task 1：admin-center route CRUD + 纯函数 helper + 10 例单测
+- `7c6dfd6` Task 2：uni-admin 路线管理页 + dashboard 入口
+- `6a3c1ab` hotfix：modal 输入框高度 + 文档维护
+- `6ccf5c9` Task 3：App 路线列表 + 详情 + cloudSync.pullActiveRoutes
+- `2469d7a` Task 4：route-completion 纯函数 + 8 例单测 + checkin/repairCheckin 触发 user_routes / rewards 幂等写入
+- *本次 Task 5 commit*：首页 actionSheet 入口 + checkin 完成庆祝 toast + my-checkins 路线 tag + getMyCheckins 服务端 join routes + 文档
+
+**Task 3 落地点**（App 端首次 P4 .uvue）
+- `marker-center.getActiveRoutes()`：公开读，未登录进度全 0；按 createdAt desc 返回 active 路线 + 当前 uid 进度。复刻 calcRouteProgress（Task 4 抽到 route-completion.js 后切到共享 helper）。
+- `cloudSync.pullActiveRoutes(): Promise<RouteWithProgress[]>` 用 JSON.parse<T[]>() 边界。
+- `pages/routes/routes.uvue`：列表 + 进度 pill + 进度条 + 奖励文案，单根 scroll-view（§规则 23），onShow 全局钩子（§规则 16），display 仅 flex/none（§规则 30）。
+- `pages/route-detail/route-detail.uvue`：onLoad 读 query.id，按 id 找路线后渲染节点列表（已打卡 ✓ / 待打卡 + "去这里" 按钮 → requestFocus + switchTab 回首页）。markerIds 客户端用 useMarkerStore 做 join 拿 title 与 lat/lng。
+
+**Task 4 落地点**（路线完成检测 + 奖励发放）
+- `marker-center/route-completion.js` 纯函数：calcRouteProgress / isRouteCompleted / findNewlyCompletedRoutes / buildUserRouteEntry / buildRouteRewardEntry。语义与 admin-center/route-service.js 完全一致，由两侧测试守 schema。
+- `detectAndRecordCompletedRoutes(uid, now)` 共享 helper：拉 active routes + 当前 uid 已记账 routeIds + done marker set → 算出新完成的路线 → 幂等写 user_routes + rewards。子写失败仅 console.log，不阻塞主 checkin（与 §28 审计失败不阻塞同思路）。
+- `checkin / repairCheckin` 写库后调用 detect，data 多带 `completedRoutes: [{id, name, reward}]`。
+- `getActiveRoutes` 重构使用共享 calcRouteProgress（删掉旧 inline）。
+- 新增集合 `user_routes`：`{ userId, routeId, routeName, completedAt, rewardClaimed:false }`，`(userId, routeId)` 由应用层查询防重复。
+
+**Task 5 落地点**（入口 + tag + 文档）
+- `pages/index/index.uvue` `goTasks()` 改 actionSheet：`['任务', '主题路线']`（§规则 32：底栏 slot 已满，复合入口走 actionSheet，避免触控热区被挤压）。
+- `pages/checkin/checkin.uvue` 打卡成功后解析 `data.completedRoutes`，1.8s 后弹"🎉 路线完成：X"toast（不弹 modal，§10.4 四次调整避坑）。`extractCompletedRoutes` 用 `JSON.parse<CompletedRouteNotice[]>()` 边界（§规则 33：嵌套对象列表禁止 as 假 cast）。
+- `marker-center.getMyCheckins` 服务端 join active 路线，返回每条 entry 多带 `routes: [{id, name}]`。归档路线不参与匹配（admin 归档后用户卡片不再显示 tag）。
+- `cloudSync.MyCheckinEntry` 类型加 `routes: MyCheckinRouteRef[]`。
+- `pages/my-checkins/my-checkins.uvue` 卡片下方渲染"属于 X 路线"小 tag。
+- `UTS_COMPILE_PITFALLS.md` 加 §规则 32（actionSheet 复合入口）+ §规则 33（跨页响应嵌套对象 typed parse）。
+
+**P4 真机验收清单**（HBuilderX 部署 admin + 重新打包 App + 双账号联调）
+1. 后台 → 主题路线管理 → 新增"湖湘文化之旅"，markerIds = [3, 5, 7]，奖励"20 积分 + 路线徽章"。
+2. App 用户 A 登录 → 底部"任务"按钮 → actionSheet 选"主题路线" → 路线卡片显示 0/3 进度条。
+3. 用户 A 打卡 marker 3 + 5 → 路线列表卡片自动 2/3，点详情进去看节点 1/2 是 ✓，节点 3 是"去这里"。
+4. 用户 A 打卡 marker 7 → checkin 完成 toast 后 1.8s 弹"🎉 路线完成：湖湘文化之旅"toast。
+5. 用户 A 打开 my-checkins → marker 3/5/7 卡片下方各有一个绿色"属于 湖湘文化之旅" tag。
+6. 用户 A 删除 marker 7 的打卡 → 路线列表回到 2/3；重新打卡 marker 7 → **不再弹路线完成 toast**（user_routes 幂等去重）；rewards 集合不再多一行（仍是 1 行）。
+7. 用户 B 完成同条路线 → user_routes 多一行（2 行），互不干扰。
+8. 后台把路线归档 → App 路线列表不再显示该路线；my-checkins 卡片的 tag 也消失（active 过滤）。
+
+**已知未做（明确踢出 P4 范围）**
+- 路线分支剧情、推送通知、照片合集、奖励兑换商城、评论 / 点赞 —— 留 P5+。
+- admin uploadFile 直传封面图（第一版用 cloudURL 输入框承载，admin 可手贴 cloudURL）。
+- "我的奖励" 页（rewards 集合已经在写，但还没有专门的 App 页面展示）。
+
+**下一轮（P5）候选起点**：根据真机反馈决定优先级——奖励兑换商城（rewards.rewardClaimed 给前端用）、推送通知（路线完成 push）、或路线推荐（基于位置 / 已完成 markers 推路线）。计划入口在 `docs/superpowers/plans/` 起新文件。

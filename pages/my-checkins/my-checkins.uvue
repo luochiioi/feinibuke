@@ -40,6 +40,12 @@
 
         <text class="card-time">{{ fmtTime(entry.checkedAt) }}</text>
 
+        <view v-if="entry.routes.length > 0" class="route-tags">
+          <view v-for="r in entry.routes" :key="r.id" class="route-tag">
+            <text class="route-tag-text">属于 {{ r.name }}</text>
+          </view>
+        </view>
+
         <view class="card-actions">
           <view class="action-btn ghost" @click="goFocus(entry)">
             <text class="action-btn-text accent">在地图上查看</text>
@@ -217,6 +223,10 @@ function confirmDelete(entry: MyCheckinEntry): void {
 .card-note.muted { color: #9aa4a8; }
 
 .card-time { font-size: 22rpx; color: #aaaaaa; margin-top: 8rpx; }
+
+.route-tags { display: flex; flex-direction: row; flex-wrap: wrap; margin-top: 12rpx; }
+.route-tag { background-color: #eef9f2; border-radius: 999rpx; padding: 6rpx 16rpx; margin-right: 10rpx; margin-bottom: 6rpx; }
+.route-tag-text { font-size: 20rpx; color: #2ecc71; font-weight: 500; }
 
 .card-actions { display: flex; flex-direction: row; margin-top: 16rpx; }
 

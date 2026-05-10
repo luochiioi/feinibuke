@@ -92,6 +92,29 @@ const canSubmit = computed((): boolean => {
   return withinRange.value && isSubmitting.value == false
 })
 
+// P4：把 marker-center.checkin 响应里的 data.completedRoutes 解析成 typed
+// 列表。PITFALLS §九 法则 8 / §Phase 1.5/D：嵌套对象列表必须用
+// JSON.parse<T[]>() 真实构造 typed 实例，as CompletedRouteNotice[] 在
+// 访问 .name 时会触发 ClassCastException。
+type CompletedRouteNotice = { id: number, name: string, reward: string }
+
+function extractCompletedRoutes(res: UTSJSONObject): CompletedRouteNotice[] {
+  const empty: CompletedRouteNotice[] = []
+  const rawData = res["data"]
+  if (rawData == null) return empty
+  const data = rawData as UTSJSONObject
+  const rawList = data["completedRoutes"]
+  if (rawList == null) return empty
+  try {
+    const jsonStr = JSON.stringify(rawList)
+    const parsed = JSON.parse<CompletedRouteNotice[]>(jsonStr)
+    return parsed ?? empty
+  } catch (e) {
+    console.log('[checkin] extractCompletedRoutes parse fail', e)
+    return empty
+  }
+}
+
 function getCloudErrorMessage(e: any): string {
   try {
     const err = e as Error
@@ -198,6 +221,8 @@ async function doSubmit(): Promise<void> {
       } catch (e) { console.log('Photo upload failed', e) }
     }
 
+    // 提升到 try 外让成功路径之后还能读到 data.completedRoutes（P4）
+    let checkinResult: UTSJSONObject | null = null
     try {
       const markerApi = uniCloud.importObject('marker-center', { customUI: true } as UniCloudImportObjectOptions)
       const checkinRes = await markerApi.checkin({
@@ -207,6 +232,7 @@ async function doSubmit(): Promise<void> {
         latitude: currentLocation.value?.latitude,
         longitude: currentLocation.value?.longitude
       }) as UTSJSONObject
+      checkinResult = checkinRes
       if ((checkinRes["errCode"] as number) !== 0) {
         const errMsg = checkinRes["errMsg"] as string
         // “请先登录” 来自 marker-center._before token 缺失/过期。引导用户去登录页。
@@ -255,6 +281,18 @@ async function doSubmit(): Promise<void> {
       setTimeout((): void => {
         uni.showToast({ title: `完成任务：${completed[0].name}`, icon: 'none' })
       }, 1000)
+    }
+    // P4：marker-center.checkin 响应里 data.completedRoutes 是这次打卡刚好
+    // 补完成的主题路线列表（已幂等去重）。展示一行庆祝 toast；不弹 modal
+    // 是因为 5.07 真机 showModal ClassCastException（PITFALLS §10.4 四次调整），
+    // 同时路线奖励是惊喜彩蛋，不应阻塞后续动作。
+    const completedRoutes = checkinResult != null ? extractCompletedRoutes(checkinResult!!) : ([] as CompletedRouteNotice[])
+    if (completedRoutes.length > 0) {
+      const first = completedRoutes[0]
+      const moreSuffix = completedRoutes.length > 1 ? ' 等 ' + completedRoutes.length.toString() + ' 条' : ''
+      setTimeout((): void => {
+        uni.showToast({ title: '🎉 路线完成：' + first.name + moreSuffix, icon: 'none', duration: 2500 })
+      }, 1800)
     }
     setTimeout((): void => { uni.navigateBack() }, 1500)
   } catch (e) {
