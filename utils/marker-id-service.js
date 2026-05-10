@@ -11,4 +11,10 @@ function normalizeMarkerId(value) {
   return null
 }
 
-module.exports = { normalizeMarkerId }
+function toSdkMarkerId(markerIndex) {
+  if (!Number.isInteger(markerIndex)) return null
+  if (markerIndex < 0 || markerIndex > 2147483646) return null
+  return markerIndex + 1
+}
+
+module.exports = { normalizeMarkerId, toSdkMarkerId }

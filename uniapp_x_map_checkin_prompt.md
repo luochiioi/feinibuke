@@ -3747,3 +3747,10 @@ P4 已经在 `rewards` 集合里写了 `{ userId, routeId|taskId, reward, source
 - 已打卡图标：`static/marker_checked.webp`
 - 只替换视觉文件且文件名不变时，不需要改代码。
 - 如果改文件名，需要同步修改 `stores/useMarkerStore.uts` 里的 `DEFAULT_MARKER_ICON` / `CHECKED_MARKER_ICON` 常量。
+
+
+## 2026-05-11 P5.2 hotfix note: native map marker id boundary
+
+Runtime feedback: after admin-created markers synced successfully, tapping the marker could log `marker tap id not found 215432543`, show `Marker syncing, try again`, and leave the map blank or stuck. Root cause: admin-created business marker ids are timestamp-sized, but native Android map `Marker.id` / `markertap.detail.markerId` is SDK-bound and can be truncated or boxed differently.
+
+Fix direction: keep `CheckinMarker.id` as the real business id, but render native map DTOs with small SDK ids from `sdkMarkerIdForIndex(index)`. `onMarkerTap` maps the SDK id back through `findBySdkMarkerId()` before opening marker-panel. Acceptance point: admin-created markers can be tapped directly, reopened after closing, and reopened after checkin without showing the syncing fallback.
