@@ -50,6 +50,12 @@
         "navigationStyle": "custom",
         "navigationBarTitleText": "注册"
       }
+    },
+    {
+      "path": "pages/my-checkins/my-checkins",
+      "style": {
+        "navigationBarTitleText": "我的打卡"
+      }
     }
   ],
   "globalStyle": {

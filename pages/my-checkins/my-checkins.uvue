@@ -1,0 +1,230 @@
+<template>
+  <scroll-view class="my-page" scroll-y direction="vertical" :show-scrollbar="false">
+    <view class="hero">
+      <text class="hero-title">我的打卡</text>
+      <text class="hero-sub">{{ summaryLabel }}</text>
+    </view>
+
+    <view v-if="errorText.length > 0" class="notice notice-error">
+      <text class="notice-text">{{ errorText }}</text>
+    </view>
+
+    <view v-if="loading" class="notice">
+      <text class="notice-text">正在加载我的打卡历史...</text>
+    </view>
+
+    <view v-if="!loading && needsLogin" class="empty-state">
+      <text class="empty-text">登录后才能查看自己的打卡历史。</text>
+      <view class="action-btn primary" @click="goLogin">
+        <text class="action-btn-text light">去登录</text>
+      </view>
+    </view>
+
+    <view v-if="!loading && !needsLogin && entries.length === 0" class="empty-state">
+      <text class="empty-text">还没有任何云端打卡记录。{{ '\n' }}去地图上找一个点完成打卡，这里就会出现历史卡片。</text>
+    </view>
+
+    <view v-for="(entry, idx) in entries" :key="entry.markerDocId + '_' + entry.checkedAt + '_' + idx.toString()" class="card-wrap">
+      <text v-if="shouldShowMonth(idx)" class="month-label">{{ monthLabel(entry.checkedAt) }}</text>
+
+      <view class="card">
+        <view class="card-head">
+          <text class="card-title">{{ entry.markerTitle }}</text>
+          <text v-if="entry.repaired" class="repair-tag">补传</text>
+        </view>
+
+        <image v-if="entry.photoCloudURL != null" :src="entry.photoCloudURL!!" class="card-photo" mode="aspectFill" @click="previewPhoto(entry)" />
+
+        <text class="card-note" v-if="entry.note != null">{{ entry.note!! }}</text>
+        <text class="card-note muted" v-else>无备注</text>
+
+        <text class="card-time">{{ fmtTime(entry.checkedAt) }}</text>
+
+        <view class="card-actions">
+          <view class="action-btn ghost" @click="goFocus(entry)">
+            <text class="action-btn-text accent">在地图上查看</text>
+          </view>
+          <view class="action-btn danger" @click="confirmDelete(entry)">
+            <text class="action-btn-text danger-text">删除打卡</text>
+          </view>
+        </view>
+      </view>
+    </view>
+  </scroll-view>
+</template>
+
+<script setup lang="uts">
+import { ref, computed } from 'vue'
+import type { MyCheckinEntry } from '@/utils/cloudSync'
+import { pullMyCheckins, deleteCloudCheckin } from '@/utils/cloudSync'
+import { state as userState, refreshUserIdFromAuth } from '@/user/index.uts'
+import { findById, loadFromStorage as loadMarkers, syncFromCloud } from '@/stores/useMarkerStore'
+import { requestFocus } from '@/stores/useMapStore'
+import { formatDateTime } from '@/utils/format'
+
+const entries = ref<MyCheckinEntry[]>([] as MyCheckinEntry[])
+const loading = ref<boolean>(false)
+const errorText = ref<string>('')
+const needsLogin = ref<boolean>(false)
+
+const summaryLabel = computed((): string => {
+  const total = entries.value.length
+  if (total === 0) return '尚无打卡记录'
+  return '共 ' + total.toString() + ' 条打卡'
+})
+
+// 模板里直接调用 import 进来的独立函数会报"找不到名称 invoke"（PITFALLS §C）
+// 所以包成 setup 作用域的本地函数
+function fmtTime(ts: number): string {
+  return formatDateTime(ts)
+}
+
+function monthLabel(ts: number): string {
+  const d = new Date(ts)
+  return d.getFullYear().toString() + ' 年 ' + (d.getMonth() + 1).toString() + ' 月'
+}
+
+// 按 checkedAt 降序排好后的 entries 里，相邻两条月份不同 → 显示分隔条
+function shouldShowMonth(idx: number): boolean {
+  if (idx === 0) return true
+  const cur = entries.value[idx]
+  const prev = entries.value[idx - 1]
+  return monthLabel(cur.checkedAt) !== monthLabel(prev.checkedAt)
+}
+
+async function reload(): Promise<void> {
+  loading.value = true
+  errorText.value = ''
+  try {
+    await refreshUserIdFromAuth()
+    const u = userState.userInfo
+    if (u == null) {
+      needsLogin.value = true
+      entries.value = [] as MyCheckinEntry[]
+      return
+    }
+    needsLogin.value = false
+    const list = await pullMyCheckins()
+    entries.value = list
+  } catch (e) {
+    console.log('[my-checkins] reload failed', e)
+    const err = e as Error
+    const msg = err.message
+    errorText.value = msg.length > 0 ? msg : '加载失败，请稍后重试'
+  } finally {
+    loading.value = false
+  }
+}
+
+onShow((): void => {
+  // PITFALLS §规则 16：onShow 必须用 uni-app x 全局钩子，不要从 vue import
+  reload()
+})
+
+function goLogin(): void {
+  uni.navigateTo({ url: '/pages/login/login' })
+}
+
+// 跳回主地图并 focus 这个 marker：与 tasks.uvue "定位"按钮同一套
+function goFocus(entry: MyCheckinEntry): void {
+  loadMarkers()
+  const found = findById(entry.markerId)
+  if (found != null) {
+    requestFocus(found)
+    uni.switchTab({ url: '/pages/index/index' })
+    return
+  }
+  // 本地找不到时仍切回首页，由首页 syncFromCloud 后再尝试找
+  uni.switchTab({ url: '/pages/index/index' })
+}
+
+function previewPhoto(entry: MyCheckinEntry): void {
+  const url = entry.photoCloudURL
+  if (url == null) return
+  // uni.previewImage 在 5.07 真机要求 string[]
+  const list: string[] = [url!!]
+  uni.previewImage({ urls: list, current: url!! })
+}
+
+// 删除采用 actionSheet（PITFALLS §10.4 四次调整：showModal 5.07 ClassCastException）
+function confirmDelete(entry: MyCheckinEntry): void {
+  uni.showActionSheet({
+    itemList: ['删除这条打卡'],
+    success: (res: ShowActionSheetSuccess): void => {
+      if (res.tapIndex == 0) {
+        runDelete(entry)
+      }
+    }
+  })
+}
+
+async function runDelete(entry: MyCheckinEntry): Promise<void> {
+  try {
+    const deleted = await deleteCloudCheckin(entry.markerId)
+    if (deleted) {
+      uni.showToast({ title: '已删除该打卡', icon: 'none' })
+    } else {
+      uni.showToast({ title: '云端未找到该记录', icon: 'none' })
+    }
+    // 删完先把云端事实拉回本地（为了让首页数据一致），再重拉本页列表
+    const u = userState.userInfo
+    const uid = u != null ? u!!.userId : null
+    try {
+      await syncFromCloud(uid)
+    } catch (e) {
+      console.log('[my-checkins] syncFromCloud after delete failed', e)
+    }
+    await reload()
+  } catch (e) {
+    console.log('[my-checkins] runDelete failed', e)
+    const err = e as Error
+    const msg = err.message
+    uni.showToast({ title: msg.length > 0 ? msg : '删除失败', icon: 'none' })
+  }
+}
+</script>
+
+<style>
+.my-page { flex: 1; width: 750rpx; height: 100%; background-color: #f5f7f6; }
+
+.hero { padding: 32rpx 28rpx 16rpx 28rpx; display: flex; flex-direction: column; }
+.hero-title { font-size: 40rpx; font-weight: bold; color: #1a1a1a; }
+.hero-sub { font-size: 24rpx; color: #7f8c8d; margin-top: 6rpx; }
+
+.notice { background-color: #eef9f2; border-radius: 12rpx; padding: 18rpx 20rpx; margin: 0 24rpx 16rpx 24rpx; }
+.notice-error { background-color: #fff1f0; }
+.notice-text { font-size: 24rpx; color: #2e9f5f; }
+.notice-error .notice-text { color: #d93026; }
+
+.empty-state { padding: 80rpx 40rpx; display: flex; flex-direction: column; align-items: center; }
+.empty-text { font-size: 26rpx; color: #999999; line-height: 40rpx; text-align: center; }
+
+.card-wrap { padding: 0 24rpx; margin-bottom: 16rpx; }
+
+.month-label { display: block; font-size: 22rpx; color: #88928d; margin: 12rpx 4rpx 8rpx 4rpx; font-weight: 500; }
+
+.card { background-color: #ffffff; border-radius: 20rpx; padding: 24rpx; display: flex; flex-direction: column; box-shadow: 0 4rpx 12rpx rgba(0,0,0,0.04); }
+
+.card-head { display: flex; flex-direction: row; align-items: center; }
+.card-title { flex: 1; font-size: 30rpx; font-weight: 600; color: #1a1a1a; }
+.repair-tag { font-size: 20rpx; color: #9a6b00; background-color: #fff7d6; border-radius: 999rpx; padding: 4rpx 14rpx; margin-left: 12rpx; }
+
+.card-photo { width: 100%; height: 360rpx; border-radius: 14rpx; background-color: #eef0f2; margin-top: 16rpx; }
+
+.card-note { font-size: 26rpx; color: #333333; margin-top: 14rpx; line-height: 38rpx; }
+.card-note.muted { color: #9aa4a8; }
+
+.card-time { font-size: 22rpx; color: #aaaaaa; margin-top: 8rpx; }
+
+.card-actions { display: flex; flex-direction: row; margin-top: 16rpx; }
+
+.action-btn { height: 64rpx; border-radius: 32rpx; padding: 0 22rpx; display: flex; align-items: center; justify-content: center; margin-right: 12rpx; }
+.action-btn.primary { background-color: #2ecc71; }
+.action-btn.ghost   { background-color: #eef6ef; }
+.action-btn.danger  { background-color: #fff2f1; }
+
+.action-btn-text { font-size: 24rpx; font-weight: 500; }
+.action-btn-text.light       { color: #ffffff; }
+.action-btn-text.accent      { color: #2ecc71; }
+.action-btn-text.danger-text { color: #ff3b30; }
+</style>

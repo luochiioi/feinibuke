@@ -310,6 +310,41 @@ export async function deleteCloudCheckin(markerId: number): Promise<boolean> {
   return rawDeleted as boolean
 }
 
+// ===== Pull my checkin history from cloud =====
+
+// 我的打卡页用：拉取当前 uid 的所有 entry 切片。云端已经按 checkedAt 倒序，
+// 这里只做 JSON.parse<T>() 边界并保留为 typed 对象列表，避免 UTSJSONObject 假 cast。
+export type MyCheckinEntry = {
+  markerDocId: string
+  markerId: number
+  markerTitle: string
+  latitude: number
+  longitude: number
+  iconPath: string
+  checkedAt: number
+  photoCloudURL: string | null
+  note: string | null
+  repaired: boolean
+}
+
+export async function pullMyCheckins(): Promise<MyCheckinEntry[]> {
+  try {
+    const markerApi = uniCloud.importObject('marker-center')
+    const res = await markerApi.getMyCheckins() as UTSJSONObject
+    const errCode = res["errCode"] as number
+    if (errCode !== 0) return [] as MyCheckinEntry[]
+    const raw = res["data"]
+    if (raw == null) return [] as MyCheckinEntry[]
+    // PITFALLS §九 法则 8：嵌套对象列表必须用 JSON.parse<T[]>() 真实构造 typed 实例
+    const jsonStr = JSON.stringify(raw)
+    const parsed = JSON.parse<MyCheckinEntry[]>(jsonStr)
+    return parsed ?? ([] as MyCheckinEntry[])
+  } catch (e) {
+    console.log('[cloudSync] pullMyCheckins failed', e)
+    return [] as MyCheckinEntry[]
+  }
+}
+
 // ===== Pull user tasks from cloud =====
 
 export async function pullUserTasks(): Promise<UTSJSONObject[]> {

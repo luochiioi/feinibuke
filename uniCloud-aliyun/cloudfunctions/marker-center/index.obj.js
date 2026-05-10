@@ -222,6 +222,38 @@ module.exports = {
     return { errCode: 0, errMsg: '删除成功' }
   },
 
+  // P3.4 个人打卡历史：仅返回 this.auth.uid 自己在 checkedBy[] 里的切片，
+  // 不暴露其他用户。每行扁平为 marker 基础信息 + 自己的 entry 字段，按
+  // checkedAt 降序，方便 App 我的打卡页直接渲染卡片列表。
+  async getMyCheckins() {
+    if (!this.auth.uid) return { errCode: -1, errMsg: '请先登录' }
+    const uid = String(this.auth.uid)
+    const res = await col
+      .where({ 'checkedBy.userId': uid })
+      .field({ id: true, title: true, latitude: true, longitude: true, iconPath: true, width: true, height: true, checkedBy: true, checkinCount: true })
+      .get()
+    const list = []
+    ;(res.data || []).forEach(marker => {
+      const entries = (marker.checkedBy || []).filter(entry => entry && String(entry.userId || '') === uid)
+      entries.forEach(entry => {
+        list.push({
+          markerDocId: marker._id || '',
+          markerId: marker.id,
+          markerTitle: marker.title,
+          latitude: marker.latitude,
+          longitude: marker.longitude,
+          iconPath: marker.iconPath || '/static/marker_default.png',
+          checkedAt: entry.checkedAt || 0,
+          photoCloudURL: entry.photoCloudURL || null,
+          note: entry.note || null,
+          repaired: entry.repaired === true
+        })
+      })
+    })
+    list.sort((a, b) => (b.checkedAt || 0) - (a.checkedAt || 0))
+    return { errCode: 0, data: list }
+  },
+
   async getUserTasks() {
     if (!this.auth.uid) return { errCode: -1, errMsg: '请先登录' }
     const res = await colTasks.where({ userId: this.auth.uid }).get()
