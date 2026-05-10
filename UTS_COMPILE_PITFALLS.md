@@ -1316,3 +1316,15 @@ P5-B-UI 把原 `.bottom-toolbar` 白底栏拆成左下/右下两组 `position:ab
 - 底栏相关 class 必须整段删除：`.bottom-toolbar` / `.bar-btn` / `.bar-label` / `.task-tone` / `.locate-tone`，避免旧样式残留把页面重新撑高。
 
 这条不是 Kotlin 类型错误，而是 uni-app x 原生布局的可点击区风险：浮动层视觉上“看起来没问题”，真机触控时却会抢占 marker-panel 的按钮区域。
+
+### 规则 36：CLI 编译依赖 HBuilderX 会话与项目导入状态；非 tabBar 页面不要用 switchTab
+
+HBuilderX 5.07 CLI 的 `launch app-android --compile true` 不是独立 headless 编译器，它会连接正在运行的 HBuilderX 实例。若 HBuilderX 没打开、项目没导入项目列表，或同时需要验证 `map_new` 与 `uni-admin` 两个工程但只打开了其中一个，CLI 可能卡住或超时且没有诊断输出。
+
+操作建议：
+- 先打开 HBuilderX UI，并确保 `C:\Users\Raymond\Desktop\feinibuke\map_new` 已在项目列表中。
+- 如果本轮还涉及后台管理，同步打开 `C:\Users\Raymond\Desktop\feinibuke\map_new\uni-admin`。
+- CLI 可以作为辅助，但最终仍以 HBuilderX UI 的 Android 真机编译结果为准。
+- 失败时优先看 HBuilderX 控制台/运行日志，不要把 CLI 超时当成代码编译失败。
+
+同轮真机反馈还确认：`pages/route-detail/route-detail.uvue` 的“去这里”按钮当前 `requestFocus(local)` 后调用 `uni.switchTab({ url:'/pages/index/index' })`，但项目 `pages.json` 没有配置 tabBar，因此 `switchTab` 对首页不是正确导航 API，表现为点击无反应。非 tabBar 页面返回首页应改用本项目已验证的普通页面导航链路，例如 `uni.navigateBack()` 到上一层，或在无法确定栈时 `uni.reLaunch({ url:'/pages/index/index' })`，并保留 `requestFocus(local)` 让首页 `consumeFocus()` 聚焦 marker。

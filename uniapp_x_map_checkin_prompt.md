@@ -3658,3 +3658,22 @@ P4 已经在 `rewards` 集合里写了 `{ userId, routeId|taskId, reward, source
 - 云函数语法：`node --check` 全套通过。
 - 静态自检：`pages/index/index.uvue`、`pages/rewards/rewards.uvue`、`utils/cloudSync.uts` 未命中 `Number\(` / `Number\.` / 非法 `display` / 旧底栏 class。
 - HBuilderX CLI：本机 `D:\HBuilderX\cli.exe` 可启动 v5.07，但 `launch app-android --compile true` 与 `lsp lint` 在当前会话均超时无诊断输出；本轮仍需在你的 HBuilderX UI 内做真机编译复验。
+
+## 2026-05-10 P5 真机反馈与 P5.1 下一轮方向
+
+**HBuilderX CLI 反馈**：
+- CLI 编译无诊断输出并超时，很可能与 HBuilderX UI 未运行、项目未导入/未打开有关。HBuilderX CLI 不是完全独立的 headless 编译器，后续验证前先打开 HBuilderX，并确认 `map_new` 与需要时的 `uni-admin` 都在项目列表里。
+
+**已确认产品语义**：
+- 主题路线完成不要求按顺序打卡；只要路线内全部 marker 都完成打卡，即可触发路线完成与奖励发放。后台 marker chip 的 1/2/3 顺序用于展示路线节点顺序，不是完成判定顺序。
+- `users.totalCheckins` 当前更像“累计打卡次数/历史计数”，管理员删除打卡记录后不会自动回退。因此用户管理页看到的打卡次数不等于“当前有效打卡数”。下一轮需要明确拆成两个口径：累计打卡数与有效打卡数，避免 admin 误判。
+- 后台目前缺少“用户获得了多少积分/奖励”的聚合视图。`rewards.reward` 仍是字符串文案，下一轮若要做积分统计，应补标准化数值字段或可靠解析 helper。
+
+**真机发现缺陷**：
+- App 端 `pages/route-detail/route-detail.uvue` 里“去这里”按钮点击无反应。当前实现是 `requestFocus(local)` 后 `uni.switchTab({ url:'/pages/index/index' })`，但项目没有 tabBar，`switchTab` 不适用。下一轮优先修为 `requestFocus(local)` + 可工作的普通导航链路，并用真机验证从路线详情回首页聚焦 marker。
+
+**P5.1 推荐迭代范围**：
+1. 修复路线详情“去这里”导航。
+2. 后台用户管理统计口径重构：显示“有效打卡数”和“累计打卡数”，删除记录后有效数能变化。
+3. 后台增加用户积分/奖励聚合：按 userId 汇总 rewards，展示总积分、待兑/已兑、路线奖励/任务奖励数量。
+4. 如本轮顺手触碰 rewards schema，补 `rewardPoints` 规范化字段；否则先用 helper 从 `reward` 文案解析整数积分并写单测守住。
