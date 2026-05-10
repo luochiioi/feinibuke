@@ -6,6 +6,21 @@
       @refresh="reload"
     />
 
+    <view class="quick-nav">
+      <view class="quick-chip quick-chip-active">
+        <text class="quick-chip-text">📋 打卡记录</text>
+      </view>
+      <view class="quick-chip" @click="goAudit">
+        <text class="quick-chip-text">🛡 审计日志</text>
+      </view>
+      <view class="quick-chip" @click="goDashboard">
+        <text class="quick-chip-text">📊 同步诊断</text>
+      </view>
+      <view class="quick-chip" @click="goDashboard">
+        <text class="quick-chip-text">🕐 最近打卡</text>
+      </view>
+    </view>
+
     <view v-if="errorText" class="notice error">{{ errorText }}</view>
     <view v-if="loading && list.length === 0" class="notice">正在加载打卡记录...</view>
 
@@ -114,6 +129,16 @@ const preview = ref({
 let offset = 0
 const limit = 20
 const api = uniCloud.importObject('admin-center')
+
+function goAudit() {
+  uni.navigateTo({ url: '/pages/audit/index' })
+}
+
+// "同步诊断" 与 "最近打卡" 都活在 dashboard。tabBar 切回去比新建独立页便宜，
+// 同源功能不重复，未来真要拆独立详情页再升级。
+function goDashboard() {
+  uni.switchTab({ url: '/pages/dashboard/index' })
+}
 
 function recordKey(record) {
   return [record.markerDocId || '', record.markerId || '', record.userId || '', record.checkedAt || 0].join('|')
@@ -562,4 +587,34 @@ async function doDeleteRecord(record, group, fromPreview, purgePhoto) {
 
 .empty { text-align: center; color: #999; line-height: 1.7; padding: 80rpx 20rpx; font-size: 26rpx; }
 .load-more { text-align: center; padding: 24rpx; color: #2ecc71; font-size: 26rpx; }
+
+.quick-nav {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: wrap;
+  gap: 12rpx;
+  padding: 16rpx 24rpx 8rpx 24rpx;
+}
+
+.quick-chip {
+  background: #fff;
+  border: 1rpx solid #e0e3e8;
+  border-radius: 999rpx;
+  padding: 10rpx 22rpx;
+}
+
+.quick-chip-active {
+  background: #2ecc71;
+  border-color: #2ecc71;
+}
+
+.quick-chip-text {
+  font-size: 24rpx;
+  color: #555;
+}
+
+.quick-chip-active .quick-chip-text {
+  color: #ffffff;
+  font-weight: 500;
+}
 </style>

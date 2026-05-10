@@ -11,7 +11,10 @@
 
     <view class="toolbar">
       <text class="page-desc">共 {{ tasks.length }} 个任务</text>
-      <button class="btn-sm" @click="syncTasks">同步默认任务</button>
+      <view class="toolbar-actions">
+        <button class="btn-sm" @click="syncTasks">同步默认任务</button>
+        <button class="btn-sm ghost" @click="goRoutes">主题路线</button>
+      </view>
     </view>
 
     <view v-if="!loading && tasks.length === 0" class="empty">
@@ -79,6 +82,10 @@ async function syncTasks() {
   }
 }
 
+function goRoutes() {
+  uni.navigateTo({ url: '/pages/routes/index' })
+}
+
 async function toggleStatus(t) {
   const newStatus = t.status === 'active' ? 'archived' : 'active'
   try {
@@ -122,6 +129,11 @@ async function toggleStatus(t) {
   color: #888;
 }
 
+.toolbar-actions {
+  display: flex;
+  gap: 12rpx;
+}
+
 .btn-sm {
   background: #2ecc71;
   color: #fff;
@@ -129,6 +141,12 @@ async function toggleStatus(t) {
   padding: 8rpx 20rpx;
   border-radius: 8rpx;
   border: none;
+}
+
+.btn-sm.ghost {
+  background: #fff;
+  color: #2ecc71;
+  border: 1rpx solid #2ecc71;
 }
 
 .task-card {
