@@ -109,7 +109,7 @@
 import { computed } from 'vue'
 import { deleteMarker, findById, isCheckedByUser, loadFromStorage as loadMarkers, markers, syncFromCloud } from '@/stores/useMarkerStore'
 import { currentLocation, distanceTo, getEffectiveCheckinRadius, pollLocationOnce, startTracking, stopTracking } from '@/stores/useLocationStore'
-import { activeMarker, consumeFocus, latitude, longitude, mapCenterLat, mapCenterLng, moveToLocation, onRegionChangeEnd, scale, setActiveMarker, zoomIn, zoomOut } from '@/stores/useMapStore'
+import { activeMarker, consumeFocus, consumeFocusPayload, latitude, longitude, mapCenterLat, mapCenterLng, moveToLocation, onRegionChangeEnd, scale, setActiveMarker, zoomIn, zoomOut } from '@/stores/useMapStore'
 import { loadFromStorage as loadTasks } from '@/stores/useTaskStore'
 import { state as userState, clearUserInfo, refreshUserIdFromAuth } from '@/user/index.uts'
 import type { CheckinMarker, CheckinEntry } from '@/types/marker'
@@ -325,21 +325,48 @@ async function centerOnUserOnce(): Promise<void> {
   }
 }
 
-onShow((): void => {
-  loadMarkers()
-  loadTasks()
-  startTracking()
+async function consumePendingFocus(): Promise<boolean> {
+  const payload = consumeFocusPayload()
+  if (payload != null) {
+    await refreshUserIdFromAuth()
+    const user = userState.userInfo
+    const uid = user != null ? user.userId : null
+    try {
+      await syncFromCloud(uid)
+    } catch (e) {
+      console.log('syncFromCloud before focus failed', e)
+    }
+    moveToLocation(payload.latitude, payload.longitude, 16)
+    const fresh = findById(payload.markerId)
+    if (fresh != null) {
+      setActiveMarker(fresh)
+      repairAndRefreshForUser(fresh.id)
+    } else {
+      uni.showToast({ title: '璇ユ墦鍗＄偣鏆傛湭鍚屾鍒版湰鍦?, icon: 'none' })
+    }
+    return true
+  }
   const target = consumeFocus()
   if (target != null) {
     moveToLocation(target.latitude, target.longitude, 16)
     setActiveMarker(target)
     repairAndRefreshForUser(target.id)
-    return
+    return true
   }
-  const marker = activeMarker.value
-  const markerId = marker != null ? marker.id : 0
-  repairAndRefreshForUser(markerId)
-  centerOnUserOnce()
+  return false
+}
+
+onShow((): void => {
+  loadMarkers()
+  loadTasks()
+  startTracking()
+  consumePendingFocus().then((consumed: boolean): void => {
+    if (consumed) return
+    const marker = activeMarker.value
+    const markerId = marker != null ? marker.id : 0
+    repairAndRefreshForUser(markerId)
+    centerOnUserOnce()
+  })
 })
 
 onHide((): void => {

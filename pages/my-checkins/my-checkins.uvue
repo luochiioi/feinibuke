@@ -64,8 +64,8 @@ import { ref, computed } from 'vue'
 import type { MyCheckinEntry } from '@/utils/cloudSync'
 import { pullMyCheckins, deleteCloudCheckin } from '@/utils/cloudSync'
 import { state as userState, refreshUserIdFromAuth } from '@/user/index.uts'
-import { findById, loadFromStorage as loadMarkers, syncFromCloud } from '@/stores/useMarkerStore'
-import { requestFocus } from '@/stores/useMapStore'
+import { loadFromStorage as loadMarkers, syncFromCloud } from '@/stores/useMarkerStore'
+import { requestFocusById } from '@/stores/useMapStore'
 import { formatDateTime } from '@/utils/format'
 
 const entries = ref<MyCheckinEntry[]>([] as MyCheckinEntry[])
@@ -134,14 +134,8 @@ function goLogin(): void {
 // 跳回主地图并 focus 这个 marker：与 tasks.uvue "定位"按钮同一套
 function goFocus(entry: MyCheckinEntry): void {
   loadMarkers()
-  const found = findById(entry.markerId)
-  if (found != null) {
-    requestFocus(found)
-    uni.switchTab({ url: '/pages/index/index' })
-    return
-  }
-  // 本地找不到时仍切回首页，由首页 syncFromCloud 后再尝试找
-  uni.switchTab({ url: '/pages/index/index' })
+  requestFocusById(entry.markerId, entry.latitude, entry.longitude, entry.markerTitle)
+  uni.reLaunch({ url: '/pages/index/index' })
 }
 
 function previewPhoto(entry: MyCheckinEntry): void {

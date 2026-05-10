@@ -56,7 +56,7 @@ import { ref, computed } from 'vue'
 import type { RouteWithProgress } from '@/utils/cloudSync'
 import { pullActiveRoutes } from '@/utils/cloudSync'
 import { findById, loadFromStorage as loadMarkers } from '@/stores/useMarkerStore'
-import { requestFocus } from '@/stores/useMapStore'
+import { requestFocusByMarker } from '@/stores/useMapStore'
 import type { CheckinMarker } from '@/types/marker'
 
 type RouteStep = {
@@ -136,13 +136,8 @@ function goMarker(step: RouteStep): void {
     uni.showToast({ title: '该打卡点已下架', icon: 'none' })
     return
   }
-  requestFocus(local!!)
-  const pages = getCurrentPages()
-  if (pages.length > 1) {
-    uni.navigateBack()
-  } else {
-    uni.reLaunch({ url: '/pages/index/index' })
-  }
+  requestFocusByMarker(local!!)
+  uni.reLaunch({ url: '/pages/index/index' })
 }
 
 // PITFALLS §规则 16：onLoad / onShow 用 uni-app x 全局钩子，不要从 vue import

@@ -1,6 +1,15 @@
 import { ref } from 'vue'
 import type { CheckinMarker } from '@/types/marker'
 
+const KEY_PENDING_FOCUS = 'pending_map_focus'
+
+export type FocusPayload = {
+  markerId: number
+  latitude: number
+  longitude: number
+  title: string
+}
+
 export const latitude = ref<number>(39.9163)
 export const longitude = ref<number>(116.3972)
 export const scale = ref<number>(12)
@@ -9,6 +18,7 @@ export const mapCenterLat = ref<number>(39.9163)
 export const mapCenterLng = ref<number>(116.3972)
 export const mapContext = ref<UTSJSONObject | null>(null)
 export const focusTarget = ref<CheckinMarker | null>(null)
+export const focusPayload = ref<FocusPayload | null>(null)
 
 export function setActiveMarker(m: CheckinMarker | null): void {
   activeMarker.value = m
@@ -22,5 +32,52 @@ export function moveToLocation(lat: number, lng: number, targetScale: number = 1
 export function onRegionChangeEnd(centerLat: number, centerLng: number): void {
   mapCenterLat.value = centerLat; mapCenterLng.value = centerLng
 }
-export function requestFocus(marker: CheckinMarker): void { focusTarget.value = marker }
+
+function persistFocusPayload(payload: FocusPayload): void {
+  focusPayload.value = payload
+  uni.setStorageSync(KEY_PENDING_FOCUS, JSON.stringify(payload))
+}
+
+export function requestFocusByMarker(marker: CheckinMarker): void {
+  focusTarget.value = marker
+  persistFocusPayload({
+    markerId: marker.id,
+    latitude: marker.latitude,
+    longitude: marker.longitude,
+    title: marker.title
+  } as FocusPayload)
+}
+
+export function requestFocusById(markerId: number, lat: number, lng: number, title: string): void {
+  focusTarget.value = null
+  persistFocusPayload({
+    markerId: markerId,
+    latitude: lat,
+    longitude: lng,
+    title: title
+  } as FocusPayload)
+}
+
+export function requestFocus(marker: CheckinMarker): void { requestFocusByMarker(marker) }
+
+export function consumeFocusPayload(): FocusPayload | null {
+  const inMemory = focusPayload.value
+  if (inMemory != null) {
+    focusPayload.value = null
+    uni.removeStorageSync(KEY_PENDING_FOCUS)
+    return inMemory
+  }
+  const raw = uni.getStorageSync(KEY_PENDING_FOCUS) as string | null
+  if (raw == null || raw.length === 0) return null
+  try {
+    const parsed = JSON.parse<FocusPayload>(raw)
+    uni.removeStorageSync(KEY_PENDING_FOCUS)
+    return parsed
+  } catch (e) {
+    console.log('consumeFocusPayload failed', e)
+    uni.removeStorageSync(KEY_PENDING_FOCUS)
+    return null
+  }
+}
+
 export function consumeFocus(): CheckinMarker | null { const m = focusTarget.value; focusTarget.value = null; return m }
