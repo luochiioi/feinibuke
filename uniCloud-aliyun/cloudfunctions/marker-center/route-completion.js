@@ -6,6 +6,8 @@
 // 写库副作用集中在 marker-center/index.obj.js 的 checkin / repairCheckin，
 // 这里只暴露 (route, doneIds, alreadyCompletedRouteIds) → 计划对象的纯函数。
 
+const { parseRewardPoints } = require('./reward-service')
+
 function calcRouteProgress(route, userCheckedMarkerIds) {
   const routeIds = (route && Array.isArray(route.markerIds)) ? route.markerIds : []
   const userIds = Array.isArray(userCheckedMarkerIds) ? userCheckedMarkerIds : []
@@ -73,11 +75,13 @@ function buildUserRouteEntry(userId, route, now) {
 // routeName / source: 'route' 用于区分来源。task 奖励行没有 source 字段，
 // 读取方应把缺失的 source 当作 'task'。
 function buildRouteRewardEntry(userId, route, now) {
+  const reward = String((route && route.reward) || '')
   return {
     userId: String(userId || ''),
     routeId: Number(route && route.id),
     routeName: String((route && route.name) || ''),
-    reward: String((route && route.reward) || ''),
+    reward,
+    rewardPoints: parseRewardPoints(reward),
     source: 'route',
     earnedAt: Number(now),
     rewardClaimed: false

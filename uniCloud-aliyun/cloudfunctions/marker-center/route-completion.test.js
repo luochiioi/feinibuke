@@ -87,6 +87,7 @@ test('buildRouteRewardEntry tags source=route and keeps userId/reward/earnedAt �
     routeId: 100,
     routeName: '湖湘文化之旅',
     reward: '20 积分',
+    rewardPoints: 20,
     source: 'route',
     earnedAt: 1700000000,
     rewardClaimed: false

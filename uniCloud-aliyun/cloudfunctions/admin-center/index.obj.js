@@ -14,10 +14,12 @@ const {
   groupCheckinRecordsByMarker,
   createDeleteCheckinRecordPlan,
   createPurgeUserCheckinsPlan,
+  deriveActiveCheckinsFromMarkers,
   deriveUserStatsFromMarkers,
   normalizeAdminUsers,
   buildSyncDiagnostics
 } = require('./marker-service')
+const { aggregateRewardStatsByUser } = require('./reward-service')
 const { buildAuditLogEntry, ALLOWED_TYPES: AUDIT_TYPES } = require('./audit-service')
 const {
   ROUTE_STATUSES,
@@ -136,15 +138,29 @@ module.exports = {
 
   async getUsers(data) {
     const { offset, limit } = toPageArgs(data)
-    const [totalRes, userRes, profileRes, markerRes] = await Promise.all([
+    const [totalRes, userRes, profileRes, markerRes, rewardRes] = await Promise.all([
       colUsers.count(),
       colUsers.skip(offset).limit(limit).get(),
       colUserProfiles.get(),
-      colMarkers.field({ createdBy: true, checkedBy: true }).get()
+      colMarkers.field({ createdBy: true, checkedBy: true }).get(),
+      colRewards.field({
+        userId: true,
+        reward: true,
+        rewardPoints: true,
+        rewardClaimed: true,
+        source: true,
+        routeId: true,
+        taskId: true
+      }).get()
     ])
 
     return ok({
-      list: normalizeAdminUsers(userRes.data, profileRes.data, deriveUserStatsFromMarkers(markerRes.data)),
+      list: normalizeAdminUsers(
+        userRes.data,
+        profileRes.data,
+        deriveActiveCheckinsFromMarkers(markerRes.data),
+        aggregateRewardStatsByUser(rewardRes.data)
+      ),
       total: totalRes.total,
       offset,
       limit

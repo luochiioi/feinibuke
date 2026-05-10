@@ -14,6 +14,7 @@ const {
   createDeleteCheckinRecordPlan,
   createPurgeUserCheckinsPlan,
   deriveUserStatsFromMarkers,
+  deriveActiveCheckinsFromMarkers,
   normalizeAdminUsers,
   buildSyncDiagnostics
 } = require('./marker-service')
@@ -379,8 +380,16 @@ test('normalizeAdminUsers reads accounts from uni-id-users and merges profile st
       nickname: '管理员',
       role: 'admin',
       totalCheckins: 3,
+      activeCheckins: 2,
       totalPhotos: 2,
       totalCreated: 1,
+      totalRewardPoints: 0,
+      claimedRewardPoints: 0,
+      pendingRewardPoints: 0,
+      routeRewardCount: 0,
+      taskRewardCount: 0,
+      claimedCount: 0,
+      pendingCount: 0,
       createdAt: 1000
     },
     {
@@ -390,9 +399,74 @@ test('normalizeAdminUsers reads accounts from uni-id-users and merges profile st
       nickname: 'traveler',
       role: ['user'],
       totalCheckins: 1,
+      activeCheckins: 1,
       totalPhotos: 0,
       totalCreated: 2,
+      totalRewardPoints: 0,
+      claimedRewardPoints: 0,
+      pendingRewardPoints: 0,
+      routeRewardCount: 0,
+      taskRewardCount: 0,
+      claimedCount: 0,
+      pendingCount: 0,
       createdAt: null
     }
   ])
+})
+
+test('deriveActiveCheckinsFromMarkers counts current checkedBy records per user', () => {
+  const activeStats = deriveActiveCheckinsFromMarkers([
+    {
+      id: 1,
+      checkedBy: [
+        { userId: 'uid-1', checkedAt: 100, photoCloudURL: 'a.jpg' },
+        { userId: 'uid-2', checkedAt: 200 }
+      ]
+    },
+    {
+      id: 2,
+      checkedBy: [
+        { userId: 'uid-1', checkedAt: 300 },
+        { userId: 'uid-3', checkedAt: 400, photoCloudURL: 'c.jpg' }
+      ]
+    },
+    {
+      id: 3,
+      checkedBy: []
+    }
+  ])
+
+  assert.equal(activeStats.get('uid-1').activeCheckins, 2)
+  assert.equal(activeStats.get('uid-1').totalPhotos, 1)
+  assert.equal(activeStats.get('uid-2').activeCheckins, 1)
+  assert.equal(activeStats.get('uid-3').activeCheckins, 1)
+  assert.equal(activeStats.has('missing-user'), false)
+})
+
+test('normalizeAdminUsers exposes activeCheckins separately from cumulative totalCheckins', () => {
+  const activeStats = deriveActiveCheckinsFromMarkers([
+    {
+      checkedBy: [
+        { userId: 'uid-1', photoCloudURL: 'a.jpg' },
+        { userId: 'uid-2', photoCloudURL: null }
+      ]
+    }
+  ])
+
+  const users = normalizeAdminUsers([
+    { _id: 'uid-1', username: 'alice', nickname: 'Alice' },
+    { _id: 'uid-2', username: 'bob', nickname: 'Bob' },
+    { _id: 'uid-3', username: 'cara', nickname: 'Cara' }
+  ], [
+    { userId: 'uid-1', totalCheckins: 5, totalPhotos: 3, totalCreated: 1 },
+    { userId: 'uid-3', totalCheckins: 7, totalPhotos: 2, totalCreated: 0 }
+  ], activeStats)
+
+  assert.equal(users[0].totalCheckins, 5)
+  assert.equal(users[0].activeCheckins, 1)
+  assert.equal(users[0].totalPhotos, 3)
+  assert.equal(users[1].totalCheckins, 1)
+  assert.equal(users[1].activeCheckins, 1)
+  assert.equal(users[2].totalCheckins, 7)
+  assert.equal(users[2].activeCheckins, 0)
 })

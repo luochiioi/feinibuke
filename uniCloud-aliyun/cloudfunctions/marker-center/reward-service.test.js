@@ -3,13 +3,38 @@ const test = require('node:test')
 
 const {
   buildClaimedReward,
-  enrichRewardWithSource
+  buildTaskRewardEntry,
+  enrichRewardWithSource,
+  parseRewardPoints
 } = require('./reward-service')
 
 test('buildClaimedReward marks reward claimed with server timestamp', () => {
   assert.deepEqual(buildClaimedReward({ rewardClaimed: false }, 1800000000000), {
     rewardClaimed: true,
     claimedAt: 1800000000000
+  })
+})
+
+test('parseRewardPoints extracts integer points from reward text', () => {
+  assert.equal(parseRewardPoints('20 积分'), 20)
+  assert.equal(parseRewardPoints('20 points'), 20)
+  assert.equal(parseRewardPoints('no numeric reward'), 0)
+})
+
+test('buildTaskRewardEntry stores normalized rewardPoints for new task rewards', () => {
+  assert.deepEqual(buildTaskRewardEntry('uid-1', {
+    id: 'task_001',
+    name: 'Palace Explorer',
+    reward: '10 points'
+  }, 1700000000000), {
+    userId: 'uid-1',
+    taskId: 'task_001',
+    taskName: 'Palace Explorer',
+    reward: '10 points',
+    rewardPoints: 10,
+    source: 'task',
+    earnedAt: 1700000000000,
+    rewardClaimed: false
   })
 })
 

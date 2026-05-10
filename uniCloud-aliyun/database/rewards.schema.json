@@ -1,6 +1,6 @@
 {
   "bsonType": "object",
-  "required": ["userId", "taskId", "taskName", "reward"],
+  "required": ["userId", "reward"],
   "permission": {
     "read": "auth.uid != null",
     "create": "auth.uid != null",
@@ -12,7 +12,13 @@
     "userId": { "bsonType": "string" },
     "taskId": { "bsonType": "string" },
     "taskName": { "bsonType": "string" },
+    "routeId": { "bsonType": "int" },
+    "routeName": { "bsonType": "string" },
+    "source": { "bsonType": "string", "enum": ["route", "task"] },
     "reward": { "bsonType": "string" },
+    "rewardPoints": { "bsonType": "int" },
+    "rewardClaimed": { "bsonType": "bool" },
+    "claimedAt": { "bsonType": "int" },
     "earnedAt": { "bsonType": "int", "description": "获得时间戳（毫秒）" }
   }
 }

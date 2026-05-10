@@ -8,10 +8,32 @@ function n(value) {
   return Number.isFinite(num) ? num : null
 }
 
+function parseRewardPoints(rewardText) {
+  const text = s(rewardText)
+  const match = text.match(/(\d+)/)
+  if (!match) return 0
+  const num = Number(match[1])
+  return Number.isFinite(num) ? Math.floor(num) : 0
+}
+
 function buildClaimedReward(reward, now) {
   return {
     rewardClaimed: true,
     claimedAt: Number(now)
+  }
+}
+
+function buildTaskRewardEntry(userId, task, now) {
+  const reward = s(task && task.reward)
+  return {
+    userId: s(userId),
+    taskId: s(task && task.id),
+    taskName: s(task && task.name),
+    reward,
+    rewardPoints: parseRewardPoints(reward),
+    source: 'task',
+    earnedAt: Number(now),
+    rewardClaimed: false
   }
 }
 
@@ -50,5 +72,7 @@ function enrichRewardWithSource(reward, routes, tasks) {
 
 module.exports = {
   buildClaimedReward,
-  enrichRewardWithSource
+  buildTaskRewardEntry,
+  enrichRewardWithSource,
+  parseRewardPoints
 }

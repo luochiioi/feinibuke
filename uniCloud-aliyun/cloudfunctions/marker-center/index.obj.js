@@ -15,7 +15,7 @@ const {
   buildUserRouteEntry,
   buildRouteRewardEntry
 } = require('./route-completion')
-const { buildClaimedReward, enrichRewardWithSource } = require('./reward-service')
+const { buildClaimedReward, buildTaskRewardEntry, enrichRewardWithSource } = require('./reward-service')
 const { buildAuditLogEntry } = require('./audit-service')
 
 // 拉当前 uid 在所有 marker 中的"已打卡 markerId 集合"。
@@ -499,7 +499,7 @@ async function checkTasksForMarker(userId, marker) {
     }
     const rewardExists = await colRewards.where({ userId, taskId: task.id }).get()
     if (!rewardExists.data.length) {
-      await colRewards.add({ userId, taskId: task.id, taskName: task.name, reward: task.reward, earnedAt: now })
+      await colRewards.add(buildTaskRewardEntry(userId, task, now))
     }
     completed.push({ taskId: task.id, taskName: task.name, reward: task.reward })
   }

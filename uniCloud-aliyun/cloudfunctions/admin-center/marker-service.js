@@ -393,12 +393,12 @@ function ensureStats(map, userId) {
   const key = String(userId || '')
   if (!key) return null
   if (!map.has(key)) {
-    map.set(key, { totalCheckins: 0, totalPhotos: 0, totalCreated: 0 })
+    map.set(key, { activeCheckins: 0, totalPhotos: 0, totalCreated: 0 })
   }
   return map.get(key)
 }
 
-function deriveUserStatsFromMarkers(markers) {
+function deriveActiveCheckinsFromMarkers(markers) {
   const statsByUserId = new Map()
   ;(markers || []).forEach(marker => {
     const creator = ensureStats(statsByUserId, marker && marker.createdBy)
@@ -407,14 +407,34 @@ function deriveUserStatsFromMarkers(markers) {
     ;((marker && marker.checkedBy) || []).forEach(entry => {
       const stats = ensureStats(statsByUserId, entry && entry.userId)
       if (!stats) return
-      stats.totalCheckins += 1
+      stats.activeCheckins += 1
       if (entry.photoCloudURL) stats.totalPhotos += 1
     })
   })
   return statsByUserId
 }
 
-function normalizeAdminUsers(uniUsers, profileUsers, markerStats) {
+function deriveUserStatsFromMarkers(markers) {
+  const statsByUserId = deriveActiveCheckinsFromMarkers(markers)
+  statsByUserId.forEach(stats => {
+    stats.totalCheckins = stats.activeCheckins
+  })
+  return statsByUserId
+}
+
+function zeroRewardStats() {
+  return {
+    totalRewardPoints: 0,
+    claimedRewardPoints: 0,
+    pendingRewardPoints: 0,
+    routeRewardCount: 0,
+    taskRewardCount: 0,
+    claimedCount: 0,
+    pendingCount: 0
+  }
+}
+
+function normalizeAdminUsers(uniUsers, profileUsers, markerStats, rewardStats) {
   const statsByUserId = new Map()
   ;(profileUsers || []).forEach(item => {
     if (item && item.userId) statsByUserId.set(String(item.userId), item)
@@ -423,9 +443,14 @@ function normalizeAdminUsers(uniUsers, profileUsers, markerStats) {
   return (uniUsers || []).map(user => {
     const uid = String((user && user._id) || '')
     const username = String((user && user.username) || uid)
-    const stats = statsByUserId.get(uid) || statsByUserId.get(username) ||
-      (markerStats && (markerStats.get(uid) || markerStats.get(username))) || {}
+    const profileStats = statsByUserId.get(uid) || statsByUserId.get(username) || {}
+    const activeStats = (markerStats && (markerStats.get(uid) || markerStats.get(username))) || {}
+    const rewards = (rewardStats && (rewardStats.get(uid) || rewardStats.get(username))) || zeroRewardStats()
     const nickname = String((user && user.nickname) || username || uid)
+    const activeCheckins = Number(activeStats.activeCheckins || activeStats.totalCheckins || 0)
+    const totalCheckins = profileStats.totalCheckins != null
+      ? Number(profileStats.totalCheckins || 0)
+      : Number(activeStats.totalCheckins != null ? activeStats.totalCheckins : activeCheckins)
 
     return {
       _id: uid,
@@ -433,9 +458,17 @@ function normalizeAdminUsers(uniUsers, profileUsers, markerStats) {
       userId: username,
       nickname,
       role: user && user.role != null ? user.role : null,
-      totalCheckins: Number(stats.totalCheckins || 0),
-      totalPhotos: Number(stats.totalPhotos || 0),
-      totalCreated: Number(stats.totalCreated || 0),
+      totalCheckins,
+      activeCheckins,
+      totalPhotos: Number(profileStats.totalPhotos != null ? profileStats.totalPhotos : (activeStats.totalPhotos || 0)),
+      totalCreated: Number(profileStats.totalCreated != null ? profileStats.totalCreated : (activeStats.totalCreated || 0)),
+      totalRewardPoints: Number(rewards.totalRewardPoints || 0),
+      claimedRewardPoints: Number(rewards.claimedRewardPoints || 0),
+      pendingRewardPoints: Number(rewards.pendingRewardPoints || 0),
+      routeRewardCount: Number(rewards.routeRewardCount || 0),
+      taskRewardCount: Number(rewards.taskRewardCount || 0),
+      claimedCount: Number(rewards.claimedCount || 0),
+      pendingCount: Number(rewards.pendingCount || 0),
       createdAt: (user && (user.createdAt || user.register_date)) || null
     }
   })
@@ -455,6 +488,7 @@ module.exports = {
   groupCheckinRecordsByMarker,
   createDeleteCheckinRecordPlan,
   createPurgeUserCheckinsPlan,
+  deriveActiveCheckinsFromMarkers,
   deriveUserStatsFromMarkers,
   normalizeAdminUsers,
   buildSyncDiagnostics
