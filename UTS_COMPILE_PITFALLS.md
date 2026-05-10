@@ -1198,3 +1198,21 @@ node --check uniCloud-aliyun/cloudfunctions/user-center/index.obj.js
 ```
 
 下一轮 P3.4 计划入口：`docs/superpowers/plans/2026-05-09-p3.4-record-cleanup-and-personal-history.md`。
+
+## 十二、P4 主题路线进度面包屑（2026-05-10）
+
+**已落地（admin 链路，不触发 uvue 限制）**：
+- `523e272` admin-center route CRUD + 纯函数 helper + 10 例单测
+- `7c6dfd6` uni-admin 路线管理页 + dashboard 入口
+
+**App 端（.uvue / .uts）尚未开始**。下轮 Task 3 起将首次在 P4 写 `.uvue`，必须按以下既有规则写代码，本轮没有新增的运行期/编译期规则：
+
+- **§规则 16**：路线列表页 `routes.uvue` / 详情页 `route-detail.uvue` 的 `onShow` / `onHide` 必须用 uni-app x 全局钩子，**不要从 vue import**。
+- **§规则 23**：路线详情页若有"已打卡 marker 网格"，**不要**在外层 scroll-view 里嵌横向 scroll-view。用 `display: flex; flex-direction: row; flex-wrap: wrap` 让网格自然换行。
+- **§规则 29**：`cloudSync.uts pullActiveRoutes()` 解析云端响应必须用 `JSON.parse<RouteWithProgress[]>(JSON.stringify(raw))`，不要写 `as RouteWithProgress[]`（参 §Phase 1.5/D / §九 法则 8 的 ClassCastException 来源）。
+- **§规则 30**：`display` 仅 `flex|none`；admin Vue 页里的 `display: grid` / `position: fixed` / `inset: 0` 等写法在 uvue Android 上会爆，**不能照抄管理页 CSS**。函数提升不稳：被回调引用的 async 函数（如 `runCompleteRouteCelebrate` 之于 `confirmCompleteRoute`）必须**词法上**先声明、再被引用。
+- **§规则 14**：路线完成检测里写 `user_routes` 的 `userId` 必须取 `this.auth.uid`，不能信客户端传值。
+
+**§规则 28 (跨 cloudfunction require) 提醒**：Task 4 的 `marker-center/route-completion.js` 不能 `require('../admin-center/route-service')`。需要在 marker-center 内复刻 `isRouteCompleted` / `calcRouteProgress` 最小写法，并由 `admin-center/route-service.test.js` + `marker-center/route-completion.test.js` 双侧测试守住 schema 一致。
+
+**§规则 32 占位**：如果 Task 3-5 真机验证踩出新坑（如 actionSheet 多入口冲突、scroll-view 嵌套滑动失效新场景、tag 容器换行异常等），在此 §十二 之后追加 §规则 32。本轮无新规则。

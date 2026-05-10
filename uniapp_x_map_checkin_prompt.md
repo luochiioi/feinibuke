@@ -3437,3 +3437,33 @@ P4 验收重点：
 - 后台归档路线 → App 列表不再显示。
 
 P4 工作量预估：5 commits / 1-2 天。每个 task 都要单独 `node --test` + `node --check` 验证后再 commit，避免 P3.4 那种"一气推完才发现编译错"的返工。
+
+## 2026-05-10 P4 Task 1+2 已落地（admin 链路闭环，App 端待完成）
+
+**落地 commits**：
+- `523e272` feat(routes): admin-center route CRUD + sanitize/progress helpers
+- `7c6dfd6` feat(routes): admin routes management page + dashboard entry
+
+**Task 1（云函数 + 纯函数 helper）**
+- 新增 `uniCloud-aliyun/cloudfunctions/admin-center/route-service.js`：
+  - `sanitizeRouteCreate / sanitizeRouteUpdate`：白名单 + 长度校验（name ≤30、description ≤200、reward ≤100、coverImage ≤1024、markerIds ≤50 项且去重 + 正整数）。
+  - `validateRouteMarkerIds(markerIds, allMarkerIds)` 校验外键存在。
+  - `calcRouteProgress / isRouteCompleted` 纯计算，下一轮 marker-center 复刻最小写法（uniCloud 不支持跨 cloudfunction require）。
+- 新增 `route-service.test.js` 共 10 例：覆盖 sanitize 边界（空名 / 超长 / markerIds 空 / 非数组 / 0 与字符串 / 状态白名单）、update 局部字段、validateRouteMarkerIds 缺失检测、progress 计算、完成判定。
+- `admin-center/index.obj.js` 新增 5 个云方法 `getRoutes / createRoute / updateRoute / deleteRoute / getRouteProgressByUser`。`createRoute / updateRoute` 落库前对照 `tourism_markers.id` 全表校验 markerIds；`getRouteProgressByUser` 走 `'checkedBy.userId': uid` 嵌套字段查询（与 §规则 29 同款索引友好写法）。
+- 全套验证 46 测试 + 7 语法检查全绿。
+
+**Task 2（uni-admin 路线管理页）**
+- 新增 `uni-admin/pages/routes/index.vue`：列表 + 状态 tab（全部/进行中/已归档）+ 关键词搜索 + 新增/编辑 modal（marker chip 选择器自带 1/2/3 顺序徽章，按勾选顺序作为路线顺序）+ 归档/激活快捷切换 + 删除二次确认（红色 confirmText）。
+- `uni-admin/pages.json` 注册 `pages/routes/index`；`pages/dashboard/index.vue` "section-actions" 加"主题路线"入口（navigateTo）。
+- 第一版封面图用 cloudURL 输入框承载，admin uploadFile 直传留作后续增强。
+- modal 输入框 hotfix：原 `padding: 14rpx 16rpx; font-size: 26rpx` 在 H5 上输完一行字看不全，调整为 `padding: 20rpx; font-size: 28rpx; line-height: 1.6; min-height: 80rpx`（textarea 140rpx）。
+
+**注意：admin 链路是普通 Vue / H5，不触发 uvue 限制。** 这一段落里的 `display: grid` / `position: fixed` / `inset: 0` 等写法在 uvue Android 上都会爆，下轮 Task 3 写 `.uvue` 时不能照抄管理页 CSS。
+
+**P4 剩余 Task（Task 3-5，下次会话推进）**：
+- Task 3：`marker-center.getActiveRoutes()` 公开读 + `cloudSync.uts pullActiveRoutes` + `pages/routes/routes.uvue` + `pages/route-detail/route-detail.uvue` + pages.json 注册。**这是 P4 第一次写 .uvue，PITFALLS §规则 23 / §规则 29 / §规则 30 必读**：display 仅 flex/none、scroll-view 不能纵向嵌横向、函数提升不稳（被引用的 async 函数必须先声明）、JSON.parse<T[]>() 边界（不要写 as RouteWithProgress[]）。
+- Task 4：`marker-center/route-completion.js` 纯函数 + 单测 + checkin/repairCheckin 写库后异步触发 + `user_routes / rewards` `(userId, routeId)` 幂等写入。注意 marker-center 里要复刻 isRouteCompleted/calcRouteProgress 最小写法（不能 require admin-center），靠测试守住 schema 一致。
+- Task 5：首页 actionSheet 加"主题路线" + my-checkins 卡片"属于 X 路线" tag（getMyCheckins 服务端 join routeIds）+ PITFALLS §规则 32（如果新踩坑）+ prompt 加 P4 完整落地段。
+
+**Task 3 真机验收前置**：写完 `routes.uvue` / `route-detail.uvue` 单页后必须先单独跑一次 HBuilderX 编译确认无 error 18 / display 报错，不要堆到 Task 4-5 才发现要回头改。

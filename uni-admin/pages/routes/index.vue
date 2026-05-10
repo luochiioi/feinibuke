@@ -510,9 +510,11 @@ async function doDelete(r) {
   display: block;
   background: #f7f8fa;
   border-radius: 8rpx;
-  padding: 14rpx 16rpx;
-  font-size: 26rpx;
-  margin-bottom: 12rpx;
+  padding: 20rpx 20rpx;
+  font-size: 28rpx;
+  line-height: 1.6;
+  min-height: 80rpx;
+  margin-bottom: 16rpx;
   width: 100%;
   box-sizing: border-box;
 }
@@ -522,10 +524,11 @@ async function doDelete(r) {
   width: 100%;
   background: #f7f8fa;
   border-radius: 8rpx;
-  padding: 14rpx 16rpx;
-  font-size: 26rpx;
-  min-height: 100rpx;
-  margin-bottom: 12rpx;
+  padding: 20rpx 20rpx;
+  font-size: 28rpx;
+  line-height: 1.6;
+  min-height: 140rpx;
+  margin-bottom: 16rpx;
   box-sizing: border-box;
 }
 
