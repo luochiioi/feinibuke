@@ -1100,16 +1100,53 @@ function createDeleteCheckinRecordPlan(marker, target) {
 
 返回值携带各表清理数量，供前端 toast 显示 "已清理 X 条打卡 / Y 条任务 / Z 条奖励"，让审计动作有可见回执。
 
-### 11.6 P3.3 复测验证命令
+### 规则 27：物理删图必须有命名空间白名单 + 不回滚数据库
+
+P3.4 引入 `photo-center.deletePhoto(cloudURL)` 的物理删图链路。两条死规则：
+
+1. **命名空间白名单**：所有物理删图必须经过 `photo-service.isAllowedCloudURL(url)`，只允许包含 `/checkin-photos/` 前缀的 URL，且拒绝路径穿越（含 `..`）、超长 (> 1024) 与非字符串入参。任何"我自己写云端 fileID"的入口都不能绕开这道闸。
+2. **物理删除失败不回滚数据库**：`admin-center.deleteCheckinRecord({ purgePhoto: true })` 在数据库 `checkedBy[]` 已经更新成功后才异步调用物理删图。若 `deletePhoto` 返回 `{ deleted: false, errMsg }`，仅把 `purgeError` 写进响应（与审计日志），数据库 entry 保持已删。这是因为"用户审核已生效"的语义比"云存储一致性"优先；残留文件可以异步清理工具兜底，但 UI 不能回滚违规判定。
+
+`uniCloud.importObject('photo-center')` 在云函数内部调用另一个云函数时，鉴权上下文（`auth.uid`）会随之透传——所以 `photo-center._before` 仍可强制要求登录。但**不要**在 photo-center 内部按 uid 限制"只能删自己的文件"：admin 违规清理的就是别人的文件，命名空间校验已经够强。
+
+### 规则 28：审计日志写失败仅 console.log，绝不阻塞主流程
+
+`tourism_audit_logs` 是只追加的审计沉淀，不参与任何业务判定。`admin-center.deleteCheckinRecord` / `deleteUser` 与 `marker-center.deleteCheckin` 在主流程成功后调用 `appendAuditLog(...)` / `appendUserDeleteAudit(...)`，内部 try/catch 捕获后只 `console.log`，**不要 throw 也不要把审计失败计入响应 errCode**。
+
+理由：审计本身一旦成为可用性单点，反而会让"删除"流程因为日志服务抖动而失败，触发用户重试 → 二次幂等问题；这是分布式系统里典型的"审计反向放大事故"。
+
+跨 cloudfunction 的事实：`marker-center` 不能 `require('../admin-center/audit-service')`——uniCloud 不支持跨函数 require。`marker-center/index.obj.js` 内部复刻最小写入逻辑（与 `audit-service.buildAuditLogEntry` 的字段集对齐），由 `admin-center/audit-service.test.js` 的 schema 测试守住一致性。
+
+### 规则 29：UTS 5.07 个人历史页用嵌套字段 where + JSON.parse<T[]>() 边界
+
+`marker-center.getMyCheckins` 走 `col.where({ 'checkedBy.userId': uid })`：mongo / uniCloud 的 dot-notation 嵌套字段查询，比"全表扫 + JS filter"更省并能利用索引。返回每行仍是 marker 全 doc，由服务端再 filter `entry.userId === uid` 后扁平化。
+
+App 端 `cloudSync.uts pullMyCheckins(): Promise<MyCheckinEntry[]>` 必须用：
+
+```ts
+const jsonStr = JSON.stringify(raw)
+const parsed = JSON.parse<MyCheckinEntry[]>(jsonStr)
+```
+
+不要写 `as MyCheckinEntry[]` —— 这是 PITFALLS §九 法则 8 / §Phase 1.5/D 反复强调的 ClassCastException 来源。`JSON.parse<T>()` 是泛型解析，会真实构造 typed 实例；`as` 只是 Kotlin 名义类型断言，访问数组成员（如 `entry.checkedAt`）会运行期炸。
+
+页面层面：`pages/my-checkins/my-checkins.uvue` 顶层是单根 `<scroll-view scroll-y direction="vertical">`，内部全用普通 `view`——绝不嵌套任何 scroll-view（参 §10.4 / §规则 23 手势冲突）。删除走 `uni.showActionSheet` + `tapIndex`，**不要**用 `uni.showModal`（§10.4 四次调整：5.07 `UniShowModalResult` cast 崩）。`onShow` / `onHide` 也必须用 uni-app x 全局钩子，**不要**从 `vue` import（§规则 16）。
+
+### 11.6 P3.3 / P3.4 复测验证命令
 
 ```bash
 node --test uniCloud-aliyun/cloudfunctions/admin-center/marker-service.test.js
+node --test uniCloud-aliyun/cloudfunctions/admin-center/audit-service.test.js
 node --test uniCloud-aliyun/cloudfunctions/marker-center/repair-service.test.js
+node --test uniCloud-aliyun/cloudfunctions/photo-center/photo-service.test.js
 node --test uni-admin/pages/checkins/checkin-groups.test.js
 node --check uniCloud-aliyun/cloudfunctions/admin-center/index.obj.js
 node --check uniCloud-aliyun/cloudfunctions/admin-center/marker-service.js
+node --check uniCloud-aliyun/cloudfunctions/admin-center/audit-service.js
 node --check uniCloud-aliyun/cloudfunctions/marker-center/index.obj.js
 node --check uniCloud-aliyun/cloudfunctions/marker-center/repair-service.js
+node --check uniCloud-aliyun/cloudfunctions/photo-center/index.obj.js
+node --check uniCloud-aliyun/cloudfunctions/photo-center/photo-service.js
 node --check uniCloud-aliyun/cloudfunctions/user-center/index.obj.js
 ```
 

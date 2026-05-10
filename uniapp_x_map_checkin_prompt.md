@@ -3350,3 +3350,54 @@ P3.4 验收重点：
 - 真机：admin 违规删除带 purgePhoto 后，该 cloudURL 在云存储控制台不再可访问。
 - 后台审计页能列两种类型并显示 actor/target uid、marker、photoCloudURL（已物理删除则标 cloud-deleted）。
 - App 我的打卡页能纵向滑动，点击跳回地图，删除后人数与详情面板同步刷新。
+
+---
+
+## 2026-05-10 P3.4 已落地（含两件新增小特性 + dashboard 修复）
+
+本轮 6 个 commit（按时间顺序）：
+
+| commit | 主题 |
+|--------|-----|
+| `36012ed` | feat(checkin): admin record review with username + violation delete（P3.3 follow-up 落盘） |
+| `fda9ef2` | fix(admin): render recent checkins with username and photo（dashboard B 方案） |
+| `428f506` | feat(admin): cascade delete user with marker / task / reward purge（新增 A） |
+| `304abf9` | feat(photo): violation delete optionally purges cloud storage file（P3.4 Task 1） |
+| `229542d` | feat(audit): tourism_audit_logs writes from delete paths and admin viewer（P3.4 Task 2） |
+| `df8a956` | feat(app): personal checkin history page with photo, focus, delete（P3.4 Task 3） |
+
+设计要点：
+
+- **dashboard 修复（B 方案）**：admin-center 新增 `getRecentCheckins({ limit })` 返回扁平 record 列表，dashboard 切换调用并按 username/time/marker/note/photo 渲染。原因是 P3.3 把 `getCheckins` 改成 marker 分组，dashboard 仍按扁平 record 渲染，导致除 `markerTitle` 外字段全 undefined。
+- **后台删除用户**：`admin-center.deleteUser({ _id })` 拒绝删自己 / 最后一个 admin；用纯函数 `createPurgeUserCheckinsPlan(marker, uid)` 描述每个 marker 的 patch；级联删除统计 / user_tasks / rewards / colUsers；toast 显示清理数量。详见 PITFALLS §规则 26。
+- **物理删图**：photo-center 新增 `deletePhoto({ cloudURL })`，仅允许 `/checkin-photos/` 命名空间；admin 违规删除接 `purgePhoto` 选项；物理删除失败仅记 `purgeError`，不回滚数据库。详见 PITFALLS §规则 27。
+- **审计日志**：`tourism_audit_logs` 集合 + `audit-service.js`（含单测）+ `getAuditLogs({ offset, limit, type? })` + 新审计页 `uni-admin/pages/audit/index.vue`。三种 type：`admin.deleteCheckinRecord` / `admin.deleteUser` / `user.deleteCheckin`。详见 PITFALLS §规则 28。
+- **App 我的打卡页**：marker-center 新增 `getMyCheckins`（嵌套字段 where + 服务端 filter）；cloudSync 新增 `pullMyCheckins(): Promise<MyCheckinEntry[]>` 用 `JSON.parse<T[]>()` 真实构造类型；新页用单根纵向 scroll-view，删除走 actionSheet，跳回地图复用 `requestFocus`。详见 PITFALLS §规则 29。
+
+本轮自动化校验（全绿，36 测试用例）：
+
+```bash
+node --test uniCloud-aliyun/cloudfunctions/admin-center/marker-service.test.js
+node --test uniCloud-aliyun/cloudfunctions/admin-center/audit-service.test.js
+node --test uniCloud-aliyun/cloudfunctions/marker-center/repair-service.test.js
+node --test uniCloud-aliyun/cloudfunctions/photo-center/photo-service.test.js
+node --test uni-admin/pages/checkins/checkin-groups.test.js
+node --check uniCloud-aliyun/cloudfunctions/admin-center/index.obj.js
+node --check uniCloud-aliyun/cloudfunctions/admin-center/marker-service.js
+node --check uniCloud-aliyun/cloudfunctions/admin-center/audit-service.js
+node --check uniCloud-aliyun/cloudfunctions/marker-center/index.obj.js
+node --check uniCloud-aliyun/cloudfunctions/marker-center/repair-service.js
+node --check uniCloud-aliyun/cloudfunctions/photo-center/index.obj.js
+node --check uniCloud-aliyun/cloudfunctions/photo-center/photo-service.js
+node --check uniCloud-aliyun/cloudfunctions/user-center/index.obj.js
+```
+
+真机/服务空间验收（HBuilderX 双账号）：
+
+1. **部署云函数**：`admin-center`、`marker-center`、`photo-center` 三个目录全部上传。云存储建议预先在控制台创建一张 `tourism_audit_logs` 集合（schema 不强制，留默认）。
+2. **dashboard 验收**：仪表盘"最近打卡记录"每条显示用户名、时间、所在 marker、备注、照片缩略图、补传 tag；空数据文案与 P3.3 一致。
+3. **删除用户验收**：用户管理页 → 选一个非自己的账号 → 红色"删除"→ 二次确认 → 该用户消失，toast 显示清理数量；该用户在 marker.checkedBy[] 里的所有打卡都被清空，dashboard 总数同步下降；用户自己那一行的按钮显示"本人"且禁用。
+4. **物理删图验收**：打卡记录页 → 选一条带照片的违规删除 → 选"确认"（同步物理删图）→ 等 toast"已物理删除照片"→ 在云存储控制台搜原 cloudURL 应已 404；选"仅删记录"则数据库 entry 已删但 cloudURL 仍可访问。
+5. **审计日志验收**：仪表盘"审计日志"入口 → 列表按 occurredAt 倒序 → type chip 筛选三种事件 → 每条卡片显示 actor/target 名字、marker、原打卡时间、原因、purge 结果；用户在 App 自删一条打卡 → 审计页"用户·自删"分类多一行。
+6. **App 我的打卡验收**：登录 → 顶栏 chip → 选"我的打卡"→ 列表按月分隔 → 单条卡片可纵向滑动到底（不卡住手势）→ 点照片大图预览 → 点"在地图上查看"切回首页并 focus 该 marker → 点"删除打卡"actionSheet 二次确认后云端真的删除，再回到列表已少一条。
+7. **双账号联调（A/B）**：A 在 marker_X 打卡 → B 进同 marker → 详情面板"他人足迹"显示 A 的照片 → admin 违规删除 A 这条记录（带 purgePhoto）→ A 端 my-checkins / 首页 / B 端详情面板都看不到该照片，三处人数一致 -1。
