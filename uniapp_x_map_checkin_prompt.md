@@ -3401,3 +3401,39 @@ node --check uniCloud-aliyun/cloudfunctions/user-center/index.obj.js
 5. **审计日志验收**：仪表盘"审计日志"入口 → 列表按 occurredAt 倒序 → type chip 筛选三种事件 → 每条卡片显示 actor/target 名字、marker、原打卡时间、原因、purge 结果；用户在 App 自删一条打卡 → 审计页"用户·自删"分类多一行。
 6. **App 我的打卡验收**：登录 → 顶栏 chip → 选"我的打卡"→ 列表按月分隔 → 单条卡片可纵向滑动到底（不卡住手势）→ 点照片大图预览 → 点"在地图上查看"切回首页并 focus 该 marker → 点"删除打卡"actionSheet 二次确认后云端真的删除，再回到列表已少一条。
 7. **双账号联调（A/B）**：A 在 marker_X 打卡 → B 进同 marker → 详情面板"他人足迹"显示 A 的照片 → admin 违规删除 A 这条记录（带 purgePhoto）→ A 端 my-checkins / 首页 / B 端详情面板都看不到该照片，三处人数一致 -1。
+
+---
+
+## 2026-05-10 P3.4 真机验证 hotfix（commit `428b7ae`）
+
+P3.4 真机首次编译/运行后发现并修复的三类问题：
+
+1. **uvue 编译错 — `display: block` 不被支持**：`pages/my-checkins/my-checkins.uvue` 的 `.month-label` 用了 web CSS 的 `display: block`，uvue Android 只接受 `flex|none`。删除即可，`<text>` 默认就有行为。
+2. **uvue 编译错 — error 18 `找不到名称 runDelete`**：UTS 5.07 函数提升不稳定，`confirmDelete` 在 actionSheet success 回调里调用了下方声明的 `runDelete`。把 `runDelete` 上移到 `confirmDelete` 之前即可。已加入 PITFALLS §规则 30。
+3. **`Method was not found` 不是代码错，是云函数没部署**：`getRecentCheckins` / `deleteUser` / `getMyCheckins` / `deletePhoto` 都已写入源码并 commit，但 HBuilderX 还没把新版本上传到关联的服务空间。修复 = 在 HBuilderX 里右键 `admin-center` / `marker-center` / `photo-center` 三个云函数目录 → "上传部署"。云存储控制台同时新建 `tourism_audit_logs` 集合（schema 留默认）。
+4. **后台违规删除 UX 简化**：原"仅删记录 / 同步物理删图"二选一改回单一二次确认 modal —— "取消 / 违规删除"，默认一并物理清照片（如果有），让 admin 不用替后端做"删数据库 vs 删文件"的选择。已加入 PITFALLS §规则 31。
+
+---
+
+## 2026-05-10 P4 下一轮计划入口：主题路线（Themed Routes）系统
+
+下一轮正式迭代目标为 **P4：主题路线 P0**。计划文件位于：
+
+`docs/superpowers/plans/2026-05-10-p4-themed-routes.md`
+
+P4 锁定的范围：
+
+1. **新数据集合**：`tourism_routes`（admin 维护的多 marker 主题路线）+ `user_routes`（用户路线完成记录，`(userId, routeId)` 唯一）。
+2. **后台路线管理页**：`uni-admin/pages/routes/index.vue` 含列表 / 新建 / 编辑 / 归档 / 删除；admin-center 新增 `route-service.js` 纯函数 helper（calcRouteProgress / isRouteCompleted）+ 5 个 CRUD 云方法 + 单测。
+3. **App 路线列表 + 详情**：`pages/routes/routes.uvue` 拉 active 路线 + 当前 uid 进度；`pages/route-detail/route-detail.uvue` 顺序展示 marker，已打卡标 ✓ 未打卡显示距离。`marker-center.getActiveRoutes()` 公开读，不进 admin 鉴权。
+4. **路线完成检测 + reward 发放**：`marker-center.checkin()` 写库后异步检测哪些路线刚刚完成，写 `user_routes` + `rewards`（`(userId, routeId)` 幂等），响应里带 `completedRoutes` 列表给 App 庆祝。新增纯函数 `route-completion.js` + 单测。
+5. **首页入口 + my-checkins 路线 tag + 文档**。
+
+P4 明确不做：路线分支剧情、推送通知、照片合集、奖励兑换商城、评论 / 点赞。
+
+P4 验收重点：
+- 后台 → 创建一条"湖湘文化之旅" 路线（选 3 个种子 marker） → App 用户 A 打卡 3 个 → checkin 响应携带 `completedRoutes` 弹庆祝；user_routes 多一行；rewards 多一条；删除 → 重新打卡 **不应**重复发奖。
+- 用户 B 打完同条路线 → user_routes 两行，互不干扰。
+- 后台归档路线 → App 列表不再显示。
+
+P4 工作量预估：5 commits / 1-2 天。每个 task 都要单独 `node --test` + `node --check` 验证后再 commit，避免 P3.4 那种"一气推完才发现编译错"的返工。

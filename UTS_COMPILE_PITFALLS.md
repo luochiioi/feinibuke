@@ -1132,6 +1132,53 @@ const parsed = JSON.parse<MyCheckinEntry[]>(jsonStr)
 
 页面层面：`pages/my-checkins/my-checkins.uvue` 顶层是单根 `<scroll-view scroll-y direction="vertical">`，内部全用普通 `view`——绝不嵌套任何 scroll-view（参 §10.4 / §规则 23 手势冲突）。删除走 `uni.showActionSheet` + `tapIndex`，**不要**用 `uni.showModal`（§10.4 四次调整：5.07 `UniShowModalResult` cast 崩）。`onShow` / `onHide` 也必须用 uni-app x 全局钩子，**不要**从 `vue` import（§规则 16）。
 
+### 规则 30：uvue Android `display` 只支持 `flex` 与 `none`，函数提升必须先声明
+
+P3.4 真机验证后 hotfix 复盘的两条死规则，与 §10.4 三次调整呼应但更具体：
+
+**`display` 属性白名单**：uvue Android 只接受 `display: flex` 与 `display: none`。来自 web CSS 的 `block` / `inline-block` / `inline` / `grid` / `table` 全部编译时报错：
+```
+[plugin:uni:app-uvue-css] ERROR: property value `block` is not supported for `display`
+(supported values are: `flex`|`none`)
+```
+- `<text>` 默认就能换行/独占一行的视觉效果，不需要 `display: block`。
+- 想要"块状盒子"直接用 `<view>`，本身就是 flex 容器。
+- 想要"水平排列子元素"在父级写 `display: flex; flex-direction: row`，子元素不需要写任何 display。
+
+**函数被引用前必须声明**：UTS 5.07 编译到 Kotlin 时，setup 作用域里的函数提升不稳定，被回调引用的 async 函数必须**词法上**先于引用点声明。否则 error 18：
+```
+error: 找不到名称 "runDelete"
+```
+P3.3 在 PITFALLS §10.4 三次调整里第一次记录，P3.4 真机验证又踩一次（actionSheet success 回调里调用了下方声明的 runDelete）—— 这条规则要内化为肌肉记忆：
+
+```ts
+// 错（5.07 真机崩 / 编译报 error 18）
+function confirmDelete(entry) {
+  uni.showActionSheet({
+    success: () => { runDelete(entry) }   // ← 找不到 runDelete
+  })
+}
+async function runDelete(entry) { /* ... */ }
+
+// 对：被引用的先声明
+async function runDelete(entry) { /* ... */ }
+function confirmDelete(entry) {
+  uni.showActionSheet({
+    success: () => { runDelete(entry) }
+  })
+}
+```
+
+### 规则 31：违规审核 UX 不要让管理员替后端做选择
+
+P3.4 第一版给后台违规删除做了"仅删记录 / 同步物理删图"双 modal，让管理员在删除时还要决定"这次删数据库还是删数据库 + 文件"。这违反"产品语义优先于实现细节"原则——审核员的语义只有"删 / 不删"，"删什么"是后端事务一致性的事。
+
+修正后的标准模式（对齐 B 站 / 微博 / 知乎审核台）：
+- 单一二次确认 modal："取消 / 违规删除"两个按钮（注意 `confirmText` 用红色 `#d93026`）。
+- "违规删除"= 数据库 entry 删 + 云存储照片同步物理清理（如果记录有照片）。
+- 失败时仅记 `purgeError` 进 `tourism_audit_logs`，不向 admin 暴露重试选项；运维通过审计页定期巡检即可。
+- 想保留照片做后续争议复核？依赖 audit log 里的 cloudURL 字段，不依赖文件本体（**审计 = 后悔药**，不要让用户实例选）。
+
 ### 11.6 P3.3 / P3.4 复测验证命令
 
 ```bash
