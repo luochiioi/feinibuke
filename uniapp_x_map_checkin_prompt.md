@@ -3635,3 +3635,26 @@ P4 已经在 `rewards` 集合里写了 `{ userId, routeId|taskId, reward, source
 4. 点击地图上某 marker → 弹出 marker-panel，左下/右下 stack 自动隐藏；关闭面板 stack 重现。
 5. 浮动 "+" 添加打卡点按钮位置正常（bottom: 64rpx 居中），不与 stack 重叠。
 6. iOS / Android 真机底部 safe-area（home indicator）不挡按钮——按钮 bottom 64rpx 已留出余量；如果 iPhone X 系列仍被挡，再加 `padding-bottom: env(safe-area-inset-bottom)` 到 stack 容器。
+
+## 2026-05-10 P5-A + P5-B-UI 已落地（奖励兑换闭环 + 首页浮动按钮）
+
+**落地 commits**：
+- `ef8e71a` Task 1：`marker-center/reward-service.js` 纯函数 helper + 7 例单测，覆盖 claimed patch、route/task join、旧 task 行兼容与缺失来源兜底。
+- `da7c6f7` Task 2：`marker-center.getRewards()` 服务端 join active routes/tasks；新增 `claimReward({ rewardId })`，按 `_id + this.auth.uid` 校验归属后写 `rewardClaimed/claimedAt`；admin-center 与 marker-center 双侧审计 schema 增加 `user.claimReward`。
+- `5cd78ef` Task 3：`utils/cloudSync.uts` 新增 typed `RewardEntry[]` 边界与 `claimReward(rewardId): Promise<boolean>`，`pullRewards()` 使用 `JSON.parse<RewardEntry[]>()`，避免 UTSJSONObject 假 cast。
+- `4138619` Task 4/5：新增 `/pages/rewards/rewards` 我的奖励页；首页 auth-chip actionSheet 增加“我的奖励”入口。
+- `1773620` Task 6：首页删除 `.bottom-toolbar` 白底栏，改为左下“路线/任务”和右下“+/−/定位”浮动按钮；marker-panel 打开时隐藏两侧 stack 和新增按钮。
+
+**真机验收点**：
+1. 部署 `marker-center` 后，用户完成任务或路线，打开首页右上角 auth-chip → “我的奖励”，能看到“共 X 条奖励 · 已兑 Y / 待兑 Z”。
+2. 奖励页按“路线奖励 / 任务奖励”分段，卡片展示 routeName/taskName、reward、earnedAt、已兑/待兑 badge。
+3. 待兑卡片点“兑换”→ actionSheet 确认 → 调 `marker-center.claimReward`，成功后刷新为已兑；`rewards` 行写入 `rewardClaimed:true`、`claimedAt`，`tourism_audit_logs` 追加 `type='user.claimReward'`。
+4. 用户 A 不能兑换用户 B 的 reward：服务端按 `{ _id: rewardId, userId: this.auth.uid }` 查找，查不到返回无权/不存在。
+5. 首页地图占满整屏，无底部白栏；左下“路线/任务”分别直达 routes/tasks；右下“+/−/定位”保持原功能。
+6. 点击 marker 打开详情面板时，左下/右下 stack 与中间“在此新增”隐藏，避免覆盖面板按钮；关闭面板后恢复。
+
+**验证记录**：
+- Node 单测：`node --test` 全套 66 例通过。
+- 云函数语法：`node --check` 全套通过。
+- 静态自检：`pages/index/index.uvue`、`pages/rewards/rewards.uvue`、`utils/cloudSync.uts` 未命中 `Number\(` / `Number\.` / 非法 `display` / 旧底栏 class。
+- HBuilderX CLI：本机 `D:\HBuilderX\cli.exe` 可启动 v5.07，但 `launch app-android --compile true` 与 `lsp lint` 在当前会话均超时无诊断输出；本轮仍需在你的 HBuilderX UI 内做真机编译复验。

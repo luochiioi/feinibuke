@@ -1304,3 +1304,15 @@ error: Too many arguments for 'constructor(): Number'.
 1. `Number(stringValue)` —— 编译炸
 2. `Number.isFinite(n)` / `Number.isInteger(n)` / `Number.parseFloat(s)` —— Number 静态成员在 UTS 里也不可用，统统换全局 `parseInt` / `parseFloat` / `isNaN`
 3. 想"保险一点"双重转换 `parseInt(String(n))` —— 多此一举且 `String()` 在 5.07 同样有概率被解析成抽象类 constructor。直接用 `n.toString()` 实例方法
+
+### 规则 35：首页地图浮动按钮必须和 marker-panel 互斥，避免覆盖可点击区
+
+P5-B-UI 把原 `.bottom-toolbar` 白底栏拆成左下/右下两组 `position:absolute` 浮动按钮后，按钮本身不会再参与页面流式布局，因此 marker 详情面板弹出时如果不隐藏这些按钮，会压住面板底部的“打卡 / 删除”操作区。
+
+标准写法：
+- 左下 `.bl-stack`、右下 `.br-stack`、地图内 `.floating-add-btn` 都加 `v-if="activeMarker == null"`。
+- stack 容器只能 `display:flex; flex-direction:column`，不要用 `gap`，子按钮用 `margin-bottom`。
+- `.floating-add-btn` 的 `bottom` 与 stack 基线统一为 `64rpx`；如果未来 iOS home indicator 遮挡，再单独补 safe-area padding。
+- 底栏相关 class 必须整段删除：`.bottom-toolbar` / `.bar-btn` / `.bar-label` / `.task-tone` / `.locate-tone`，避免旧样式残留把页面重新撑高。
+
+这条不是 Kotlin 类型错误，而是 uni-app x 原生布局的可点击区风险：浮动层视觉上“看起来没问题”，真机触控时却会抢占 marker-panel 的按钮区域。
