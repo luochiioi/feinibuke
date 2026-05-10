@@ -4,8 +4,38 @@ const colTasks = db.collection('user_tasks')
 const colRewards = db.collection('rewards')
 const colUserProfiles = db.collection('users')
 const colAuditLogs = db.collection('tourism_audit_logs')
+const colRoutes = db.collection('tourism_routes')
 const authUtil = require('auth-util')
 const { createRepairCheckinPlan, createDeleteCheckinPlan } = require('./repair-service')
+
+// 复刻自 admin-center/route-service.js 的 calcRouteProgress 最小写法。
+// uniCloud 不支持跨 cloudfunction require（PITFALLS §规则 28），但 schema
+// 一致性由 admin-center/route-service.test.js 守住——计算逻辑完全相同：
+// route.markerIds ∩ userCheckedMarkerIds = doneMarkerIds。
+function calcRouteProgressLocal(route, userCheckedMarkerIds) {
+  const routeIds = (route && Array.isArray(route.markerIds)) ? route.markerIds : []
+  const userIds = Array.isArray(userCheckedMarkerIds) ? userCheckedMarkerIds : []
+  const userSet = new Set(userIds.map(item => Number(item)))
+  const doneMarkerIds = []
+  const pendingMarkerIds = []
+  for (let i = 0; i < routeIds.length; i++) {
+    const n = Number(routeIds[i])
+    if (userSet.has(n)) {
+      doneMarkerIds.push(n)
+    } else {
+      pendingMarkerIds.push(n)
+    }
+  }
+  const total = routeIds.length
+  const done = doneMarkerIds.length
+  return {
+    total,
+    done,
+    ratio: total > 0 ? done / total : 0,
+    doneMarkerIds,
+    pendingMarkerIds
+  }
+}
 
 // 仅记录用户自删事件；admin-center.audit-service 持有规范化 helper，本文件
 // 不跨 cloudfunction require，只复刻最小写法保持表结构一致（参见
@@ -264,6 +294,43 @@ module.exports = {
     if (!this.auth.uid) return { errCode: -1, errMsg: '请先登录' }
     const res = await colRewards.where({ userId: this.auth.uid }).orderBy('earnedAt', 'desc').get()
     return { errCode: 0, data: res.data }
+  },
+
+  // P4 主题路线公开读：列出所有 active 路线 + 当前 uid 的进度；不强制登录
+  // （未登录时进度全 0，登录后实时显示 done/total）。放在 marker-center 而
+  // 不是 admin-center，避免 admin 鉴权门挡掉 App 端普通用户拉路线列表。
+  async getActiveRoutes() {
+    const routesRes = await colRoutes
+      .where({ status: 'active' })
+      .orderBy('createdAt', 'desc')
+      .get()
+    const routes = routesRes.data || []
+
+    let userCheckedMarkerIds = []
+    if (this.auth.uid) {
+      const uid = String(this.auth.uid)
+      const markerRes = await col
+        .where({ 'checkedBy.userId': uid })
+        .field({ id: true, checkedBy: true })
+        .get()
+      userCheckedMarkerIds = (markerRes.data || [])
+        .filter(marker => (marker.checkedBy || []).some(entry => String(entry && entry.userId || '') === uid))
+        .map(marker => Number(marker.id))
+    }
+
+    const list = routes.map(route => ({
+      _id: route._id,
+      id: route.id,
+      name: route.name,
+      description: route.description || '',
+      coverImage: route.coverImage || null,
+      markerIds: Array.isArray(route.markerIds) ? route.markerIds.map(Number) : [],
+      reward: route.reward || '',
+      status: route.status,
+      progress: calcRouteProgressLocal(route, userCheckedMarkerIds)
+    }))
+
+    return { errCode: 0, data: list }
   }
 }
 

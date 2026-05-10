@@ -1,0 +1,146 @@
+<template>
+  <scroll-view class="routes-page" scroll-y direction="vertical" :show-scrollbar="false">
+    <view class="hero">
+      <text class="hero-title">主题路线</text>
+      <text class="hero-sub">{{ summaryLabel }}</text>
+    </view>
+
+    <view v-if="errorText.length > 0" class="notice notice-error">
+      <text class="notice-text">{{ errorText }}</text>
+    </view>
+
+    <view v-if="loading" class="notice">
+      <text class="notice-text">正在加载主题路线...</text>
+    </view>
+
+    <view v-if="!loading && needsLogin" class="notice notice-tip">
+      <text class="notice-text">未登录可浏览路线，登录后才能看到自己的进度。</text>
+    </view>
+
+    <view v-if="!loading && routes.length === 0" class="empty-state">
+      <text class="empty-text">还没有主题路线{{ '\n' }}让管理员在后台创建一条吧</text>
+    </view>
+
+    <view v-for="(route, idx) in routes" :key="route.id.toString() + '_' + idx.toString()" class="card-wrap">
+      <view class="card" @click="goDetail(route)">
+        <view class="card-head">
+          <text class="card-title">{{ route.name }}</text>
+          <view class="progress-pill" :class="route.progress.done === route.progress.total && route.progress.total > 0 ? 'pill-done' : 'pill-pending'">
+            <text class="progress-pill-text">{{ route.progress.done.toString() }}/{{ route.progress.total.toString() }}</text>
+          </view>
+        </view>
+
+        <text v-if="route.description.length > 0" class="card-desc">{{ route.description }}</text>
+
+        <view class="progress-bar-track">
+          <view class="progress-bar-fill" :style="'width:' + computeRatioPercent(route) + '%;'"></view>
+        </view>
+
+        <view class="card-footer">
+          <text class="card-reward">奖励：{{ route.reward }}</text>
+          <text class="card-arrow">查看 ›</text>
+        </view>
+      </view>
+    </view>
+  </scroll-view>
+</template>
+
+<script setup lang="uts">
+import { ref, computed } from 'vue'
+import type { RouteWithProgress } from '@/utils/cloudSync'
+import { pullActiveRoutes } from '@/utils/cloudSync'
+import { state as userState, refreshUserIdFromAuth } from '@/user/index.uts'
+
+const routes = ref<RouteWithProgress[]>([] as RouteWithProgress[])
+const loading = ref<boolean>(false)
+const errorText = ref<string>('')
+const needsLogin = ref<boolean>(false)
+
+const summaryLabel = computed((): string => {
+  const total = routes.value.length
+  if (total === 0) return '尚无路线'
+  let done = 0
+  routes.value.forEach((r: RouteWithProgress): void => {
+    if (r.progress.total > 0 && r.progress.done === r.progress.total) done += 1
+  })
+  return '共 ' + total.toString() + ' 条路线 · 已完成 ' + done.toString() + ' 条'
+})
+
+function computeRatioPercent(route: RouteWithProgress): number {
+  if (route.progress.total <= 0) return 0
+  const pct = Math.round((route.progress.done / route.progress.total) * 100)
+  if (pct < 0) return 0
+  if (pct > 100) return 100
+  return pct
+}
+
+// PITFALLS §规则 30：被回调引用的函数必须先声明
+async function reload(): Promise<void> {
+  loading.value = true
+  errorText.value = ''
+  try {
+    await refreshUserIdFromAuth()
+    needsLogin.value = userState.userInfo == null
+    const list = await pullActiveRoutes()
+    routes.value = list
+  } catch (e) {
+    console.log('[routes] reload failed', e)
+    const err = e as Error
+    const msg = err.message
+    errorText.value = msg.length > 0 ? msg : '加载失败，请稍后重试'
+  } finally {
+    loading.value = false
+  }
+}
+
+function goDetail(route: RouteWithProgress): void {
+  // 用业务主键 route.id（number）做 query；route-detail 通过 pullActiveRoutes
+  // 再次拉取 + 按 id 找。这样无论从首页/分享/书签进来都能拿到最新进度。
+  uni.navigateTo({ url: '/pages/route-detail/route-detail?id=' + route.id.toString() })
+}
+
+// PITFALLS §规则 16：onShow 用 uni-app x 全局钩子，不要从 vue import
+onShow((): void => {
+  reload()
+})
+</script>
+
+<style>
+.routes-page { flex: 1; width: 750rpx; height: 100%; background-color: #f5f7f6; }
+
+.hero { padding: 32rpx 28rpx 16rpx 28rpx; display: flex; flex-direction: column; }
+.hero-title { font-size: 40rpx; font-weight: bold; color: #1a1a1a; }
+.hero-sub { font-size: 24rpx; color: #7f8c8d; margin-top: 6rpx; }
+
+.notice { background-color: #eef9f2; border-radius: 12rpx; padding: 18rpx 20rpx; margin: 0 24rpx 16rpx 24rpx; }
+.notice-error { background-color: #fff1f0; }
+.notice-tip { background-color: #fff7e6; }
+.notice-text { font-size: 24rpx; color: #2e9f5f; }
+.notice-error .notice-text { color: #d93026; }
+.notice-tip .notice-text { color: #9a6b00; }
+
+.empty-state { padding: 80rpx 40rpx; display: flex; flex-direction: column; align-items: center; }
+.empty-text { font-size: 26rpx; color: #999999; line-height: 40rpx; text-align: center; }
+
+.card-wrap { padding: 0 24rpx; margin-bottom: 16rpx; }
+
+.card { background-color: #ffffff; border-radius: 20rpx; padding: 24rpx; display: flex; flex-direction: column; }
+
+.card-head { display: flex; flex-direction: row; align-items: center; }
+.card-title { flex: 1; font-size: 30rpx; font-weight: 600; color: #1a1a1a; }
+
+.progress-pill { padding: 4rpx 14rpx; border-radius: 999rpx; margin-left: 12rpx; }
+.progress-pill.pill-done { background-color: #e6f9ed; }
+.progress-pill.pill-pending { background-color: #eef0f2; }
+.progress-pill-text { font-size: 22rpx; color: #2ecc71; font-weight: 600; }
+.progress-pill.pill-pending .progress-pill-text { color: #6b7480; }
+
+.card-desc { font-size: 24rpx; color: #5a6770; margin-top: 12rpx; line-height: 36rpx; }
+
+.progress-bar-track { width: 100%; height: 12rpx; background-color: #eef0f2; border-radius: 999rpx; margin-top: 16rpx; overflow: hidden; }
+.progress-bar-fill { height: 12rpx; background-color: #2ecc71; border-radius: 999rpx; }
+
+.card-footer { display: flex; flex-direction: row; align-items: center; margin-top: 16rpx; }
+.card-reward { flex: 1; font-size: 24rpx; color: #888888; }
+.card-arrow { font-size: 24rpx; color: #2ecc71; }
+</style>

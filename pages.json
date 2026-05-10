@@ -56,6 +56,18 @@
       "style": {
         "navigationBarTitleText": "我的打卡"
       }
+    },
+    {
+      "path": "pages/routes/routes",
+      "style": {
+        "navigationBarTitleText": "主题路线"
+      }
+    },
+    {
+      "path": "pages/route-detail/route-detail",
+      "style": {
+        "navigationBarTitleText": "路线详情"
+      }
     }
   ],
   "globalStyle": {

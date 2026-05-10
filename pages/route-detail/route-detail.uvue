@@ -1,0 +1,208 @@
+<template>
+  <scroll-view class="detail-page" scroll-y direction="vertical" :show-scrollbar="false">
+    <view v-if="loading" class="notice">
+      <text class="notice-text">加载中...</text>
+    </view>
+
+    <view v-if="errorText.length > 0" class="notice notice-error">
+      <text class="notice-text">{{ errorText }}</text>
+    </view>
+
+    <view v-if="!loading && route == null && errorText.length === 0" class="empty">
+      <text class="empty-text">未找到该路线，可能已被归档或删除。</text>
+    </view>
+
+    <view v-if="route != null" class="content">
+      <view class="hero" :class="isCompleted ? 'hero-done' : 'hero-pending'">
+        <text class="hero-title">{{ route!!.name }}</text>
+        <text v-if="route!!.description.length > 0" class="hero-desc">{{ route!!.description }}</text>
+        <view class="hero-progress">
+          <text class="hero-progress-text">进度 {{ route!!.progress.done.toString() }} / {{ route!!.progress.total.toString() }}</text>
+          <view class="hero-bar-track">
+            <view class="hero-bar-fill" :style="'width:' + ratioPercent + '%;'"></view>
+          </view>
+        </view>
+        <text class="hero-reward">奖励：{{ route!!.reward }}</text>
+        <text v-if="isCompleted" class="hero-tag">已完成</text>
+      </view>
+
+      <view class="section">
+        <text class="section-title">路线节点</text>
+
+        <view v-for="(step, idx) in steps" :key="step.markerId.toString() + '_' + idx.toString()" class="step-row">
+          <view class="step-index" :class="step.done ? 'step-done' : 'step-pending'">
+            <text v-if="step.done" class="step-index-text">✓</text>
+            <text v-else class="step-index-text">{{ (idx + 1).toString() }}</text>
+          </view>
+          <view class="step-info">
+            <text class="step-title">{{ step.title }}</text>
+            <text v-if="step.done" class="step-status step-status-done">已打卡</text>
+            <text v-else class="step-status step-status-pending">待打卡</text>
+          </view>
+          <view v-if="!step.done && step.markerExists" class="step-action" @click="goMarker(step)">
+            <text class="step-action-text">去这里</text>
+          </view>
+          <view v-if="!step.markerExists" class="step-action step-action-disabled">
+            <text class="step-action-text-muted">已下架</text>
+          </view>
+        </view>
+      </view>
+    </view>
+  </scroll-view>
+</template>
+
+<script setup lang="uts">
+import { ref, computed } from 'vue'
+import type { RouteWithProgress } from '@/utils/cloudSync'
+import { pullActiveRoutes } from '@/utils/cloudSync'
+import { findById, loadFromStorage as loadMarkers } from '@/stores/useMarkerStore'
+import { requestFocus } from '@/stores/useMapStore'
+import type { CheckinMarker } from '@/types/marker'
+
+type RouteStep = {
+  markerId: number
+  title: string
+  done: boolean
+  markerExists: boolean
+}
+
+const routeId = ref<number>(0)
+const route = ref<RouteWithProgress | null>(null)
+const loading = ref<boolean>(false)
+const errorText = ref<string>('')
+
+const isCompleted = computed((): boolean => {
+  const r = route.value
+  if (r == null) return false
+  return r.progress.total > 0 && r.progress.done === r.progress.total
+})
+
+const ratioPercent = computed((): number => {
+  const r = route.value
+  if (r == null || r.progress.total <= 0) return 0
+  const pct = Math.round((r.progress.done / r.progress.total) * 100)
+  if (pct < 0) return 0
+  if (pct > 100) return 100
+  return pct
+})
+
+// 详情页的"路线节点"列表：marker 顺序 + 该 marker 是否已打卡（取自 progress.doneMarkerIds）
+// 从 useMarkerStore 拿 title / 经纬度做客户端 join，避免服务端把 marker 全字段塞进 routes 响应
+const steps = computed((): RouteStep[] => {
+  const r = route.value
+  if (r == null) return [] as RouteStep[]
+  const doneSet: number[] = r.progress.doneMarkerIds
+  const list: RouteStep[] = []
+  r.markerIds.forEach((mid: number): void => {
+    const local = findById(mid)
+    const exists = local != null
+    const title = exists ? local!!.title : '#' + mid.toString()
+    const done = doneSet.indexOf(mid) >= 0
+    list.push({ markerId: mid, title: title, done: done, markerExists: exists } as RouteStep)
+  })
+  return list
+})
+
+// PITFALLS §规则 30：先声明 run，再被 confirm 调用
+async function reload(): Promise<void> {
+  loading.value = true
+  errorText.value = ''
+  try {
+    loadMarkers()
+    const list = await pullActiveRoutes()
+    let found: RouteWithProgress | null = null
+    list.forEach((r: RouteWithProgress): void => {
+      if (Number(r.id) === routeId.value && found == null) {
+        found = r
+      }
+    })
+    route.value = found
+  } catch (e) {
+    console.log('[route-detail] reload failed', e)
+    const err = e as Error
+    const msg = err.message
+    errorText.value = msg.length > 0 ? msg : '加载失败，请稍后重试'
+  } finally {
+    loading.value = false
+  }
+}
+
+function goMarker(step: RouteStep): void {
+  const local: CheckinMarker | null = findById(step.markerId)
+  if (local == null) {
+    uni.showToast({ title: '该打卡点已下架', icon: 'none' })
+    return
+  }
+  requestFocus(local!!)
+  uni.switchTab({ url: '/pages/index/index' })
+}
+
+// PITFALLS §规则 16：onLoad / onShow 用 uni-app x 全局钩子，不要从 vue import
+onLoad((options: OnLoadOptions): void => {
+  const idStr = options['id'] as string | null
+  if (idStr != null && idStr.length > 0) {
+    const n = Number(idStr)
+    if (Number.isFinite(n)) {
+      routeId.value = n
+    }
+  }
+})
+
+onShow((): void => {
+  if (routeId.value > 0) {
+    reload()
+  }
+})
+</script>
+
+<style>
+.detail-page { flex: 1; width: 750rpx; height: 100%; background-color: #f5f7f6; }
+
+.notice { background-color: #eef9f2; border-radius: 12rpx; padding: 18rpx 20rpx; margin: 24rpx; }
+.notice-error { background-color: #fff1f0; }
+.notice-text { font-size: 24rpx; color: #2e9f5f; }
+.notice-error .notice-text { color: #d93026; }
+
+.empty { padding: 80rpx 40rpx; display: flex; flex-direction: column; align-items: center; }
+.empty-text { font-size: 26rpx; color: #999999; line-height: 40rpx; text-align: center; }
+
+.content { display: flex; flex-direction: column; }
+
+.hero { margin: 24rpx; padding: 32rpx 28rpx; border-radius: 24rpx; display: flex; flex-direction: column; }
+.hero-pending { background-color: #ffffff; }
+.hero-done { background-color: #eaffe9; }
+
+.hero-title { font-size: 40rpx; font-weight: bold; color: #1a1a1a; }
+.hero-desc { font-size: 26rpx; color: #5a6770; margin-top: 12rpx; line-height: 38rpx; }
+
+.hero-progress { margin-top: 20rpx; display: flex; flex-direction: column; }
+.hero-progress-text { font-size: 24rpx; color: #1a1a1a; margin-bottom: 12rpx; font-weight: 500; }
+.hero-bar-track { width: 100%; height: 16rpx; background-color: #eef0f2; border-radius: 999rpx; overflow: hidden; }
+.hero-bar-fill { height: 16rpx; background-color: #2ecc71; border-radius: 999rpx; }
+
+.hero-reward { font-size: 26rpx; color: #2ecc71; margin-top: 18rpx; font-weight: 500; }
+
+.hero-tag { font-size: 22rpx; color: #ffffff; background-color: #2ecc71; align-self: flex-start; padding: 6rpx 18rpx; border-radius: 999rpx; margin-top: 14rpx; }
+
+.section { margin: 0 24rpx 24rpx 24rpx; padding: 24rpx 24rpx 8rpx 24rpx; background-color: #ffffff; border-radius: 20rpx; display: flex; flex-direction: column; }
+.section-title { font-size: 28rpx; font-weight: 600; color: #1a1a1a; margin-bottom: 16rpx; }
+
+.step-row { display: flex; flex-direction: row; align-items: center; padding: 16rpx 0; border-bottom-width: 1rpx; border-bottom-style: solid; border-bottom-color: #f0f2f5; }
+
+.step-index { width: 56rpx; height: 56rpx; border-radius: 999rpx; display: flex; align-items: center; justify-content: center; margin-right: 16rpx; }
+.step-pending { background-color: #eef0f2; }
+.step-done { background-color: #2ecc71; }
+.step-index-text { font-size: 26rpx; color: #ffffff; font-weight: 600; }
+.step-pending .step-index-text { color: #6b7480; }
+
+.step-info { flex: 1; display: flex; flex-direction: column; }
+.step-title { font-size: 28rpx; color: #1a1a1a; }
+.step-status { font-size: 22rpx; margin-top: 4rpx; }
+.step-status-done { color: #2ecc71; }
+.step-status-pending { color: #888888; }
+
+.step-action { padding: 10rpx 22rpx; background-color: #2ecc71; border-radius: 999rpx; }
+.step-action-disabled { background-color: #eef0f2; }
+.step-action-text { font-size: 24rpx; color: #ffffff; font-weight: 500; }
+.step-action-text-muted { font-size: 22rpx; color: #888888; }
+</style>

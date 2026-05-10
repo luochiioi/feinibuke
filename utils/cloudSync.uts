@@ -378,3 +378,48 @@ export async function pullRewards(): Promise<UTSJSONObject[]> {
     return []
   }
 }
+
+// ===== Pull active themed routes with current uid progress =====
+
+export type RouteProgress = {
+  total: number
+  done: number
+  ratio: number
+  doneMarkerIds: number[]
+  pendingMarkerIds: number[]
+}
+
+export type RouteWithProgress = {
+  _id: string
+  id: number
+  name: string
+  description: string
+  coverImage: string | null
+  markerIds: number[]
+  reward: string
+  status: string
+  progress: RouteProgress
+}
+
+// 路线列表 / 路线详情共用同一个云端拉取入口；服务端按当前 auth.uid 计算
+// 进度（未登录时进度全 0），不需要前端再聚合 marker.checkedBy[]。
+//
+// PITFALLS §九 法则 8：嵌套对象列表必须用 JSON.parse<T[]>() 真实构造 typed
+// 实例，不要写 as RouteWithProgress[]（Kotlin 假 cast 在访问 progress.total
+// 时炸 ClassCastException）。
+export async function pullActiveRoutes(): Promise<RouteWithProgress[]> {
+  try {
+    const markerApi = uniCloud.importObject('marker-center', { customUI: true } as UniCloudImportObjectOptions)
+    const res = await markerApi.getActiveRoutes() as UTSJSONObject
+    const errCode = res["errCode"] as number
+    if (errCode !== 0) return [] as RouteWithProgress[]
+    const raw = res["data"]
+    if (raw == null) return [] as RouteWithProgress[]
+    const jsonStr = JSON.stringify(raw)
+    const parsed = JSON.parse<RouteWithProgress[]>(jsonStr)
+    return parsed ?? ([] as RouteWithProgress[])
+  } catch (e) {
+    console.log('[cloudSync] pullActiveRoutes failed', e)
+    return [] as RouteWithProgress[]
+  }
+}
