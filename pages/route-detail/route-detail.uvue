@@ -112,7 +112,10 @@ async function reload(): Promise<void> {
     const list = await pullActiveRoutes()
     let found: RouteWithProgress | null = null
     list.forEach((r: RouteWithProgress): void => {
-      if (Number(r.id) === routeId.value && found == null) {
+      // r.id 已经在 RouteWithProgress 类型里声明成 number，不需要再 Number(...)
+      // PITFALLS §规则 34：UTS 5.07 不支持 `Number(value)` 调用形式（Number 是
+      // abstract 类、零参 constructor），字符串转数字只能用 parseInt / parseFloat。
+      if (r.id === routeId.value && found == null) {
         found = r
       }
     })
@@ -141,8 +144,10 @@ function goMarker(step: RouteStep): void {
 onLoad((options: OnLoadOptions): void => {
   const idStr = options['id'] as string | null
   if (idStr != null && idStr.length > 0) {
-    const n = Number(idStr)
-    if (Number.isFinite(n)) {
+    // PITFALLS §规则 34：UTS 5.07 不支持 Number(string) / Number.isFinite(...)，
+    // 用 parseInt + isNaN 替代。route id 是 ms-epoch 整数，parseInt 足够。
+    const n = parseInt(idStr!!)
+    if (!isNaN(n)) {
       routeId.value = n
     }
   }
