@@ -41,6 +41,12 @@
       "style": {
         "navigationBarTitleText": "审计日志"
       }
+    },
+    {
+      "path": "pages/routes/index",
+      "style": {
+        "navigationBarTitleText": "主题路线管理"
+      }
     }
   ],
   "globalStyle": {

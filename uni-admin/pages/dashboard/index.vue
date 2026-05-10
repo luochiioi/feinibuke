@@ -60,6 +60,7 @@
       <view class="section-header">
         <text class="section-title">最近打卡记录</text>
         <view class="section-actions">
+          <text class="section-action" @click="goToRoutes">主题路线</text>
           <text class="section-action" @click="goToAudit">审计日志</text>
           <text class="section-action" @click="goToCheckins">查看全部 ›</text>
         </view>
@@ -150,6 +151,10 @@ function goToCheckins() {
 
 function goToAudit() {
   uni.navigateTo({ url: '/pages/audit/index' })
+}
+
+function goToRoutes() {
+  uni.navigateTo({ url: '/pages/routes/index' })
 }
 </script>
 
