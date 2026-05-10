@@ -3582,3 +3582,56 @@ P4 已经在 `rewards` 集合里写了 `{ userId, routeId|taskId, reward, source
 **建议下次会话先做候选 1**：rewards 是 P4 已经在写但没消费的"半成品数据"——闭环它能让用户立即感知到 P4 的价值。预估 1 day / 4-5 commits。
 
 下一轮 plan 文档入口：`docs/superpowers/plans/2026-05-1X-p5-rewards-claim.md`（待新建）。
+
+## 2026-05-10 下一轮额外目标：首页底栏浮动按钮重构（与 P5-A 同轮迭代）
+
+**用户需求原话**：把首页底栏 4 个按钮改成"登录按钮那样的样式"，放屏幕两边。任务 actionSheet 拆开成"路线"+"任务"两个按钮放左下角。放大/缩小/定位三个按钮按顺序从上到下放右下角。
+
+**目标布局**：
+- 删掉 `.bottom-toolbar` 整个白底栏（当前 height: 120rpx 顶在地图下方），地图占满全屏。
+- **左下角**：胶囊浮动按钮垂直堆叠 [路线（实心绿） / 任务（白底绿描边）]，样式参考 `.auth-chip`（line 507）。
+- **右下角**：圆形浮动按钮垂直堆叠 [+ / − / 定位]（定位蓝色保留 `#1e88e5`）。
+- 现有 `.floating-add-btn`（地图中下方"添加打卡点"圆按钮）保留，bottom 从 200rpx 调到 64rpx 与新 stack 底基线对齐。
+- `marker-panel`（点 marker 弹的详情面板）显示时，用 `v-if="!activeMarker"` 把左下/右下 stack 隐藏，避免挡住面板里的"去打卡 / 删除"按钮。
+
+**actionSheet 拆解**：
+- 原 `goTasks()`（line 404）当前是 `uni.showActionSheet({itemList:['任务','主题路线']...})`。
+- 改成两个独立函数 `goTasksOnly()` / `goRoutes()`，分别是直接 `uni.navigateTo`，不再走 actionSheet。
+
+**CSS 草图**（参考 `.auth-chip` 已验证可用的胶囊浮动写法）：
+```
+.bl-stack { position: absolute; left: 24rpx; bottom: 64rpx;
+            display: flex; flex-direction: column; }
+.bl-btn { padding: 14rpx 28rpx; border-radius: 999rpx; margin-bottom: 16rpx;
+          box-shadow: 0 4rpx 12rpx rgba(0,0,0,0.08); }
+.bl-btn-route { background-color: #2ecc71; }
+.bl-btn-task  { background-color: #ffffff; border: 2rpx solid #2ecc71; }
+.bl-btn-text-on  { color: #ffffff; font-size: 26rpx; font-weight: 500; }
+.bl-btn-text-off { color: #2ecc71; font-size: 26rpx; font-weight: 500; }
+
+.br-stack { position: absolute; right: 24rpx; bottom: 64rpx;
+            display: flex; flex-direction: column; }
+.br-btn { width: 88rpx; height: 88rpx; border-radius: 999rpx;
+          background-color: #ffffff; margin-bottom: 16rpx;
+          box-shadow: 0 4rpx 12rpx rgba(0,0,0,0.08);
+          display: flex; align-items: center; justify-content: center; }
+.br-btn-locate { background-color: #1e88e5; }
+.br-btn-text { font-size: 36rpx; color: #2ecc71; font-weight: 600; }
+.br-btn-locate .br-btn-text { color: #ffffff; font-size: 24rpx; font-weight: 500; }
+```
+
+**PITFALLS 边界**：
+- §规则 30：display 仅 flex|none —— flex-direction: column 允许，gap 不要用，改 margin-bottom（uvue Android 对 gap 支持不完整时的兜底，参 `.auth-chip` 系列也没用 gap）。
+- §规则 30 后半：被引用的函数先声明 —— 模板里 `@click="goRoutes"` 引用前 `<script>` 顶部就要有 `function goRoutes()`，习惯位置和 `goAuth` 同高度。
+- `position: absolute` + bottom 在 uvue Android 已经被 `.auth-chip` / `.floating-add-btn` 双重验证可用，不需新 PITFALLS 规则。
+- 删掉的 CSS：`.bottom-toolbar` / `.bar-btn` / `.bar-label` / `.task-tone` / `.locate-tone`（line 513-538）全部移除；模板里 `<view class="bottom-toolbar">` 整段（line 85-98）移除。
+
+**实施量预估**：约 80-120 行 / 1 commit / 0.5 day，与 P5-A 奖励商城任务（4-5 commits）平行推进，建议作为 P5-A 的 Task 6（最后一项 UI 收尾）或者独立成 P5-B-UI 单 commit。
+
+**真机验收**：
+1. 首页地图占满整屏（无白底底栏）。
+2. 左下角看到 [路线（绿色实心）] 在上、[任务（白底绿边）] 在下，点击分别跳路线列表 / 任务页。
+3. 右下角看到 [+] [−] [定位（蓝色）] 三个圆按钮垂直堆叠，分别工作。
+4. 点击地图上某 marker → 弹出 marker-panel，左下/右下 stack 自动隐藏；关闭面板 stack 重现。
+5. 浮动 "+" 添加打卡点按钮位置正常（bottom: 64rpx 居中），不与 stack 重叠。
+6. iOS / Android 真机底部 safe-area（home indicator）不挡按钮——按钮 bottom 64rpx 已留出余量；如果 iPhone X 系列仍被挡，再加 `padding-bottom: env(safe-area-inset-bottom)` 到 stack 容器。
