@@ -372,18 +372,50 @@ export async function pullUserTasks(): Promise<UTSJSONObject[]> {
 
 // ===== Pull rewards from cloud =====
 
-export async function pullRewards(): Promise<UTSJSONObject[]> {
+export type RewardEntry = {
+  _id: string
+  userId: string
+  taskId: string | null
+  routeId: number | null
+  taskName: string
+  routeName: string
+  sourceType: string
+  sourceTitle: string
+  reward: string
+  earnedAt: number
+  rewardClaimed: boolean
+  claimedAt: number | null
+}
+
+export async function pullRewards(): Promise<RewardEntry[]> {
   try {
-    const markerApi = uniCloud.importObject('marker-center')
+    const markerApi = uniCloud.importObject('marker-center', { customUI: true } as UniCloudImportObjectOptions)
     const res = await markerApi.getRewards() as UTSJSONObject
     const errCode = res["errCode"] as number
-    if (errCode === 0) {
-      return res["data"] as UTSJSONObject[]
-    }
-    return []
+    if (errCode !== 0) return [] as RewardEntry[]
+    const raw = res["data"]
+    if (raw == null) return [] as RewardEntry[]
+    const jsonStr = JSON.stringify(raw)
+    const parsed = JSON.parse<RewardEntry[]>(jsonStr)
+    return parsed ?? ([] as RewardEntry[])
   } catch (e) {
     console.log('[cloudSync] pullRewards failed', e)
-    return []
+    return [] as RewardEntry[]
+  }
+}
+
+export async function claimReward(rewardId: string): Promise<boolean> {
+  if (rewardId.length == 0) return false
+  try {
+    const markerApi = uniCloud.importObject('marker-center', { customUI: true } as UniCloudImportObjectOptions)
+    const payload = JSON.parse('{}') as UTSJSONObject
+    payload["rewardId"] = rewardId
+    const res = await markerApi.claimReward(payload) as UTSJSONObject
+    const errCode = res["errCode"] as number
+    return errCode === 0
+  } catch (e) {
+    console.log('[cloudSync] claimReward failed', e)
+    return false
   }
 }
 
