@@ -13,6 +13,12 @@
       <text class="notice-text">正在加载我的打卡历史...</text>
     </view>
 
+    <view v-if="!loading && !needsLogin" class="quick-actions">
+      <view class="action-btn primary" @click="goMyTasks">
+        <text class="action-btn-text light">任务记录</text>
+      </view>
+    </view>
+
     <view v-if="!loading && needsLogin" class="empty-state">
       <text class="empty-text">登录后才能查看自己的打卡历史。</text>
       <view class="action-btn primary" @click="goLogin">
@@ -131,6 +137,10 @@ function goLogin(): void {
   uni.navigateTo({ url: '/pages/login/login' })
 }
 
+function goMyTasks(): void {
+  uni.navigateTo({ url: '/pages/my-tasks/my-tasks' })
+}
+
 // 跳回主地图并 focus 这个 marker：与 tasks.uvue "定位"按钮同一套
 function goFocus(entry: MyCheckinEntry): void {
   loadMarkers()
@@ -201,6 +211,8 @@ function confirmDelete(entry: MyCheckinEntry): void {
 
 .empty-state { padding: 80rpx 40rpx; display: flex; flex-direction: column; align-items: center; }
 .empty-text { font-size: 26rpx; color: #999999; line-height: 40rpx; text-align: center; }
+
+.quick-actions { padding: 0 24rpx 16rpx 24rpx; display: flex; flex-direction: row; }
 
 .card-wrap { padding: 0 24rpx; margin-bottom: 16rpx; }
 

@@ -1,0 +1,130 @@
+<template>
+  <scroll-view class="tasks-page" scroll-y direction="vertical" :show-scrollbar="false">
+    <view class="hero">
+      <text class="hero-title">任务记录</text>
+      <text class="hero-sub">共 {{ taskRewards.length.toString() }} 条已发放任务奖励</text>
+    </view>
+
+    <view v-if="errorText.length > 0" class="notice notice-error">
+      <text class="notice-text">{{ errorText }}</text>
+    </view>
+
+    <view v-if="loading" class="notice">
+      <text class="notice-text">正在加载任务记录...</text>
+    </view>
+
+    <view v-if="!loading && needsLogin" class="empty-state">
+      <text class="empty-text">登录后才能查看任务记录。</text>
+      <view class="action-btn primary" @click="goLogin">
+        <text class="action-btn-text light">去登录</text>
+      </view>
+    </view>
+
+    <view v-if="!loading && !needsLogin && taskRewards.length === 0" class="empty-state">
+      <text class="empty-text">还没有任务奖励记录。完成任务后，这里会显示自动发放的积分。</text>
+    </view>
+
+    <view v-for="(entry, idx) in taskRewards" :key="entry._id + '_' + idx.toString()" class="task-card">
+      <view class="card-head">
+        <text class="card-title">{{ titleFor(entry) }}</text>
+        <view class="status-badge">
+          <text class="status-text">已发放</text>
+        </view>
+      </view>
+      <text class="reward-text">{{ rewardText(entry) }}</text>
+      <text class="time-text">{{ fmtTime(entry.earnedAt) }}</text>
+    </view>
+  </scroll-view>
+</template>
+
+<script setup lang="uts">
+import { ref, computed } from 'vue'
+import type { RewardEntry } from '@/utils/cloudSync'
+import { pullRewards } from '@/utils/cloudSync'
+import { state as userState, refreshUserIdFromAuth } from '@/user/index.uts'
+import { formatDateTime } from '@/utils/format'
+
+const rewards = ref<RewardEntry[]>([] as RewardEntry[])
+const loading = ref<boolean>(false)
+const errorText = ref<string>('')
+const needsLogin = ref<boolean>(false)
+
+const taskRewards = computed((): RewardEntry[] => {
+  return rewards.value.filter((entry: RewardEntry): boolean => entry.sourceType != 'route')
+})
+
+function fmtTime(ts: number): string {
+  return formatDateTime(ts)
+}
+
+function titleFor(entry: RewardEntry): string {
+  if (entry.sourceTitle.length > 0) return entry.sourceTitle
+  if (entry.taskName.length > 0) return entry.taskName
+  return '任务奖励'
+}
+
+function rewardText(entry: RewardEntry): string {
+  if (entry.reward.length > 0) return entry.reward
+  return '积分已发放'
+}
+
+async function reload(): Promise<void> {
+  loading.value = true
+  errorText.value = ''
+  try {
+    await refreshUserIdFromAuth()
+    const u = userState.userInfo
+    if (u == null) {
+      needsLogin.value = true
+      rewards.value = [] as RewardEntry[]
+      return
+    }
+    needsLogin.value = false
+    rewards.value = await pullRewards()
+  } catch (e) {
+    console.log('[my-tasks] reload failed', e)
+    const err = e as Error
+    const msg = err.message
+    errorText.value = msg.length > 0 ? msg : '加载失败，请稍后重试'
+  } finally {
+    loading.value = false
+  }
+}
+
+function goLogin(): void {
+  uni.navigateTo({ url: '/pages/login/login' })
+}
+
+onShow((): void => {
+  reload()
+})
+</script>
+
+<style>
+.tasks-page { flex: 1; width: 750rpx; height: 100%; background-color: #f5f7f6; }
+
+.hero { padding: 32rpx 28rpx 16rpx 28rpx; display: flex; flex-direction: column; }
+.hero-title { font-size: 40rpx; font-weight: bold; color: #1a1a1a; }
+.hero-sub { font-size: 24rpx; color: #7f8c8d; margin-top: 6rpx; }
+
+.notice { background-color: #eef9f2; border-radius: 12rpx; padding: 18rpx 20rpx; margin: 0 24rpx 16rpx 24rpx; }
+.notice-error { background-color: #fff1f0; }
+.notice-text { font-size: 24rpx; color: #2e9f5f; }
+.notice-error .notice-text { color: #d93026; }
+
+.empty-state { padding: 80rpx 40rpx; display: flex; flex-direction: column; align-items: center; }
+.empty-text { font-size: 26rpx; color: #999999; line-height: 40rpx; text-align: center; }
+
+.task-card { margin: 0 24rpx 16rpx 24rpx; background-color: #ffffff; border-radius: 18rpx; padding: 24rpx; display: flex; flex-direction: column; box-shadow: 0 4rpx 12rpx rgba(0,0,0,0.04); }
+.card-head { display: flex; flex-direction: row; align-items: center; }
+.card-title { flex: 1; font-size: 30rpx; font-weight: 600; color: #1a1a1a; lines: 2; }
+.status-badge { border-radius: 999rpx; padding: 4rpx 12rpx; margin-left: 8rpx; background-color: #e6f9ed; }
+.status-text { font-size: 20rpx; font-weight: 600; color: #2ecc71; }
+.reward-text { font-size: 30rpx; color: #2e3a34; font-weight: 600; margin-top: 18rpx; line-height: 40rpx; }
+.time-text { font-size: 22rpx; color: #9aa4a8; margin-top: 8rpx; }
+
+.action-btn { height: 64rpx; border-radius: 32rpx; padding: 0 24rpx; display: flex; align-items: center; justify-content: center; margin-top: 22rpx; }
+.action-btn.primary { background-color: #2ecc71; }
+.action-btn-text { font-size: 24rpx; font-weight: 500; }
+.action-btn-text.light { color: #ffffff; }
+</style>

@@ -42,7 +42,7 @@
     </view>
 
     <view v-if="!loading && !needsLogin && rewards.length === 0" class="empty-state">
-      <text class="empty-text">还没有奖励。完成主题路线或任务后，这里会出现可兑换卡片。</text>
+      <text class="empty-text">还没有路线奖励。完成主题路线后，这里会出现可兑换卡片。</text>
     </view>
 
     <view v-if="!loading && !needsLogin && routeRewards.length > 0" class="section">
@@ -64,24 +64,6 @@
       </view>
     </view>
 
-    <view v-if="!loading && !needsLogin && taskRewards.length > 0" class="section">
-      <text class="section-title">任务奖励</text>
-      <view class="card-grid">
-        <view v-for="(entry, idx) in taskRewards" :key="entry._id + '_task_' + idx.toString()" :class="entry.rewardClaimed ? 'reward-card card-claimed' : 'reward-card card-pending'">
-          <view class="card-head">
-            <text class="card-title">{{ titleFor(entry) }}</text>
-            <view :class="entry.rewardClaimed ? 'status-badge badge-claimed' : 'status-badge badge-pending'">
-              <text :class="entry.rewardClaimed ? 'status-text text-claimed' : 'status-text text-pending'">{{ entry.rewardClaimed ? '已兑' : '待兑' }}</text>
-            </view>
-          </view>
-          <text class="reward-text">{{ entry.reward }}</text>
-          <text class="time-text">{{ fmtTime(entry.earnedAt) }}</text>
-          <view v-if="entry.rewardClaimed == false" class="claim-btn" @click="confirmClaim(entry)">
-            <text class="claim-btn-text">兑换</text>
-          </view>
-        </view>
-      </view>
-    </view>
   </scroll-view>
 </template>
 
@@ -129,10 +111,6 @@ const routeRewards = computed((): RewardEntry[] => {
   return rewards.value.filter((entry: RewardEntry): boolean => entry.sourceType == 'route')
 })
 
-const taskRewards = computed((): RewardEntry[] => {
-  return rewards.value.filter((entry: RewardEntry): boolean => entry.sourceType != 'route')
-})
-
 function fmtTime(ts: number): string {
   return formatDateTime(ts)
 }
@@ -156,7 +134,8 @@ async function reload(): Promise<void> {
       return
     }
     needsLogin.value = false
-    rewards.value = await pullRewards()
+    const allRewards = await pullRewards()
+    rewards.value = allRewards.filter((entry: RewardEntry): boolean => entry.sourceType == 'route')
     summary.value = await pullPointsSummary()
   } catch (e) {
     console.log('[rewards] reload failed', e)

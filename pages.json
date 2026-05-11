@@ -58,6 +58,12 @@
       }
     },
     {
+      "path": "pages/my-tasks/my-tasks",
+      "style": {
+        "navigationBarTitleText": "任务记录"
+      }
+    },
+    {
       "path": "pages/routes/routes",
       "style": {
         "navigationBarTitleText": "主题路线"
