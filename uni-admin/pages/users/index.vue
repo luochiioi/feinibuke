@@ -32,7 +32,7 @@
           <text class="ustat">有效打卡 {{ u.activeCheckins || 0 }} / 累计 {{ u.totalCheckins || 0 }}</text>
           <text class="ustat">照片 {{ u.totalPhotos || 0 }} 张</text>
           <text class="ustat">创建 {{ u.totalCreated || 0 }} 个</text>
-          <text class="ustat reward-stat">积分 {{ u.totalRewardPoints || 0 }} / 待兑 {{ u.pendingRewardPoints || 0 }} / 已兑 {{ u.claimedRewardPoints || 0 }}</text>
+          <text class="ustat reward-stat">已发放 {{ u.claimedRewardPoints || 0 }} / 待领取路线 {{ u.pendingRewardPoints || 0 }} / 累计 {{ u.totalRewardPoints || 0 }}</text>
         </view>
       </view>
       <view
@@ -71,16 +71,16 @@
             <text class="detail-lbl">创建点</text>
           </view>
           <view class="detail-item">
-            <text class="detail-val">{{ selected.totalRewardPoints || 0 }}</text>
-            <text class="detail-lbl">总积分</text>
+            <text class="detail-val">{{ selected.claimedRewardPoints || 0 }}</text>
+            <text class="detail-lbl">已发放积分</text>
           </view>
           <view class="detail-item">
             <text class="detail-val">{{ selected.pendingRewardPoints || 0 }}</text>
-            <text class="detail-lbl">待兑积分</text>
+            <text class="detail-lbl">待领取路线积分</text>
           </view>
           <view class="detail-item">
-            <text class="detail-val">{{ selected.claimedRewardPoints || 0 }}</text>
-            <text class="detail-lbl">已兑积分</text>
+            <text class="detail-val">{{ selected.totalRewardPoints || 0 }}</text>
+            <text class="detail-lbl">累计获得积分</text>
           </view>
           <view class="detail-item">
             <text class="detail-val">{{ selected.routeRewardCount || 0 }}</text>
