@@ -75,13 +75,22 @@ function buildUserRouteEntry(userId, route, now) {
 // routeName / source: 'route' 用于区分来源。task 奖励行没有 source 字段，
 // 读取方应把缺失的 source 当作 'task'。
 function buildRouteRewardEntry(userId, route, now) {
+  const rewardKind = String((route && route.rewardKind) || 'prize')
+  if (rewardKind === 'none') return null
   const reward = String((route && route.reward) || '')
+  const rawPoints = route && route.rewardPoints != null ? Number(route.rewardPoints) : 0
+  const rewardPoints = (rewardKind === 'points' || rewardKind === 'both')
+    ? (Number.isFinite(rawPoints) ? rawPoints : 0)
+    : parseRewardPoints(reward)
+  const rewardText = rewardKind === 'points'
+    ? (rewardPoints > 0 ? `${rewardPoints} 积分` : '')
+    : reward
   return {
     userId: String(userId || ''),
     routeId: Number(route && route.id),
     routeName: String((route && route.name) || ''),
-    reward,
-    rewardPoints: parseRewardPoints(reward),
+    reward: rewardText,
+    rewardPoints,
     source: 'route',
     earnedAt: Number(now),
     rewardClaimed: false

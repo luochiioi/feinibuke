@@ -18,6 +18,8 @@ test('sanitizeRouteCreate trims, dedupes markerIds and locks creator + timestamp
     coverImage: ' cloud://demo/cover.jpg ',
     markerIds: [3, 5, 7, 5, '3'],
     reward: ' 20 积分 + 路线徽章 ',
+    rewardKind: 'both',
+    rewardPoints: '20',
     createdBy: 'attacker',
     createdAt: 0,
     id: 999
@@ -30,11 +32,69 @@ test('sanitizeRouteCreate trims, dedupes markerIds and locks creator + timestamp
     coverImage: 'cloud://demo/cover.jpg',
     markerIds: [3, 5, 7],
     reward: '20 积分 + 路线徽章',
+    rewardKind: 'both',
+    rewardPoints: 20,
     status: ROUTE_STATUS_ACTIVE,
     createdBy: 'admin-1',
     createdAt: 1700000000,
     updatedAt: 1700000000
   })
+})
+
+test('sanitizeRouteCreate defaults legacy routes to prize reward kind', () => {
+  const route = sanitizeRouteCreate({
+    name: 'legacy',
+    markerIds: [1],
+    reward: '路线徽章'
+  }, 'admin', 1000)
+
+  assert.equal(route.rewardKind, 'prize')
+  assert.equal(route.rewardPoints, 0)
+})
+
+test('sanitizeRouteCreate rejects prize or both reward kind without reward text', () => {
+  assert.throws(() => sanitizeRouteCreate({
+    name: 'r',
+    markerIds: [1],
+    rewardKind: 'prize',
+    reward: ''
+  }, 'admin', 1), /奖励文案不能为空/)
+
+  assert.throws(() => sanitizeRouteCreate({
+    name: 'r',
+    markerIds: [1],
+    rewardKind: 'both',
+    rewardPoints: 20,
+    reward: ''
+  }, 'admin', 1), /奖励文案不能为空/)
+})
+
+test('sanitizeRouteCreate accepts no-reward routes with empty reward and zero points', () => {
+  const route = sanitizeRouteCreate({
+    name: 'no reward',
+    markerIds: [1],
+    rewardKind: 'none',
+    reward: ' ignored ',
+    rewardPoints: 99
+  }, 'admin', 1000)
+
+  assert.equal(route.rewardKind, 'none')
+  assert.equal(route.reward, '')
+  assert.equal(route.rewardPoints, 0)
+})
+
+test('sanitizeRouteCreate accepts points-only routes without reward text', () => {
+  const route = sanitizeRouteCreate({
+    name: 'points',
+    markerIds: [1],
+    rewardKind: 'points',
+    rewardPoints: '50',
+    reward: ''
+  }, 'admin', 1000)
+
+  assert.equal(route.rewardKind, 'points')
+  assert.equal(route.reward, '')
+  assert.equal(route.rewardPoints, 50)
 })
 
 test('sanitizeRouteCreate rejects empty name and over-long name', () => {
@@ -121,12 +181,18 @@ test('sanitizeRouteUpdate only writes provided fields and stamps updatedAt', () 
   const updates = sanitizeRouteUpdate({
     name: '新名',
     markerIds: [2, 2, 4],
+    rewardKind: 'points',
+    rewardPoints: '30',
+    reward: '',
     status: ROUTE_STATUS_ARCHIVED
   }, 1700001000)
 
   assert.deepEqual(updates, {
     name: '新名',
     markerIds: [2, 4],
+    reward: '',
+    rewardKind: 'points',
+    rewardPoints: 30,
     status: ROUTE_STATUS_ARCHIVED,
     updatedAt: 1700001000
   })

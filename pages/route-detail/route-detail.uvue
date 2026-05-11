@@ -22,7 +22,7 @@
             <view class="hero-bar-fill" :style="'width:' + ratioPercent + '%;'"></view>
           </view>
         </view>
-        <text class="hero-reward">奖励：{{ route!!.reward }}</text>
+        <text class="hero-reward">奖励：{{ rewardSummary }}</text>
         <text v-if="isCompleted" class="hero-tag">已完成</text>
       </view>
 
@@ -75,6 +75,21 @@ const isCompleted = computed((): boolean => {
   const r = route.value
   if (r == null) return false
   return r.progress.total > 0 && r.progress.done === r.progress.total
+})
+
+const rewardSummary = computed((): string => {
+  const r = route.value
+  if (r == null) return '--'
+  const kind = r.rewardKind.length > 0 ? r.rewardKind : 'prize'
+  const points = r.rewardPoints
+  const reward = r.reward
+  if (kind == 'none') return '无奖励'
+  if (kind == 'points') return points > 0 ? '积分 ' + points.toString() : '积分'
+  if (kind == 'both') {
+    const prize = reward.length > 0 ? reward : '奖品'
+    return points > 0 ? prize + ' / 积分 ' + points.toString() : prize
+  }
+  return reward.length > 0 ? reward : '奖品'
 })
 
 const ratioPercent = computed((): number => {

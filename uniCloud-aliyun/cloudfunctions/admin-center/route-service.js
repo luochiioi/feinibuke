@@ -1,6 +1,11 @@
 const ROUTE_STATUS_ACTIVE = 'active'
 const ROUTE_STATUS_ARCHIVED = 'archived'
 const ROUTE_STATUSES = new Set([ROUTE_STATUS_ACTIVE, ROUTE_STATUS_ARCHIVED])
+const REWARD_KIND_NONE = 'none'
+const REWARD_KIND_PRIZE = 'prize'
+const REWARD_KIND_POINTS = 'points'
+const REWARD_KIND_BOTH = 'both'
+const REWARD_KINDS = new Set([REWARD_KIND_NONE, REWARD_KIND_PRIZE, REWARD_KIND_POINTS, REWARD_KIND_BOTH])
 
 const NAME_MAX = 30
 const DESCRIPTION_MAX = 200
@@ -28,8 +33,32 @@ function normalizeDescription(value) {
   return text
 }
 
-function normalizeReward(value) {
+function normalizeRewardKind(value) {
+  const kind = String(value == null ? REWARD_KIND_PRIZE : value).trim()
+  if (!REWARD_KINDS.has(kind)) {
+    throw new Error('rewardKind 必须是 none/prize/points/both')
+  }
+  return kind
+}
+
+function normalizeRewardPoints(value) {
+  if (value == null || value === '') return 0
+  const n = typeof value === 'number' ? value : Number(value)
+  if (!Number.isFinite(n) || !Number.isInteger(n) || n < 0) {
+    throw new Error('rewardPoints 必须是非负整数')
+  }
+  return n
+}
+
+function normalizeReward(value, rewardKind) {
   const reward = String(value == null ? '' : value).trim()
+  if (rewardKind === REWARD_KIND_NONE) return ''
+  if (rewardKind === REWARD_KIND_POINTS) {
+    if (reward.length > REWARD_MAX) {
+      throw new Error(`奖励文案不能超过 ${REWARD_MAX} 个字符`)
+    }
+    return reward
+  }
   if (reward.length === 0) {
     throw new Error('奖励文案不能为空')
   }
@@ -92,7 +121,9 @@ function sanitizeRouteCreate(data, creatorId, now) {
   const description = normalizeDescription(data && data.description)
   const coverImage = normalizeCoverImage(data && data.coverImage)
   const markerIds = normalizeMarkerIds(data && data.markerIds)
-  const reward = normalizeReward(data && data.reward)
+  const rewardKind = normalizeRewardKind(data && data.rewardKind)
+  const reward = normalizeReward(data && data.reward, rewardKind)
+  const rewardPoints = rewardKind === REWARD_KIND_NONE ? 0 : normalizeRewardPoints(data && data.rewardPoints)
   const status = data && Object.prototype.hasOwnProperty.call(data, 'status')
     ? normalizeStatus(data.status)
     : ROUTE_STATUS_ACTIVE
@@ -103,6 +134,8 @@ function sanitizeRouteCreate(data, creatorId, now) {
     coverImage,
     markerIds,
     reward,
+    rewardKind,
+    rewardPoints,
     status,
     createdBy: String(creatorId || ''),
     createdAt: now,
@@ -112,6 +145,9 @@ function sanitizeRouteCreate(data, creatorId, now) {
 
 function sanitizeRouteUpdate(data, now) {
   const updates = {}
+  const rewardKind = data && Object.prototype.hasOwnProperty.call(data, 'rewardKind')
+    ? normalizeRewardKind(data.rewardKind)
+    : null
   if (data && Object.prototype.hasOwnProperty.call(data, 'name')) {
     updates.name = normalizeRouteName(data.name)
   }
@@ -125,7 +161,18 @@ function sanitizeRouteUpdate(data, now) {
     updates.markerIds = normalizeMarkerIds(data.markerIds)
   }
   if (data && Object.prototype.hasOwnProperty.call(data, 'reward')) {
-    updates.reward = normalizeReward(data.reward)
+    updates.reward = normalizeReward(data.reward, rewardKind || REWARD_KIND_PRIZE)
+  }
+  if (rewardKind != null) {
+    updates.rewardKind = rewardKind
+    if (!Object.prototype.hasOwnProperty.call(updates, 'reward') && (rewardKind === REWARD_KIND_NONE || rewardKind === REWARD_KIND_POINTS)) {
+      updates.reward = ''
+    }
+  }
+  if (data && Object.prototype.hasOwnProperty.call(data, 'rewardPoints')) {
+    updates.rewardPoints = rewardKind === REWARD_KIND_NONE ? 0 : normalizeRewardPoints(data.rewardPoints)
+  } else if (rewardKind === REWARD_KIND_NONE) {
+    updates.rewardPoints = 0
   }
   if (data && Object.prototype.hasOwnProperty.call(data, 'status')) {
     updates.status = normalizeStatus(data.status)
@@ -178,6 +225,11 @@ module.exports = {
   ROUTE_STATUS_ACTIVE,
   ROUTE_STATUS_ARCHIVED,
   ROUTE_STATUSES,
+  REWARD_KIND_NONE,
+  REWARD_KIND_PRIZE,
+  REWARD_KIND_POINTS,
+  REWARD_KIND_BOTH,
+  REWARD_KINDS,
   sanitizeRouteCreate,
   sanitizeRouteUpdate,
   validateRouteMarkerIds,

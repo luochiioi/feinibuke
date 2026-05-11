@@ -55,7 +55,7 @@
             </view>
           </view>
           <text class="card-desc">{{ r.description || '无描述' }}</text>
-          <text class="card-meta">奖励：{{ r.reward || '--' }}</text>
+          <text class="card-meta">奖励：{{ rewardKindLabel(r.rewardKind) }} · {{ routeRewardText(r) }}</text>
           <text class="card-meta">打卡点：{{ formatMarkerNames(r.markerIds) }}</text>
           <text class="card-meta">路线 ID：{{ r.id }} · 创建于 {{ formatTime(r.createdAt) }} · 更新于 {{ formatTime(r.updatedAt) }}</text>
           <text v-if="r.coverImage" class="card-meta">封面：{{ r.coverImage }}</text>
@@ -79,7 +79,28 @@
         <text class="modal-title">{{ editing._id ? '编辑路线' : '新增路线' }}</text>
         <input class="modal-input" v-model="editForm.name" placeholder="路线名称（≤30 字）" />
         <textarea class="modal-textarea" v-model="editForm.description" placeholder="简介（≤200 字，可选）" />
-        <input class="modal-input" v-model="editForm.reward" placeholder="奖励文案，例如 20 积分 + 路线徽章" />
+        <view class="modal-row modal-row-stack">
+          <text class="modal-label">奖励类型</text>
+          <view class="status-toggle">
+            <text class="toggle-pill" :class="editForm.rewardKind === 'none' ? 'on' : ''" @click="editForm.rewardKind = 'none'">无</text>
+            <text class="toggle-pill" :class="editForm.rewardKind === 'prize' ? 'on' : ''" @click="editForm.rewardKind = 'prize'">奖品</text>
+            <text class="toggle-pill" :class="editForm.rewardKind === 'points' ? 'on' : ''" @click="editForm.rewardKind = 'points'">积分</text>
+            <text class="toggle-pill" :class="editForm.rewardKind === 'both' ? 'on' : ''" @click="editForm.rewardKind = 'both'">奖品+积分</text>
+          </view>
+        </view>
+        <input
+          v-if="editForm.rewardKind !== 'none'"
+          class="modal-input"
+          v-model="editForm.reward"
+          :placeholder="editForm.rewardKind === 'points' ? '积分说明（可选）' : '奖励文案，例如 路线徽章'"
+        />
+        <input
+          v-if="editForm.rewardKind === 'points' || editForm.rewardKind === 'both'"
+          class="modal-input"
+          type="number"
+          v-model="editForm.rewardPoints"
+          placeholder="积分数量，例如 50"
+        />
         <input class="modal-input" v-model="editForm.coverImage" placeholder="封面图 cloudURL（可选）" />
         <text class="modal-label">选择打卡点（按勾选顺序作为路线顺序，至少 1 个）</text>
         <view class="markers-select">
@@ -130,6 +151,8 @@ const editForm = ref({
   name: '',
   description: '',
   reward: '',
+  rewardKind: 'prize',
+  rewardPoints: 0,
   coverImage: '',
   markerIds: [],
   status: 'active'
@@ -210,12 +233,31 @@ function formatTime(ts) {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`
 }
 
+function rewardKindLabel(kind) {
+  const k = kind || 'prize'
+  if (k === 'none') return '无奖励'
+  if (k === 'points') return '积分'
+  if (k === 'both') return '奖品+积分'
+  return '奖品'
+}
+
+function routeRewardText(route) {
+  const kind = route.rewardKind || 'prize'
+  const points = Number(route.rewardPoints || 0)
+  if (kind === 'none') return '--'
+  if (kind === 'points') return points > 0 ? `${points} 积分` : '积分'
+  if (kind === 'both') return `${route.reward || '--'} / ${points} 积分`
+  return route.reward || '--'
+}
+
 function openCreate() {
   editing.value = { _id: '' }
   editForm.value = {
     name: '',
     description: '',
     reward: '',
+    rewardKind: 'prize',
+    rewardPoints: 0,
     coverImage: '',
     markerIds: [],
     status: 'active'
@@ -228,6 +270,8 @@ function startEdit(r) {
     name: r.name || '',
     description: r.description || '',
     reward: r.reward || '',
+    rewardKind: r.rewardKind || 'prize',
+    rewardPoints: Number(r.rewardPoints || 0),
     coverImage: r.coverImage || '',
     markerIds: Array.isArray(r.markerIds) ? r.markerIds.map(id => Number(id)) : [],
     status: r.status || 'active'
@@ -262,7 +306,7 @@ async function saveRoute() {
     uni.showToast({ title: '请填写路线名称', icon: 'none' })
     return
   }
-  if (!editForm.value.reward.trim()) {
+  if ((editForm.value.rewardKind === 'prize' || editForm.value.rewardKind === 'both') && !editForm.value.reward.trim()) {
     uni.showToast({ title: '请填写奖励文案', icon: 'none' })
     return
   }
@@ -275,6 +319,8 @@ async function saveRoute() {
       name: editForm.value.name,
       description: editForm.value.description,
       reward: editForm.value.reward,
+      rewardKind: editForm.value.rewardKind,
+      rewardPoints: Number(editForm.value.rewardPoints || 0),
       coverImage: editForm.value.coverImage || null,
       markerIds: editForm.value.markerIds,
       status: editForm.value.status
@@ -577,6 +623,11 @@ async function doDelete(r) {
   align-items: center;
   gap: 16rpx;
   margin: 12rpx 0;
+}
+
+.modal-row-stack {
+  align-items: flex-start;
+  flex-direction: column;
 }
 
 .markers-select {

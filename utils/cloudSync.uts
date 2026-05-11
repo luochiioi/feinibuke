@@ -477,6 +477,8 @@ export type RouteWithProgress = {
   coverImage: string | null
   markerIds: number[]
   reward: string
+  rewardKind: string
+  rewardPoints: number
   status: string
   progress: RouteProgress
 }

@@ -32,6 +32,39 @@ test('buildRouteRewardEntry starts route rewards unclaimed', () => {
   assert.equal(reward.rewardClaimed, false)
 })
 
+test('buildRouteRewardEntry returns null for no-reward routes', () => {
+  const reward = buildRouteRewardEntry('uid-1', {
+    id: 100,
+    name: 'Route',
+    rewardKind: 'none',
+    reward: '',
+    rewardPoints: 0
+  }, 1700000000)
+
+  assert.equal(reward, null)
+})
+
+test('buildRouteRewardEntry writes points-only rows without prize text', () => {
+  const reward = buildRouteRewardEntry('uid-1', {
+    id: 100,
+    name: 'Route',
+    rewardKind: 'points',
+    reward: '',
+    rewardPoints: 50
+  }, 1700000000)
+
+  assert.deepEqual(reward, {
+    userId: 'uid-1',
+    routeId: 100,
+    routeName: 'Route',
+    reward: '50 积分',
+    rewardPoints: 50,
+    source: 'route',
+    earnedAt: 1700000000,
+    rewardClaimed: false
+  })
+})
+
 test('isRouteCompleted requires every marker checked and at least one marker', () => {
   const route = { markerIds: [3, 5, 7] }
   assert.equal(isRouteCompleted(route, [3, 5, 7]), true)

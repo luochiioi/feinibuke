@@ -58,12 +58,15 @@ async function detectAndRecordCompletedRoutes(uid, now) {
     for (const route of newly) {
       try {
         await colUserRoutes.add(buildUserRouteEntry(uid, route, now))
-        await colRewards.add(buildRouteRewardEntry(uid, route, now))
-        completedRoutes.push({
-          id: Number(route.id),
-          name: String(route.name || ''),
-          reward: String(route.reward || '')
-        })
+        const rewardEntry = buildRouteRewardEntry(uid, route, now)
+        if (rewardEntry != null) {
+          await colRewards.add(rewardEntry)
+          completedRoutes.push({
+            id: Number(route.id),
+            name: String(route.name || ''),
+            reward: String(rewardEntry.reward || '')
+          })
+        }
       } catch (e) {
         console.log('[routes] record completion failed', route && route.id, e && e.message ? e.message : e)
       }
@@ -439,6 +442,8 @@ module.exports = {
       coverImage: route.coverImage || null,
       markerIds: Array.isArray(route.markerIds) ? route.markerIds.map(Number) : [],
       reward: route.reward || '',
+      rewardKind: route.rewardKind || 'prize',
+      rewardPoints: Number(route.rewardPoints || 0),
       status: route.status,
       progress: calcRouteProgress(route, userCheckedMarkerIds)
     }))
