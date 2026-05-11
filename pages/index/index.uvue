@@ -64,11 +64,21 @@
           </view>
         </view>
 
-        <view class="my-checkin" v-if="myCheckin != null">
+        <view class="my-checkin panel-skeleton" v-if="panelDetailsLoading">
+          <text class="section-label">详情更新中</text>
+          <text class="skeleton-text">正在加载最近打卡和照片...</text>
+        </view>
+
+        <view class="my-checkin" v-if="panelDetailsLoading == false && myCheckin != null">
           <text class="section-label">我的打卡</text>
           <image v-if="myCheckin!!.photoCloudURL != null" :src="myCheckin!!.photoCloudURL!!" class="my-photo" mode="aspectFill" />
           <text class="my-note" v-if="myCheckin!!.note != null">{{ myCheckin!!.note }}</text>
           <text class="my-time">{{ fmtTime(myCheckin!!.checkedAt) }}</text>
+        </view>
+
+        <view class="other-checkins panel-skeleton" v-if="panelDetailsLoading && visibleOtherCheckinsWithPhoto.length == 0">
+          <text class="section-label">照片足迹</text>
+          <text class="skeleton-text">正在同步照片...</text>
         </view>
 
         <view class="other-checkins" v-if="visibleOtherCheckinsWithPhoto.length > 0">
@@ -101,10 +111,11 @@
 </template>
 
 <script setup lang="uts">
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import { deleteMarker, findById, isCheckedByUser, loadFromStorage as loadMarkers, markers, syncFromCloud } from '@/stores/useMarkerStore'
 import { currentLocation, distanceTo, getEffectiveCheckinRadius, pollLocationOnce, startTracking, stopTracking } from '@/stores/useLocationStore'
 import { activeMarker, consumeFocus, consumeFocusPayload, latitude, longitude, moveToLocation, onRegionChangeEnd, scale, setActiveMarker, zoomIn, zoomOut } from '@/stores/useMapStore'
+import type { FocusPayload } from '@/stores/useMapStore'
 import { loadFromStorage as loadTasks } from '@/stores/useTaskStore'
 import { state as userState, clearUserInfo, refreshUserIdFromAuth } from '@/user/index.uts'
 import type { CheckinMarker, CheckinEntry } from '@/types/marker'
@@ -114,6 +125,7 @@ import { deleteCloudCheckin, repairMissingCheckins } from '@/utils/cloudSync'
 const LOCATE_SCALE: number = 17
 const OTHER_FOOTPRINT_PHOTO_LIMIT: number = 12
 let hasCenteredOnUser: boolean = false
+const panelDetailsLoading = ref<boolean>(false)
 
 const isLoggedIn = computed((): boolean => userState.userInfo != null)
 const authLabel = computed((): string => {
@@ -188,6 +200,28 @@ function findBySdkMarkerId(sdkMarkerId: number): CheckinMarker | null {
   const index = sdkMarkerId - 1
   if (index < 0 || index >= markers.value.length) return null
   return markers.value[index]
+}
+
+function buildFocusSnapshot(payload: FocusPayload): CheckinMarker {
+  return {
+    id: payload.markerId,
+    _id: '',
+    title: payload.title,
+    latitude: payload.latitude,
+    longitude: payload.longitude,
+    checked: false,
+    width: 36,
+    height: 36,
+    iconPath: '/static/marker_default.png',
+    checkedAt: null,
+    photoPath: null,
+    photoCloudURL: null,
+    note: null,
+    createdAt: Date.now(),
+    createdBy: null,
+    checkedBy: null,
+    checkinCount: null
+  } as CheckinMarker
 }
 
 const markersJson = computed((): string => {
@@ -299,6 +333,8 @@ function fmtTime(ts: number): string {
 }
 
 async function refreshCloudAndPanel(markerId: number): Promise<void> {
+  const shouldShowPanelLoading = markerId > 0 && activeMarker.value != null
+  if (shouldShowPanelLoading) panelDetailsLoading.value = true
   try {
     const user = userState.userInfo
     const uid = user != null ? user.userId : null
@@ -310,6 +346,8 @@ async function refreshCloudAndPanel(markerId: number): Promise<void> {
     loadTasks()
   } catch (e) {
     console.log('syncFromCloud failed', e)
+  } finally {
+    if (shouldShowPanelLoading) panelDetailsLoading.value = false
   }
 }
 
@@ -343,22 +381,12 @@ async function centerOnUserOnce(): Promise<void> {
 async function consumePendingFocus(): Promise<boolean> {
   const payload = consumeFocusPayload()
   if (payload != null) {
-    await refreshUserIdFromAuth()
-    const user = userState.userInfo
-    const uid = user != null ? user.userId : null
-    try {
-      await syncFromCloud(uid)
-    } catch (e) {
-      console.log('syncFromCloud before focus failed', e)
-    }
     moveToLocation(payload.latitude, payload.longitude, 16)
-    const fresh = findById(payload.markerId)
-    if (fresh != null) {
-      setActiveMarker(fresh)
-      repairAndRefreshForUser(fresh.id)
-    } else {
-      uni.showToast({ title: 'Marker not synced yet', icon: 'none' })
-    }
+    const cached = findById(payload.markerId)
+    const initial = cached != null ? cached : buildFocusSnapshot(payload)
+    setActiveMarker(initial)
+    await refreshUserIdFromAuth()
+    repairAndRefreshForUser(payload.markerId)
     return true
   }
   const target = consumeFocus()
@@ -651,6 +679,13 @@ function doDelete(): void {
   color: #7f8c8d;
   margin-bottom: 12rpx;
   font-weight: 500;
+}
+.panel-skeleton {
+  border: 2rpx dashed #d8e8de;
+}
+.skeleton-text {
+  font-size: 24rpx;
+  color: #8a9890;
 }
 .my-checkin {
   margin-top: 24rpx;
