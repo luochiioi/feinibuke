@@ -1417,3 +1417,9 @@ P5.4 did not introduce a new UTS/HBuilderX compile rule. The changed `.uvue/.uts
 - `pages/route-detail/route-detail.uvue` and `utils/cloudSync.uts` continued to deserialize nested cloud data with `JSON.stringify(raw) -> JSON.parse<T>(...)`.
 - `pages/rewards/rewards.uvue`, `pages/my-checkins/my-checkins.uvue`, and `pages/my-tasks/my-tasks.uvue` avoided `switchTab`, illegal `display` values, and `Number(...)` / `Number.*`.
 - The post-edit grep may still report existing explanatory comments in `pages/route-detail/route-detail.uvue` that mention `Number(...)`; those are documentation comments, not executable UTS calls.
+
+## 2026-05-12 P5.4 follow-up note: auth chip status-bar clearance
+
+Moving the App homepage auth chip from the WeChat capsule side to the top-left was not enough on some phones because `top: calc(env(safe-area-inset-top) + 12rpx)` could still sit inside or too close to the status bar. The current offset is `top: calc(env(safe-area-inset-top) + 44rpx)`.
+
+This is a layout acceptance note, not a new compile rule. Keep using `env(safe-area-inset-top)` plus an explicit rpx offset for top floating controls, then verify on the actual target phone.

@@ -3884,3 +3884,23 @@ Next, implement P5.5 in task-sized commits:
 6. Full tests, `node --check`, UTS grep, and docs.
 
 Do not commit `.hbuilderx/launch.json`, `uni-admin/.hbuilderx/`, or `uniCloud-aliyun/cloudfunctions/admin-center/admin-center.param.js`. App `pages.json` has no tabBar, so do not use `switchTab`. Native map marker ids must stay SDK-safe; never bind business marker ids directly to `<map :markers>`. In UTS 5.07, do not use `Number(` / `Number.` and do not cast `getCurrentPages()` entries to `UTSJSONObject`. Cross cloud boundaries with `JSON.stringify(raw) -> JSON.parse<T>(...)`.
+
+## 2026-05-12 P5.4 follow-up: admin task records split + auto task ids
+
+Commit:
+- `9a9775b` feat: split admin task records and auto task ids
+
+Fixes after P5.4 review:
+- Admin "奖励记录" page now focuses on route rewards only by forcing `source: 'route'` in `getRewardRecords()` / `getPointsSummary()`.
+- New admin page `uni-admin/pages/task-records/index.vue` lists task auto-issued reward rows by forcing `source: 'task'`.
+- Admin records quick-nav (`pages/checkins/index.vue`) and dashboard section actions now include "任务记录" next to 打卡记录 / 审计日志 / 奖励记录 / 同步诊断 / 最近打卡.
+- Admin task creation no longer asks the administrator to type a task id. `admin-center/task-service.nextTaskId()` generates the next `task_###` id from existing tasks, and `upsertTask` reads existing ids only when creating without an id.
+- App homepage auth pill moved further down from `safe-area + 12rpx` to `safe-area + 44rpx` to avoid phone status-bar overlap.
+
+Verification:
+- `node --test ...`: 103 passed.
+- Cloud syntax `node --check`: 14 cloud `index.obj.js` / `*-service.js` files passed.
+- `pages.json` and `uni-admin/pages.json` parse successfully.
+- UTS forbidden-token grep: expected hits are only existing `route-detail` comments mentioning `Number(...)`.
+
+Next iteration plan remains: `docs/superpowers/plans/2026-05-12-p5.5-authoring-polish-and-ops.md`, with the admin task-records split and task-id auto-generation now treated as already landed.
