@@ -20,6 +20,27 @@
       </view>
     </view>
 
+    <view v-if="!loading && !needsLogin && summary != null" class="wallet">
+      <view class="wallet-head">
+        <text class="wallet-label">可用积分</text>
+        <text class="wallet-value">{{ availablePoints.toString() }}</text>
+      </view>
+      <view class="wallet-grid">
+        <view class="wallet-cell">
+          <text class="wallet-cell-label">待领取路线</text>
+          <text class="wallet-cell-value">{{ pendingRoutePoints.toString() }}</text>
+        </view>
+        <view class="wallet-cell">
+          <text class="wallet-cell-label">任务已发</text>
+          <text class="wallet-cell-value">{{ taskIssuedPoints.toString() }}</text>
+        </view>
+        <view class="wallet-cell">
+          <text class="wallet-cell-label">路线已发</text>
+          <text class="wallet-cell-value">{{ routeIssuedPoints.toString() }}</text>
+        </view>
+      </view>
+    </view>
+
     <view v-if="!loading && !needsLogin && rewards.length === 0" class="empty-state">
       <text class="empty-text">还没有奖励。完成主题路线或任务后，这里会出现可兑换卡片。</text>
     </view>
@@ -66,15 +87,33 @@
 
 <script setup lang="uts">
 import { ref, computed } from 'vue'
-import type { RewardEntry } from '@/utils/cloudSync'
-import { pullRewards, claimReward } from '@/utils/cloudSync'
+import type { RewardEntry, PointsSummary } from '@/utils/cloudSync'
+import { pullRewards, claimReward, pullPointsSummary } from '@/utils/cloudSync'
 import { state as userState, refreshUserIdFromAuth } from '@/user/index.uts'
 import { formatDateTime } from '@/utils/format'
 
 const rewards = ref<RewardEntry[]>([] as RewardEntry[])
+const summary = ref<PointsSummary | null>(null)
 const loading = ref<boolean>(false)
 const errorText = ref<string>('')
 const needsLogin = ref<boolean>(false)
+
+const availablePoints = computed((): number => {
+  const s = summary.value
+  return s != null ? s!!.issuedPoints : 0
+})
+const pendingRoutePoints = computed((): number => {
+  const s = summary.value
+  return s != null ? s!!.pendingRoutePoints : 0
+})
+const taskIssuedPoints = computed((): number => {
+  const s = summary.value
+  return s != null ? s!!.taskIssuedPoints : 0
+})
+const routeIssuedPoints = computed((): number => {
+  const s = summary.value
+  return s != null ? s!!.routeIssuedPoints : 0
+})
 
 const totalCount = computed((): number => rewards.value.length)
 const claimedCount = computed((): number => {
@@ -118,6 +157,7 @@ async function reload(): Promise<void> {
     }
     needsLogin.value = false
     rewards.value = await pullRewards()
+    summary.value = await pullPointsSummary()
   } catch (e) {
     console.log('[rewards] reload failed', e)
     const err = e as Error
@@ -201,4 +241,14 @@ onShow((): void => {
 .action-btn.primary { background-color: #2ecc71; }
 .action-btn-text { font-size: 24rpx; font-weight: 500; }
 .action-btn-text.light { color: #ffffff; }
+
+.wallet { margin: 0 24rpx 20rpx 24rpx; background-color: #ffffff; border-radius: 20rpx; padding: 24rpx; display: flex; flex-direction: column; box-shadow: 0 4rpx 14rpx rgba(0,0,0,0.05); }
+.wallet-head { display: flex; flex-direction: column; padding-bottom: 18rpx; border-bottom-width: 2rpx; border-bottom-color: #eef2f0; }
+.wallet-label { font-size: 24rpx; color: #7f8c8d; }
+.wallet-value { font-size: 56rpx; color: #2ecc71; font-weight: bold; margin-top: 6rpx; }
+
+.wallet-grid { display: flex; flex-direction: row; margin-top: 18rpx; }
+.wallet-cell { flex: 1; display: flex; flex-direction: column; align-items: center; }
+.wallet-cell-label { font-size: 22rpx; color: #88928d; }
+.wallet-cell-value { font-size: 32rpx; color: #1a1a1a; font-weight: 600; margin-top: 6rpx; }
 </style>
