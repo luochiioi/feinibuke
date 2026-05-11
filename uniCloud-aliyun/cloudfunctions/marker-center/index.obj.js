@@ -144,28 +144,6 @@ module.exports = {
     return { errCode: 0, data: { uid: this.auth.uid } }
   },
 
-  async add(data) {
-    if (!this.auth.uid) return { errCode: -1, errMsg: '请先登录' }
-    const { title, latitude, longitude } = data
-    if (!title || latitude == null || longitude == null) {
-      return { errCode: -1, errMsg: '参数不完整' }
-    }
-    const now = Date.now()
-    const res = await col.add({
-      id: now,
-      title, latitude, longitude,
-      iconPath: '/static/marker_default.png',
-      checked: false,
-      checkinCount: 0,
-      checkedBy: [],
-      createdBy: this.auth.uid,
-      createdAt: now,
-      updatedAt: now
-    })
-    await incrementUserStats(this.auth.uid, { totalCreated: 1 })
-    return { errCode: 0, data: { id: res.id } }
-  },
-
   async checkin(data) {
     if (!this.auth.uid) return { errCode: -1, errMsg: '请先登录' }
     const { markerId, photoCloudURL, note, latitude, longitude } = data
@@ -487,7 +465,6 @@ async function incrementUserStats(userId, increments) {
       userId,
       totalCheckins: Number(increments.totalCheckins || 0),
       totalPhotos: Number(increments.totalPhotos || 0),
-      totalCreated: Number(increments.totalCreated || 0),
       createdAt: now,
       updatedAt: now
     })
@@ -497,7 +474,6 @@ async function incrementUserStats(userId, increments) {
   const updates = { updatedAt: now }
   if (increments.totalCheckins) updates.totalCheckins = db.command.inc(increments.totalCheckins)
   if (increments.totalPhotos) updates.totalPhotos = db.command.inc(increments.totalPhotos)
-  if (increments.totalCreated) updates.totalCreated = db.command.inc(increments.totalCreated)
   await colUserProfiles.doc(existing.data[0]._id).update(updates)
 }
 

@@ -15,7 +15,6 @@ const {
   createDeleteCheckinRecordPlan,
   createPurgeUserCheckinsPlan,
   deriveActiveCheckinsFromMarkers,
-  deriveUserStatsFromMarkers,
   normalizeAdminUsers,
   buildSyncDiagnostics
 } = require('./marker-service')
@@ -147,7 +146,7 @@ module.exports = {
       colUsers.count(),
       colUsers.skip(offset).limit(limit).get(),
       colUserProfiles.get(),
-      colMarkers.field({ createdBy: true, checkedBy: true }).get(),
+      colMarkers.field({ checkedBy: true }).get(),
       colRewards.field({
         userId: true,
         reward: true,

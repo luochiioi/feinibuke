@@ -393,7 +393,7 @@ function ensureStats(map, userId) {
   const key = String(userId || '')
   if (!key) return null
   if (!map.has(key)) {
-    map.set(key, { activeCheckins: 0, totalPhotos: 0, totalCreated: 0 })
+    map.set(key, { activeCheckins: 0, totalPhotos: 0 })
   }
   return map.get(key)
 }
@@ -401,9 +401,6 @@ function ensureStats(map, userId) {
 function deriveActiveCheckinsFromMarkers(markers) {
   const statsByUserId = new Map()
   ;(markers || []).forEach(marker => {
-    const creator = ensureStats(statsByUserId, marker && marker.createdBy)
-    if (creator) creator.totalCreated += 1
-
     ;((marker && marker.checkedBy) || []).forEach(entry => {
       const stats = ensureStats(statsByUserId, entry && entry.userId)
       if (!stats) return
@@ -461,7 +458,6 @@ function normalizeAdminUsers(uniUsers, profileUsers, markerStats, rewardStats) {
       totalCheckins,
       activeCheckins,
       totalPhotos: Number(profileStats.totalPhotos != null ? profileStats.totalPhotos : (activeStats.totalPhotos || 0)),
-      totalCreated: Number(profileStats.totalCreated != null ? profileStats.totalCreated : (activeStats.totalCreated || 0)),
       totalRewardPoints: Number(rewards.totalRewardPoints || 0),
       claimedRewardPoints: Number(rewards.claimedRewardPoints || 0),
       pendingRewardPoints: Number(rewards.pendingRewardPoints || 0),

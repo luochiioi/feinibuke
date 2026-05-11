@@ -1,5 +1,5 @@
 import { ref, computed } from 'vue'
-import type { CheckinMarker, CheckinEntry, NewMarkerInput } from '@/types/marker'
+import type { CheckinMarker, CheckinEntry } from '@/types/marker'
 import { loadMarkers, saveMarkers } from '@/utils/storage'
 import { getDefaultMarkers } from '@/utils/defaults'
 import { syncMarkers } from '@/utils/cloudSync'
@@ -53,31 +53,6 @@ export async function loadFromStorage(): Promise<void> {
 
 export function persist(): void {
   saveMarkers(markers.value)
-}
-
-export async function addMarker(input: NewMarkerInput): Promise<CheckinMarker> {
-  const marker: CheckinMarker = {
-    id: Date.now(),
-    _id: '' + Date.now(),
-    title: input.title,
-    latitude: input.latitude,
-    longitude: input.longitude,
-    checked: false,
-    width: 36,
-    height: 36,
-    iconPath: DEFAULT_MARKER_ICON,
-    checkedAt: null,
-    photoPath: null,
-    photoCloudURL: null,
-    note: null,
-    createdAt: Date.now(),
-    createdBy: null,
-    checkedBy: null,
-    checkinCount: null
-  }
-  markers.value.push(marker)
-  persist()
-  return marker
 }
 
 export async function doCheckIn(markerId: number, photoPath: string | null, note: string | null, userId: string | null, photoCloudURL: string | null): Promise<CheckinMarker> {

@@ -363,8 +363,7 @@ test('normalizeAdminUsers reads accounts from uni-id-users and merges profile st
     {
       userId: 'uid-1',
       totalCheckins: 3,
-      totalPhotos: 2,
-      totalCreated: 1
+      totalPhotos: 2
     },
     {
       userId: 'other-user',
@@ -382,7 +381,6 @@ test('normalizeAdminUsers reads accounts from uni-id-users and merges profile st
       totalCheckins: 3,
       activeCheckins: 2,
       totalPhotos: 2,
-      totalCreated: 1,
       totalRewardPoints: 0,
       claimedRewardPoints: 0,
       pendingRewardPoints: 0,
@@ -401,7 +399,6 @@ test('normalizeAdminUsers reads accounts from uni-id-users and merges profile st
       totalCheckins: 1,
       activeCheckins: 1,
       totalPhotos: 0,
-      totalCreated: 2,
       totalRewardPoints: 0,
       claimedRewardPoints: 0,
       pendingRewardPoints: 0,
@@ -458,15 +455,18 @@ test('normalizeAdminUsers exposes activeCheckins separately from cumulative tota
     { _id: 'uid-2', username: 'bob', nickname: 'Bob' },
     { _id: 'uid-3', username: 'cara', nickname: 'Cara' }
   ], [
-    { userId: 'uid-1', totalCheckins: 5, totalPhotos: 3, totalCreated: 1 },
-    { userId: 'uid-3', totalCheckins: 7, totalPhotos: 2, totalCreated: 0 }
+    { userId: 'uid-1', totalCheckins: 5, totalPhotos: 3 },
+    { userId: 'uid-3', totalCheckins: 7, totalPhotos: 2 }
   ], activeStats)
 
   assert.equal(users[0].totalCheckins, 5)
   assert.equal(users[0].activeCheckins, 1)
   assert.equal(users[0].totalPhotos, 3)
+  assert.equal(Object.prototype.hasOwnProperty.call(users[0], 'totalCreated'), false)
   assert.equal(users[1].totalCheckins, 1)
   assert.equal(users[1].activeCheckins, 1)
+  assert.equal(Object.prototype.hasOwnProperty.call(users[1], 'totalCreated'), false)
   assert.equal(users[2].totalCheckins, 7)
   assert.equal(users[2].activeCheckins, 0)
+  assert.equal(Object.prototype.hasOwnProperty.call(users[2], 'totalCreated'), false)
 })

@@ -31,12 +31,6 @@ export type CheckinMarker = {
   checkinCount: number | null       // 总打卡人次（云端聚合）；本地老数据为 null
 }
 
-export type NewMarkerInput = {
-  title: string
-  latitude: number
-  longitude: number
-}
-
 export type MarkerLabel = {
   content: string
   color: string

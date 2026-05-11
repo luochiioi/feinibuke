@@ -13,13 +13,8 @@
       :markers-json="markersJson"
       :show-location="true"
       @markertap="onMarkerTap"
-      @longpress="onMapLongPress"
       @regionchange="onRegionChange"
     >
-      <cover-view class="floating-add-btn" v-if="activeMarker == null" @click="goAddMarker">
-        <cover-view class="add-icon">+</cover-view>
-        <cover-view class="add-label">在此新增</cover-view>
-      </cover-view>
     </checkin-map>
 
     <view class="bl-stack" v-if="activeMarker == null">
@@ -109,7 +104,7 @@
 import { computed } from 'vue'
 import { deleteMarker, findById, isCheckedByUser, loadFromStorage as loadMarkers, markers, syncFromCloud } from '@/stores/useMarkerStore'
 import { currentLocation, distanceTo, getEffectiveCheckinRadius, pollLocationOnce, startTracking, stopTracking } from '@/stores/useLocationStore'
-import { activeMarker, consumeFocus, consumeFocusPayload, latitude, longitude, mapCenterLat, mapCenterLng, moveToLocation, onRegionChangeEnd, scale, setActiveMarker, zoomIn, zoomOut } from '@/stores/useMapStore'
+import { activeMarker, consumeFocus, consumeFocusPayload, latitude, longitude, moveToLocation, onRegionChangeEnd, scale, setActiveMarker, zoomIn, zoomOut } from '@/stores/useMapStore'
 import { loadFromStorage as loadTasks } from '@/stores/useTaskStore'
 import { state as userState, clearUserInfo, refreshUserIdFromAuth } from '@/user/index.uts'
 import type { CheckinMarker, CheckinEntry } from '@/types/marker'
@@ -416,24 +411,6 @@ function onMarkerTap(e: UniMapMarkerTapEvent): void {
   uni.showToast({ title: 'Marker syncing, try again', icon: 'none' })
 }
 
-function navigateToAddMarkerAt(centerLat: number, centerLng: number): void {
-  const cur = currentLocation.value
-  const curLat = cur != null ? cur.latitude.toString() : ''
-  const curLng = cur != null ? cur.longitude.toString() : ''
-  uni.navigateTo({
-    url: `/pages/add-marker/add-marker?centerLat=${centerLat}&centerLng=${centerLng}&currentLat=${curLat}&currentLng=${curLng}`
-  })
-}
-
-function onMapLongPress(): void {
-  const ctx = ensureMapCtx()
-  if (ctx == null) return
-  ctx.getCenterLocation({
-    success: (res: LocationObject): void => {
-      navigateToAddMarkerAt(res.latitude, res.longitude)
-    }
-  })
-}
 
 function onRegionChange(e: UniMapRegionChangeEvent): void {
   if (e.type !== 'end') return
@@ -446,9 +423,6 @@ function onRegionChange(e: UniMapRegionChangeEvent): void {
   })
 }
 
-function goAddMarker(): void {
-  navigateToAddMarkerAt(mapCenterLat.value, mapCenterLng.value)
-}
 
 function doCheckin(): void {
   const marker = activeMarker.value
@@ -584,9 +558,6 @@ function doDelete(): void {
 .br-btn-text { font-size: 36rpx; color: #2ecc71; font-weight: 600; }
 .br-btn-locate .br-btn-text { color: #ffffff; font-size: 24rpx; font-weight: 500; }
 
-.floating-add-btn { position: absolute; bottom: 64rpx; left: 50%; transform: translateX(-50%); display: flex; flex-direction: column; align-items: center; }
-.add-icon { width: 96rpx; height: 96rpx; border-radius: 48rpx; background-color: #2ecc71; color: #ffffff; font-size: 52rpx; font-weight: 400; display: flex; align-items: center; justify-content: center; box-shadow: 0 8rpx 24rpx rgba(46,204,113,0.4); }
-.add-label { margin-top: 8rpx; font-size: 22rpx; color: #2ecc71; background-color: rgba(255,255,255,0.9); padding: 4rpx 16rpx; border-radius: 12rpx; }
 .marker-panel {
   position: absolute;
   left: 20rpx;

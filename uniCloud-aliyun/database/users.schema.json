@@ -14,7 +14,6 @@
     "avatar": { "bsonType": "string", "description": "头像云存储URL" },
     "totalCheckins": { "bsonType": "int", "defaultValue": 0 },
     "totalPhotos": { "bsonType": "int", "defaultValue": 0 },
-    "totalCreated": { "bsonType": "int", "defaultValue": 0 },
     "createdAt": { "bsonType": "timestamp" },
     "updatedAt": { "bsonType": "timestamp" }
   }

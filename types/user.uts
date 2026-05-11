@@ -14,7 +14,6 @@ export type User = {
   role: UserRole
   totalCheckins: number           // 累计打卡次数
   totalPhotos: number             // 累计带照片打卡数
-  totalCreated: number            // 累计创建打卡点数
   createdAt: number               // 注册时间戳（毫秒）
 }
 

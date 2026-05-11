@@ -20,12 +20,6 @@
       }
     },
     {
-      "path": "pages/add-marker/add-marker",
-      "style": {
-        "navigationBarTitleText": "新增打卡点"
-      }
-    },
-    {
       "path": "pages/tasks/tasks",
       "style": {
         "navigationBarTitleText": "任务与成就"
