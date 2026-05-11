@@ -1375,3 +1375,36 @@ Reason: Android native map can briefly render a white surface when the index pag
 Anti-patterns:
 - `requestFocusById(...)` followed by unconditional `uni.reLaunch({ url: '/pages/index/index' })` from pages that were opened from the homepage.
 - Running marker sync in `App.uvue` token verification and again in `pages/index/index.uvue` onShow. Let the index page own marker sync so startup/focus flows do not triple-load.
+
+
+### Rule 40: getCurrentPages page objects are not UTSJSONObject
+
+Real-device feedback on 2026-05-11 showed:
+
+```text
+java.lang.ClassCastException: UniNormalPageImpl cannot be cast to UTSJSONObject
+at stores/useMapStore.uts:67
+const page = pages[i] as UTSJSONObject
+```
+
+`getCurrentPages()` returns native page instances such as `UniNormalPageImpl`, not JSON dictionaries. Do not cast page instances to `UTSJSONObject`, and do not read route data through `page["route"]` in UTS code.
+
+Focus-navigation rule update: if a helper needs to return to the homepage, do not scan the page stack by introspecting page objects. Use an explicit caller-provided navigation depth instead:
+
+```ts
+export function returnToIndexForFocus(deltaToIndex: number): void {
+  if (deltaToIndex > 0) {
+    uni.navigateBack({ delta: deltaToIndex })
+    return
+  }
+  uni.reLaunch({ url: '/pages/index/index' })
+}
+```
+
+Known call-site depths:
+- my-checkins -> index: `returnToIndexForFocus(1)`
+- tasks -> index: `returnToIndexForFocus(1)`
+- task-detail -> tasks -> index: `returnToIndexForFocus(2)`
+- route-detail -> routes -> index: `returnToIndexForFocus(2)`
+
+This supersedes the stack-scanning implementation described in Rule 39. The product intent remains the same: reuse the existing homepage map instance when the navigation stack is known; use `reLaunch` only as an explicit fallback.

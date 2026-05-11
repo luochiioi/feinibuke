@@ -3773,3 +3773,16 @@ Fix direction: keep `CheckinMarker.id` as the real business id, but render nativ
 4. Task rewards should display as already issued/claimed and should not require user redemption; route rewards remain redeemable.
 
 **Next plan:** `docs/superpowers/plans/2026-05-11-p5.3-points-wallet-and-ux.md`.
+
+
+## 2026-05-11 P5.3 pre-task update: focus navigation ClassCastException
+
+Real-device feedback after `5417deb` showed `java.lang.ClassCastException: UniNormalPageImpl cannot be cast to UTSJSONObject` when tapping focus actions from task detail, tasks page, and my checkins. Root cause: `returnToIndexForFocus()` scanned `getCurrentPages()` and cast page instances to `UTSJSONObject`. In UTS 5.07 these are native page objects, not JSON dictionaries.
+
+Next iteration must start with a pre-task before points wallet work:
+- Change `returnToIndexForFocus()` to accept explicit `deltaToIndex: number`.
+- Remove all `getCurrentPages()` stack scanning and page-object casts from that helper.
+- Call sites: my-checkins/tasks use `returnToIndexForFocus(1)`; task-detail/route-detail use `returnToIndexForFocus(2)`; unknown direct-entry flows can use `0` to fall back to `reLaunch`.
+- Add/update `utils/map-focus-navigation.test.js` so it fails if `stores/useMapStore.uts` contains `as UTSJSONObject` or `page["route"]` in focus navigation.
+
+Updated plan: `docs/superpowers/plans/2026-05-11-p5.3-points-wallet-and-ux.md`.
