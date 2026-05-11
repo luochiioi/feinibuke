@@ -24,13 +24,15 @@ function buildClaimedReward(reward, now) {
 }
 
 function buildTaskRewardEntry(userId, task, now) {
-  const reward = s(task && task.reward)
+  const explicitPoints = n(task && task.rewardPoints)
+  const points = explicitPoints != null && explicitPoints > 0 ? Math.floor(explicitPoints) : null
+  const reward = points != null && !s(task && task.reward) ? `${points} 积分` : s(task && task.reward)
   return {
     userId: s(userId),
     taskId: s(task && task.id),
     taskName: s(task && task.name),
     reward,
-    rewardPoints: parseRewardPoints(reward),
+    rewardPoints: points != null ? points : parseRewardPoints(reward),
     source: 'task',
     earnedAt: Number(now),
     rewardClaimed: true,

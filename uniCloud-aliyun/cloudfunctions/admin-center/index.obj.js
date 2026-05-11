@@ -32,6 +32,9 @@ const {
   validateRouteMarkerIds,
   calcRouteProgress
 } = require('./route-service')
+const {
+  buildTaskUpsertDoc
+} = require('./task-service')
 
 const colMarkers = db.collection('tourism_markers')
 const colUsers = db.collection('uni-id-users')
@@ -666,6 +669,39 @@ module.exports = {
     const { _id, ...updates } = data
     await colTasks.doc(_id).update(updates)
     return ok(null, '更新成功')
+  },
+
+  async upsertTask(data) {
+    try {
+      const now = Date.now()
+      const doc = buildTaskUpsertDoc(data, this.auth.uid, now)
+      const targetId = data && data._id ? String(data._id) : ''
+      if (targetId) {
+        await colTasks.doc(targetId).update(doc)
+        return ok({ _id: targetId, task: doc }, '更新成功')
+      }
+
+      const existing = await colTasks.where({ id: doc.id }).limit(1).get()
+      if (existing.data && existing.data.length > 0) {
+        await colTasks.doc(existing.data[0]._id).update(doc)
+        return ok({ _id: existing.data[0]._id, task: doc }, '更新成功')
+      }
+
+      const res = await colTasks.add({ ...doc, createdAt: now })
+      return ok({ _id: res.id, task: doc }, '创建成功')
+    } catch (e) {
+      return fail(e.message || '保存失败')
+    }
+  },
+
+  async deleteTask(data) {
+    const targetId = data && data._id ? String(data._id) : ''
+    if (!targetId) return fail('缺少任务 _id')
+    await colTasks.doc(targetId).update({
+      status: 'archived',
+      updatedAt: Date.now()
+    })
+    return ok(null, '归档成功')
   },
 
   // P4 主题路线 P0 —— admin CRUD。tourism_routes 是 admin 维护的纯配置集合；

@@ -43,6 +43,18 @@ test('buildTaskRewardEntry stores normalized rewardPoints and auto-claims task r
   })
 })
 
+test('buildTaskRewardEntry prefers explicit task rewardPoints', () => {
+  const row = buildTaskRewardEntry('uid-1', {
+    id: 'task_007',
+    name: 'New Task',
+    reward: '',
+    rewardPoints: 30
+  }, 1700000000000)
+
+  assert.equal(row.reward, '30 积分')
+  assert.equal(row.rewardPoints, 30)
+})
+
 test('enrichRewardWithSource joins route reward by routeId', () => {
   const reward = { _id: 'rw-1', source: 'route', routeId: 100, reward: '20 points' }
   const routes = [{ id: 100, name: 'Macau Heritage Walk' }]
