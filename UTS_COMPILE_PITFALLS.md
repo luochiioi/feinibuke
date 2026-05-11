@@ -1408,3 +1408,12 @@ Known call-site depths:
 - route-detail -> routes -> index: `returnToIndexForFocus(2)`
 
 This supersedes the stack-scanning implementation described in Rule 39. The product intent remains the same: reuse the existing homepage map instance when the navigation stack is known; use `reLaunch` only as an explicit fallback.
+
+## 2026-05-12 P5.4 verification note
+
+P5.4 did not introduce a new UTS/HBuilderX compile rule. The changed `.uvue/.uts` surfaces followed existing rules:
+
+- `pages/index/index.uvue` kept marker focus navigation on the explicit `returnToIndexForFocus(delta)` contract.
+- `pages/route-detail/route-detail.uvue` and `utils/cloudSync.uts` continued to deserialize nested cloud data with `JSON.stringify(raw) -> JSON.parse<T>(...)`.
+- `pages/rewards/rewards.uvue`, `pages/my-checkins/my-checkins.uvue`, and `pages/my-tasks/my-tasks.uvue` avoided `switchTab`, illegal `display` values, and `Number(...)` / `Number.*`.
+- The post-edit grep may still report existing explanatory comments in `pages/route-detail/route-detail.uvue` that mention `Number(...)`; those are documentation comments, not executable UTS calls.

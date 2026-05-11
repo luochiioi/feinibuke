@@ -3829,3 +3829,58 @@ Carry-forward UTS reminders for the next session:
 - Cross-cloud-boundary deserialisation: `JSON.stringify(raw) -> JSON.parse<T>(str)`, never `as T` on nested cloud data.
 - Native `<map :markers>` only accepts small positive integer ids; map business `CheckinMarker.id` through `toSdkMarkerId` before binding.
 - Local-only files that must stay out of git: `.hbuilderx/launch.json`, `uni-admin/.hbuilderx/`, `uniCloud-aliyun/cloudfunctions/admin-center/admin-center.param.js`.
+
+## 2026-05-12 P5.4 landed: admin authoring, UGC cleanup, wallet UX finish
+
+Commits:
+- `1a1cefb` fix: remove user marker authoring (T0)
+- `5855991` fix: move index auth pill left (T1)
+- `78ea7ea` feat: show cached marker panel before refresh (T2)
+- `0d9cd47` feat: support route reward kind (T3)
+- `4b368ab` feat: add admin task authoring (T4)
+- `4177410` feat: split task rewards into records page (T5)
+
+Behavior now matches the P5.4 product decision: normal users cannot create markers from the App; marker authoring is admin-only. The homepage auth pill is top-left for WeChat capsule safety. Marker-panel opens immediately from cached marker data and refreshes photos/checkins asynchronously. Route rewards support `none / prize / points / both`; `none` writes no rewards row, legacy route data defaults to `prize`, task points remain auto-issued, and route rewards remain claimable. Admin can create/edit/archive tasks. App "我的奖励" is now route-claim focused, while task auto-issued points live in `pages/my-tasks/my-tasks` from "我的打卡" -> "任务记录".
+
+Acceptance checklist:
+1. App has no "新增打卡点" page, FAB, long-press create path, or user-facing marker-center add method.
+2. Admin users page no longer displays `totalCreated`.
+3. WeChat preview shows the login/auth pill at top-left without capsule overlap.
+4. Marker detail panel shows cached title/cover first, then async detail data.
+5. Admin routes can choose `none / prize / points / both`; completing a `none` route does not add a `rewards` row.
+6. Admin tasks page can add, edit, archive, and reactivate tasks.
+7. App rewards page shows only route rewards plus wallet summary; task rewards appear in "任务记录".
+
+Verification ran in this iteration:
+- TDD/helper tests for changed helpers during T0/T3/T4.
+- Full required `node --test ...`: 101 passed.
+- Cloud syntax `node --check`: 14 cloud `index.obj.js` / `*-service.js` files passed.
+- UTS forbidden-token grep after `.uvue/.uts` edits: expected hits are only existing `route-detail` comments mentioning `Number(...)`.
+
+Next iteration plan: `docs/superpowers/plans/2026-05-12-p5.5-authoring-polish-and-ops.md`.
+
+P5.5 recommended scope:
+1. Add an admin marker picker for task authoring so admins do not type raw `targetMarkerId`.
+2. Tighten route reward authoring guardrails so `none / prize / points / both` cannot save contradictory data.
+3. Polish the App task records page with month grouping and a jump to active tasks.
+4. Improve admin reward/points operations with better per-user filtering and ledger visibility.
+5. Audit old UGC fields/data after removing user marker authoring.
+
+## 2026-05-12 next-session AI prompt
+
+Continue development in `C:\Users\Raymond\Desktop\feinibuke\map_new` for the uni-app x / UTS 5.07 project. First read and obey:
+- `uniapp_x_map_checkin_prompt.md`
+- `UTS_COMPILE_PITFALLS.md`
+- `docs/superpowers/plans/2026-05-12-p5.5-authoring-polish-and-ops.md`
+
+P5.4 completed: removed user-side marker authoring and `totalCreated`; moved the homepage auth pill to top-left; made marker detail open from cached marker data before async refresh; added route `rewardKind` (`none / prize / points / both`) across admin, backend, and App route detail; added admin task create/edit/archive/reactivate; split task auto-issued reward history into `pages/my-tasks/my-tasks` and kept App rewards focused on route claims.
+
+Next, implement P5.5 in task-sized commits:
+1. Admin task marker picker and validation.
+2. Route reward authoring guardrails.
+3. App task records UX polish.
+4. Admin reward/points operations improvements.
+5. UGC removal cleanup audit.
+6. Full tests, `node --check`, UTS grep, and docs.
+
+Do not commit `.hbuilderx/launch.json`, `uni-admin/.hbuilderx/`, or `uniCloud-aliyun/cloudfunctions/admin-center/admin-center.param.js`. App `pages.json` has no tabBar, so do not use `switchTab`. Native map marker ids must stay SDK-safe; never bind business marker ids directly to `<map :markers>`. In UTS 5.07, do not use `Number(` / `Number.` and do not cast `getCurrentPages()` entries to `UTSJSONObject`. Cross cloud boundaries with `JSON.stringify(raw) -> JSON.parse<T>(...)`.
