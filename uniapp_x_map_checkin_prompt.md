@@ -3786,3 +3786,25 @@ Next iteration must start with a pre-task before points wallet work:
 - Add/update `utils/map-focus-navigation.test.js` so it fails if `stores/useMapStore.uts` contains `as UTSJSONObject` or `page["route"]` in focus navigation.
 
 Updated plan: `docs/superpowers/plans/2026-05-11-p5.3-points-wallet-and-ux.md`.
+
+## 2026-05-11 P5.3 landed: points wallet end-to-end
+
+Commits:
+- `129e6f4` fix: explicit delta in returnToIndexForFocus (T0)
+- `516f4fe` feat: points summary and ledger helpers in marker-center (T1)
+- `7dacae6` feat: marker-center.getPointsSummary and typed UTS boundary (T2)
+- `2aec728` feat: points wallet header on rewards page (T3)
+- `d6a9b98` feat: admin points summary and rewards page summary cards (T4)
+- `3a8a46f` refactor: consistent points labels on admin users page (T5)
+
+Semantics now uniform across App and Admin: `task` reward = auto-issued at `earnedAt`; `route` reward = pending until `rewardClaimed === true`, then issued at `claimedAt`. Both App `pullPointsSummary()` and Admin `getPointsSummary({userId?, source?})` derive numbers from the same pure helpers (`buildPointsSummary` in marker-center, `buildAdminPointsSummary` in admin-center). Cross-boundary UTS deserialisation uses `JSON.stringify(raw) -> JSON.parse<PointsSummary>(...)` per PITFALLS rule, never `as PointsSummary`.
+
+Real-device acceptance checklist:
+1. Focus navigation from task-detail / tasks / my-checkins / route-detail no longer throws `UniNormalPageImpl cannot be cast to UTSJSONObject`.
+2. App "我的奖励" shows the green available-points hero card + 3 stats (pending route / task issued / route issued).
+3. Completing a task increases `taskIssuedPoints` immediately; the corresponding card carries no claim button.
+4. Completing a route adds to `pendingRoutePoints`; tapping "兑换" moves the points to `routeIssuedPoints`.
+5. Admin rewards page renders 3 summary cards above the records list; filters (`userId`, `route`/`task`) tighten the totals.
+6. Admin users page row + detail modal use the consistent labels (已发放 / 待领取路线 / 累计获得).
+
+Verification ran: `node --test ...` (90 passed), `node --check` over all cloud functions, UTS forbidden-token grep clean.
