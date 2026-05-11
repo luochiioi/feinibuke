@@ -3808,3 +3808,24 @@ Real-device acceptance checklist:
 6. Admin users page row + detail modal use the consistent labels (已发放 / 待领取路线 / 累计获得).
 
 Verification ran: `node --test ...` (90 passed), `node --check` over all cloud functions, UTS forbidden-token grep clean.
+
+## 2026-05-12 P5.4 prep: admin authoring + UGC cleanup
+
+After P5.3 the wallet looked right, but several product-level rough edges remained: the user-facing "新增打卡点" button (discovered only via WeChat preview because the FAB was below the visible area on Android) leaked authoring power to end users; the WeChat capsule overlapped the login pill; routes had no reward-kind field; the admin task page had no editor; and the rewards page mixed task auto-issues with claimable route rewards.
+
+Next iteration plan: `docs/superpowers/plans/2026-05-12-p5.4-admin-authoring-and-cleanup.md`
+
+Scope:
+- T0 Delete `pages/add-marker/*`, its `pages.json` route, the index FAB, any user-facing `createMarker` cloud method, and the `totalCreated` user stat (admin row + detail card + `admin-center.getUsers` aggregation + service test).
+- T1 Re-anchor the auth pill to top-left so the WeChat capsule doesn't clip it.
+- T2 Marker panel renders cached title immediately; async enrichment fills in photos/checkins after.
+- T3 Add `rewardKind: 'none' | 'prize' | 'points' | 'both'` on `tourism_routes`. Legacy rows default to `'prize'`. `marker-center/route-completion` skips writing a rewards row when kind is `none`. Admin route modal grows a radio control; route-detail renders the right summary.
+- T4 New `admin-center/task-service.js` + tests; `upsertTask` / `deleteTask` cloud methods; "新增任务" button + modal in `uni-admin/pages/tasks/index.vue`.
+- T5 Drop the 任务奖励 section from `pages/rewards/rewards.uvue`; create `pages/my-tasks/my-tasks.uvue`; add "任务记录" entry on `pages/my-checkins/my-checkins.uvue`.
+- T6 Full verification + docs.
+
+Carry-forward UTS reminders for the next session:
+- `getCurrentPages()` returns `UniNormalPageImpl` and cannot be cast to `UTSJSONObject`. `returnToIndexForFocus(delta)` is fixed already; do not regress.
+- Cross-cloud-boundary deserialisation: `JSON.stringify(raw) -> JSON.parse<T>(str)`, never `as T` on nested cloud data.
+- Native `<map :markers>` only accepts small positive integer ids; map business `CheckinMarker.id` through `toSdkMarkerId` before binding.
+- Local-only files that must stay out of git: `.hbuilderx/launch.json`, `uni-admin/.hbuilderx/`, `uniCloud-aliyun/cloudfunctions/admin-center/admin-center.param.js`.
