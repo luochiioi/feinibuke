@@ -112,9 +112,44 @@ function filterRewardRecords(rewards, filters) {
   })
 }
 
+// 与 marker-center/reward-service.buildPointsSummary 同语义：
+// task 奖励登记即发放；route 奖励仅 rewardClaimed===true 才计入余额。
+function buildAdminPointsSummary(rewards) {
+  const list = Array.isArray(rewards) ? rewards : []
+  let totalEarnedPoints = 0
+  let taskIssuedPoints = 0
+  let routeIssuedPoints = 0
+  let pendingRoutePoints = 0
+
+  list.forEach(row => {
+    const points = resolveRewardPoints(row)
+    if (!Number.isFinite(points) || points <= 0) return
+    totalEarnedPoints += points
+    const source = rewardSourceType(row)
+    if (source === 'task') {
+      taskIssuedPoints += points
+      return
+    }
+    if (rewardClaimedState(row)) {
+      routeIssuedPoints += points
+    } else {
+      pendingRoutePoints += points
+    }
+  })
+
+  return {
+    totalEarnedPoints,
+    issuedPoints: taskIssuedPoints + routeIssuedPoints,
+    pendingRoutePoints,
+    taskIssuedPoints,
+    routeIssuedPoints
+  }
+}
+
 module.exports = {
   parseRewardPoints,
   aggregateRewardStatsByUser,
   filterRewardRecords,
-  normalizeRewardRecords
+  normalizeRewardRecords,
+  buildAdminPointsSummary
 }

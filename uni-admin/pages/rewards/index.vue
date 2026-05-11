@@ -6,6 +6,22 @@
       @refresh="reload"
     />
 
+    <view v-if="summary" class="summary-row">
+      <view class="summary-card primary">
+        <text class="summary-label">已发放积分</text>
+        <text class="summary-value">{{ summary.issuedPoints }}</text>
+        <text class="summary-foot">任务 {{ summary.taskIssuedPoints }} + 路线 {{ summary.routeIssuedPoints }}</text>
+      </view>
+      <view class="summary-card">
+        <text class="summary-label">待领取路线积分</text>
+        <text class="summary-value">{{ summary.pendingRoutePoints }}</text>
+      </view>
+      <view class="summary-card">
+        <text class="summary-label">累计获得</text>
+        <text class="summary-value">{{ summary.totalEarnedPoints }}</text>
+      </view>
+    </view>
+
     <view class="filter-row">
       <text class="filter-chip" :class="statusFilter === '' ? 'active' : ''" @click="setStatus('')">全部</text>
       <text class="filter-chip" :class="statusFilter === 'pending' ? 'active' : ''" @click="setStatus('pending')">待兑</text>
@@ -75,6 +91,7 @@ import AdminHeader from '@/components/AdminHeader.vue'
 import { getErrorMessage, goAdminLogin, isAuthError } from '@/utils/adminAuth.js'
 
 const list = ref([])
+const summary = ref(null)
 const total = ref(0)
 const hasMore = ref(false)
 const loading = ref(false)
@@ -110,7 +127,24 @@ function reload() {
   offset = 0
   list.value = []
   total.value = 0
+  fetchSummary()
   fetchData()
+}
+
+async function fetchSummary() {
+  try {
+    const payload = {}
+    if (sourceFilter.value) payload.source = sourceFilter.value
+    if (userIdInput.value.trim().length > 0) payload.userId = userIdInput.value.trim()
+    const res = await api.getPointsSummary(payload)
+    if (res.errCode !== 0) {
+      summary.value = null
+      return
+    }
+    summary.value = res.data || null
+  } catch (e) {
+    summary.value = null
+  }
 }
 
 async function fetchData() {
@@ -161,6 +195,49 @@ function formatTime(ts) {
 
 <style>
 .rewards-page { padding: 24rpx; }
+
+.summary-row {
+  display: grid;
+  grid-template-columns: 1.4fr 1fr 1fr;
+  gap: 16rpx;
+  margin-bottom: 20rpx;
+}
+
+.summary-card {
+  background: #fff;
+  border-radius: 14rpx;
+  padding: 22rpx 24rpx;
+}
+
+.summary-card.primary {
+  background: linear-gradient(135deg, #2ecc71 0%, #25a55c 100%);
+  color: #fff;
+}
+
+.summary-label {
+  color: #8a9891;
+  display: block;
+  font-size: 22rpx;
+}
+
+.summary-card.primary .summary-label { color: rgba(255,255,255,0.85); }
+
+.summary-value {
+  color: #123322;
+  display: block;
+  font-size: 44rpx;
+  font-weight: 700;
+  margin-top: 6rpx;
+}
+
+.summary-card.primary .summary-value { color: #fff; }
+
+.summary-foot {
+  color: rgba(255,255,255,0.85);
+  display: block;
+  font-size: 20rpx;
+  margin-top: 6rpx;
+}
 
 .filter-row {
   display: flex;

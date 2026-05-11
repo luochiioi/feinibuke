@@ -19,7 +19,12 @@ const {
   normalizeAdminUsers,
   buildSyncDiagnostics
 } = require('./marker-service')
-const { aggregateRewardStatsByUser, filterRewardRecords, normalizeRewardRecords } = require('./reward-service')
+const {
+  aggregateRewardStatsByUser,
+  filterRewardRecords,
+  normalizeRewardRecords,
+  buildAdminPointsSummary
+} = require('./reward-service')
 const { buildAuditLogEntry, ALLOWED_TYPES: AUDIT_TYPES } = require('./audit-service')
 const {
   ROUTE_STATUSES,
@@ -204,6 +209,32 @@ module.exports = {
       offset,
       limit
     })
+  },
+
+  // P5.3：跨用户/单用户积分汇总；admin 与 App 端共用同语义：task 即发放，
+  // route 须 rewardClaimed===true 方计入。
+  async getPointsSummary(data) {
+    const where = {}
+    const userId = String((data && data.userId) || '').trim()
+    const source = String((data && data.source) || '').trim()
+    if (userId.length > 0) where.userId = userId
+
+    const query = Object.keys(where).length === 0 ? colRewards : colRewards.where(where)
+    const listRes = await query
+      .field({
+        userId: true,
+        source: true,
+        routeId: true,
+        taskId: true,
+        reward: true,
+        rewardPoints: true,
+        rewardClaimed: true,
+        earnedAt: true,
+        claimedAt: true
+      })
+      .get()
+    const rows = filterRewardRecords(listRes.data, { source, userId })
+    return ok(buildAdminPointsSummary(rows))
   },
 
   async getMarkers(data) {

@@ -5,7 +5,8 @@ const {
   parseRewardPoints,
   aggregateRewardStatsByUser,
   filterRewardRecords,
-  normalizeRewardRecords
+  normalizeRewardRecords,
+  buildAdminPointsSummary
 } = require('./reward-service')
 
 test('parseRewardPoints extracts integer points from common reward text', () => {
@@ -102,4 +103,29 @@ test('filterRewardRecords treats legacy rows without source as task rewards', ()
     'task-1',
     'task-legacy'
   ])
+})
+
+test('buildAdminPointsSummary aggregates across users with task/route semantics', () => {
+  const rewards = [
+    { userId: 'u1', source: 'task', reward: '10 points', earnedAt: 1700000000000 },
+    { userId: 'u1', source: 'route', reward: '20 points', earnedAt: 1700000000010, rewardClaimed: false },
+    { userId: 'u2', source: 'route', reward: '30 points', earnedAt: 1700000000020, rewardClaimed: true, claimedAt: 1800000000000 },
+    { userId: 'u2', taskId: 'task_legacy', reward: '5 points', earnedAt: 1700000000030 }
+  ]
+  const summary = buildAdminPointsSummary(rewards)
+
+  assert.equal(summary.totalEarnedPoints, 65)
+  assert.equal(summary.taskIssuedPoints, 15)
+  assert.equal(summary.routeIssuedPoints, 30)
+  assert.equal(summary.issuedPoints, 45)
+  assert.equal(summary.pendingRoutePoints, 20)
+})
+
+test('buildAdminPointsSummary returns zero shape for empty input', () => {
+  const summary = buildAdminPointsSummary([])
+  assert.equal(summary.totalEarnedPoints, 0)
+  assert.equal(summary.issuedPoints, 0)
+  assert.equal(summary.pendingRoutePoints, 0)
+  assert.equal(summary.taskIssuedPoints, 0)
+  assert.equal(summary.routeIssuedPoints, 0)
 })
