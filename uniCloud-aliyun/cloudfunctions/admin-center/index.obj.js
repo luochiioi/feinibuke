@@ -46,6 +46,8 @@ const colUserTasks = db.collection('user_tasks')
 const colRewards = db.collection('rewards')
 const colAuditLogs = db.collection('tourism_audit_logs')
 const colRoutes = db.collection('tourism_routes')
+const colFriendships = db.collection('tourism_friendships')
+const colNotifications = db.collection('tourism_notifications')
 
 async function appendAuditLog(input) {
   const row = buildAuditLogEntry(input)
@@ -823,5 +825,73 @@ module.exports = {
       userId,
       progress
     })
+  },
+
+  // ===== P6 Admin moderation =====
+
+  async getFriendships(data) {
+    const payload = data || {}
+    const limit = Math.max(1, Math.min(100, Number(payload.limit) || 50))
+    const offset = Math.max(0, Number(payload.offset) || 0)
+    const query = {}
+    const status = String(payload.status || '')
+    if (status.length > 0) query.status = status
+    const userId = String(payload.userId || '').trim()
+    if (userId.length > 0) query.userId = userId
+    const res = await colFriendships.where(query).skip(offset).limit(limit).orderBy('createdAt', 'desc').get()
+    return ok({ rows: res.data || [], total: Number(res.count || 0) })
+  },
+
+  async revokeFriendship(data) {
+    const id = String((data || {})._id || '').trim()
+    if (!id) return fail('缺少 friendship id')
+    const rowRes = await colFriendships.doc(id).get()
+    if (!rowRes.data.length) return fail('记录不存在')
+    const row = rowRes.data[0]
+    // Delete both rows of the pair
+    await colFriendships.where({ userId: row.userId, friendUserId: row.friendUserId }).remove()
+    await colFriendships.where({ userId: row.friendUserId, friendUserId: row.userId }).remove()
+    return ok({ revoked: true, id })
+  },
+
+  async getNotifications(data) {
+    const payload = data || {}
+    const limit = Math.max(1, Math.min(100, Number(payload.limit) || 50))
+    const offset = Math.max(0, Number(payload.offset) || 0)
+    const query = {}
+    const userId = String(payload.userId || '').trim()
+    if (userId.length > 0) query.userId = userId
+    const type = String(payload.type || '')
+    if (type.length > 0) query.type = type
+    const res = await colNotifications.where(query).skip(offset).limit(limit).orderBy('createdAt', 'desc').get()
+    return ok({ rows: res.data || [], total: Number(res.count || 0) })
+  },
+
+  async broadcastNotification(data) {
+    const payload = data || {}
+    const title = String(payload.title || '').trim()
+    const body = String(payload.body || '').trim()
+    if (!title) return fail('缺少通知标题')
+    const audience = String(payload.audience || 'all')
+    const now = Date.now()
+    const notif = { type: 'system.broadcast', payload: { title, body }, read: false, readAt: null, createdAt: now }
+
+    if (audience === 'all') {
+      const userProfiles = await colUserProfiles.field({ userId: true }).get()
+      let count = 0
+      for (const p of (userProfiles.data || [])) {
+        if (p.userId && String(p.userId).length > 0) {
+          try { await colNotifications.add({ ...notif, userId: String(p.userId) }); count++ } catch (_e) {}
+        }
+      }
+      return ok({ sent: count })
+    }
+
+    const uids = audience.split(',').map(function(s) { return s.trim() }).filter(function(s) { return s.length > 0 })
+    let count = 0
+    for (const uid of uids) {
+      try { await colNotifications.add({ ...notif, userId: uid }); count++ } catch (_e) {}
+    }
+    return ok({ sent: count })
   }
 }
