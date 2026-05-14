@@ -130,7 +130,7 @@ import { currentLocation, distanceTo, getEffectiveCheckinRadius, pollLocationOnc
 import { activeMarker, consumeFocus, consumeFocusPayload, latitude, longitude, moveToLocation, onRegionChangeEnd, scale, setActiveMarker, zoomIn, zoomOut } from '@/stores/useMapStore'
 import type { FocusPayload } from '@/stores/useMapStore'
 import { loadFromStorage as loadTasks } from '@/stores/useTaskStore'
-import { state as userState, clearUserInfo, refreshUserIdFromAuth } from '@/user/index.uts'
+import { state as userState, refreshUserIdFromAuth } from '@/user/index.uts'
 import type { CheckinMarker, CheckinEntry } from '@/types/marker'
 import { formatDateTime } from '@/utils/format'
 import { deleteCloudCheckin, repairMissingCheckins } from '@/utils/cloudSync'
@@ -157,26 +157,8 @@ function goAuth(): void {
     uni.navigateTo({ url: '/pages/login/login' })
     return
   }
-  uni.showActionSheet({
-    itemList: ['我的打卡', '我的奖励', '退出登录'],
-    success: (res: ShowActionSheetSuccess): void => {
-      if (res.tapIndex == 0) {
-        uni.navigateTo({ url: '/pages/my-checkins/my-checkins' })
-        return
-      }
-      if (res.tapIndex == 1) {
-        uni.navigateTo({ url: '/pages/rewards/rewards' })
-        return
-      }
-      if (res.tapIndex == 2) {
-        clearUserInfo()
-        loadMarkers()
-        loadTasks()
-        setActiveMarker(null)
-        uni.showToast({ title: '已退出登录', icon: 'none' })
-      }
-    }
-  })
+  // 登录态点击 chip → 进我的主页(其中包含我的打卡/奖励/任务/编辑资料/退出登录入口)
+  uni.navigateTo({ url: '/pages/profile/profile' })
 }
 function ensureMapCtx(): MapContext | null {
   return uni.createMapContext('mainMap')
