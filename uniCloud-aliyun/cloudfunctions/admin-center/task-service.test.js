@@ -4,7 +4,8 @@ const test = require('node:test')
 const {
   validateTaskInput,
   buildTaskUpsertDoc,
-  nextTaskId
+  nextTaskId,
+  buildMarkerLookup
 } = require('./task-service')
 
 test('validateTaskInput rejects missing id or name', () => {
@@ -28,7 +29,7 @@ test('validateTaskInput requires numeric targetMarkerId', () => {
   }), /targetMarkerId 必须是正整数/)
 })
 
-test('buildTaskUpsertDoc trims fields and defaults status to active', () => {
+test('buildTaskUpsertDoc trims fields, defaults status to active, and does not store targetTitle snapshot', () => {
   const doc = buildTaskUpsertDoc({
     id: ' task_new ',
     name: ' 新任务 ',
@@ -45,7 +46,6 @@ test('buildTaskUpsertDoc trims fields and defaults status to active', () => {
     name: '新任务',
     description: '描述',
     targetMarkerId: 42,
-    targetTitle: '目标点',
     reward: '30 积分',
     rewardKind: 'points',
     rewardPoints: 30,
@@ -53,6 +53,7 @@ test('buildTaskUpsertDoc trims fields and defaults status to active', () => {
     createdBy: 'admin-1',
     updatedAt: 1700000000
   })
+  assert.equal(Object.prototype.hasOwnProperty.call(doc, 'targetTitle'), false)
 })
 
 test('buildTaskUpsertDoc validates reward kind and normalizes archived status', () => {
@@ -95,4 +96,44 @@ test('buildTaskUpsertDoc generates id when creating a task without one', () => {
 
   assert.equal(doc.id, 'task_007')
   assert.equal(doc.name, '自动编号任务')
+})
+
+test('buildMarkerLookup returns a Set of numeric marker ids', () => {
+  const lookup = buildMarkerLookup([
+    { id: 1 }, { id: '2' }, { id: 3.5 }, { id: 'bad' }, null, { id: 4 }
+  ])
+  assert.equal(lookup.has(1), true)
+  assert.equal(lookup.has(2), true)
+  assert.equal(lookup.has(4), true)
+  assert.equal(lookup.has(3.5), false)
+  assert.equal(lookup.size, 3)
+})
+
+test('validateTaskInput rejects targetMarkerId not in marker lookup', () => {
+  const lookup = buildMarkerLookup([{ id: 1 }, { id: 2 }])
+  assert.throws(() => validateTaskInput({
+    id: 'task_new',
+    name: '任务',
+    targetMarkerId: 99,
+    rewardKind: 'points'
+  }, undefined, lookup), /目标打卡点不存在/)
+})
+
+test('validateTaskInput accepts targetMarkerId that exists in marker lookup', () => {
+  const lookup = buildMarkerLookup([{ id: 1 }, { id: 2 }])
+  assert.equal(validateTaskInput({
+    id: 'task_new',
+    name: '任务',
+    targetMarkerId: 2,
+    rewardKind: 'points'
+  }, undefined, lookup), true)
+})
+
+test('buildTaskUpsertDoc throws when marker lookup is provided and id missing', () => {
+  const lookup = buildMarkerLookup([{ id: 1 }])
+  assert.throws(() => buildTaskUpsertDoc({
+    name: '任务',
+    targetMarkerId: 9,
+    rewardKind: 'points'
+  }, 'admin-1', 1700000000, null, lookup), /目标打卡点不存在/)
 })

@@ -37,6 +37,27 @@ function normalizeTargetMarkerId(value) {
   return n
 }
 
+function buildMarkerLookup(markers) {
+  const set = new Set()
+  ;(markers || []).forEach(marker => {
+    if (!marker) return
+    const raw = marker.id
+    const n = typeof raw === 'number' ? raw : Number(raw)
+    if (Number.isFinite(n) && Number.isInteger(n) && n > 0) {
+      set.add(n)
+    }
+  })
+  return set
+}
+
+function ensureMarkerExists(markerId, markerLookup) {
+  if (!markerLookup) return
+  if (!(markerLookup instanceof Set) || markerLookup.size === 0) return
+  if (!markerLookup.has(markerId)) {
+    throw new Error('目标打卡点不存在或已删除')
+  }
+}
+
 function normalizeTaskId(value, existingTasks) {
   const text = String(value == null ? '' : value).trim()
   if (text.length > 0) return normalizeText(text, '任务 ID ', 64, true)
@@ -69,29 +90,31 @@ function normalizeRewardPoints(value) {
   return n
 }
 
-function validateTaskInput(input, existingTasks) {
+function validateTaskInput(input, existingTasks, markerLookup) {
   const data = input || {}
   normalizeTaskId(data.id, existingTasks)
   normalizeText(data.name, '任务名称', 50, true)
-  normalizeTargetMarkerId(data.targetMarkerId)
+  const markerId = normalizeTargetMarkerId(data.targetMarkerId)
+  ensureMarkerExists(markerId, markerLookup)
   normalizeStatus(data.status)
   normalizeRewardKind(data.rewardKind)
   return true
 }
 
-function buildTaskUpsertDoc(input, actorUid, now, existingTasks) {
+function buildTaskUpsertDoc(input, actorUid, now, existingTasks, markerLookup) {
   const data = input || {}
   const rewardKind = normalizeRewardKind(data.rewardKind)
   const reward = rewardKind === 'none'
     ? ''
     : normalizeText(data.reward, '奖励文案', 100, false)
   const rewardPoints = rewardKind === 'none' ? 0 : normalizeRewardPoints(data.rewardPoints)
+  const markerId = normalizeTargetMarkerId(data.targetMarkerId)
+  ensureMarkerExists(markerId, markerLookup)
   const doc = {
     id: normalizeTaskId(data.id, existingTasks),
     name: normalizeText(data.name, '任务名称', 50, true),
     description: normalizeText(data.description, '任务描述', 200, false),
-    targetMarkerId: normalizeTargetMarkerId(data.targetMarkerId),
-    targetTitle: normalizeText(data.targetTitle, '目标点名称', 50, false),
+    targetMarkerId: markerId,
     reward,
     rewardKind,
     rewardPoints,
@@ -108,5 +131,6 @@ module.exports = {
   TASK_STATUSES,
   nextTaskId,
   validateTaskInput,
-  buildTaskUpsertDoc
+  buildTaskUpsertDoc,
+  buildMarkerLookup
 }

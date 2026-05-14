@@ -33,7 +33,8 @@ const {
   calcRouteProgress
 } = require('./route-service')
 const {
-  buildTaskUpsertDoc
+  buildTaskUpsertDoc,
+  buildMarkerLookup: buildTaskMarkerLookup
 } = require('./task-service')
 
 const colMarkers = db.collection('tourism_markers')
@@ -681,7 +682,9 @@ module.exports = {
         const tasksRes = await colTasks.field({ id: true }).get()
         existingTasksForId = tasksRes.data || []
       }
-      const doc = buildTaskUpsertDoc(data, this.auth.uid, now, existingTasksForId)
+      const markerSnapshot = await colMarkers.field({ id: true }).get()
+      const markerLookup = buildTaskMarkerLookup(markerSnapshot.data || [])
+      const doc = buildTaskUpsertDoc(data, this.auth.uid, now, existingTasksForId, markerLookup)
       if (targetId) {
         await colTasks.doc(targetId).update(doc)
         return ok({ _id: targetId, task: doc }, '更新成功')
