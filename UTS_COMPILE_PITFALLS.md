@@ -1809,3 +1809,116 @@ function rankClass(rank: number): string {
 **降级原则**：如果必须用 emoji 表达信息（如系统通知用 📢），同时在 fallback 路径有文字（"系统通知"），让用户即使看到方框也能猜出含义。
 
 **落地证据**：P7 commit `e4b5d8f` (`refactor(app): 排行榜 rank 徽章 / 头像 / 副标题重做`) —— `pages/leaderboard/leaderboard.uvue` 的 `rankText` 改为 `return rank.toString()`,1/2/3 颜色由 `rankClass`(`rank-gold/silver/bronze`)控制,文字颜色用直接 className(`rank-badge-text-light/dark`)替代 `.rank-normal .rank-badge-text` 后代选择器以规避 UTS 端兼容性不确定。同 commit 把头像从 first-letter `<text>` 升级为 `<image v-if="row.avatar.length > 0">` + first-letter `<text v-else>` 双态结构(80×80 rpx),并把副标题改为"另一个维度"(`subTextFor` 不再与右侧大号数值重复 metric)。
+
+---
+
+## §规则 50:鉴权云对象必须在 _before 注入 this.auth.uid
+
+**适用范围**:`uniCloud-aliyun/cloudfunctions/<name>/index.obj.js` 新增需要登录的方法时。
+
+**反模式**(P7 → P8 B1 NOT_LOGIN 根因):
+```js
+// user-center/index.obj.js,P7 前形态
+module.exports = {
+  _before: function() {
+  },  // ← 空函数,this.auth 从未被注入
+
+  async login(userName, userPassword) { /* 不需要 token */ },
+  async sign(...) { /* 不需要 token */ },
+  async checkToken() { /* 自己读 token,不依赖 _before */ },
+
+  // P7 新加,踩坑:
+  async updateProfile(payload) {
+    if (!this.auth || !this.auth.uid) {
+      return { errCode: 'NOT_LOGIN', errMsg: '未登录', data: null }  // ← 永远命中
+    }
+    // ...
+  }
+}
+```
+
+`this.auth.uid` 永远是 undefined,因为 `_before` 没有人调用 `authUtil.checkAuth(this)` 把 token 解析后写入 `this.auth.uid`。前端真机调用永远返 NOT_LOGIN,但本地单测会通过(单测直接调 `buildProfileUpdate` 纯函数,绕过 RPC 入口)。
+
+**正解**(对齐 marker-center / admin-center / photo-center 的统一模板):
+```js
+const authUtil = require('auth-util')
+
+module.exports = {
+  _before: async function() {
+    this.auth = { uid: null }
+    try {
+      this.auth.uid = await authUtil.checkAuth(this)
+    } catch (e) {
+      // catch 不抛:让"无需登录的方法"(login/sign/checkToken)能继续跑,
+      // 需要登录的方法自己判 this.auth.uid 是否为 null。
+    }
+  },
+  // ...
+}
+```
+
+**两种 _before 范式**:
+1. **"catch 不抛"**:云对象里既有公开方法(无需 token)又有受保护方法(需要 token)。marker-center / user-center 走此模板。
+2. **"catch 抛 -1"**:云对象全部方法都需要登录。admin-center / photo-center 走此模板:
+   ```js
+   } catch (e) {
+     throw { errCode: -1, errMsg: '请先登录' }
+   }
+   ```
+
+**审计命令**:
+```bash
+grep -A 5 "_before:" uniCloud-aliyun/cloudfunctions/*/index.obj.js
+```
+任何 `_before: function() {}` 空体且 cloudfunction 内含使用 `this.auth.uid` 的方法的,都是 §规则 50 违规。
+
+**落地证据**:P8 plan(本仓 `docs/superpowers/plans/2026-05-15-p8-auth-friend-leaderboard-fixes.md`)Task 0。提交 hash 在 P8 执行后回填。
+
+---
+
+## §规则 51:服务端写跨用户引用行,必须先验 user 存在
+
+**适用范围**:`db.collection('tourism_friendships').add({userId, friendUserId, ...})` 或任何 "userId/friendUserId/targetUid 字段从 client 传来" 的 add() / update() 调用。
+
+**反模式**(P5/P6 漏洞 → P8 B5 幽灵 ID 根因):
+```js
+// marker-center/index.obj.js:490 requestFriend,P7 前形态
+async requestFriend(data) {
+  if (!this.auth.uid) return { errCode: -1, errMsg: '请先登录' }
+  const targetUid = String(data.targetUid || '').trim()
+  if (!targetUid) return { errCode: -1, errMsg: '缺少目标用户' }
+  if (targetUid === String(this.auth.uid)) return { errCode: -1, errMsg: '不能添加自己为好友' }
+
+  // ❌ 缺这步:验证 targetUid 在 uni-id-users 存在
+  // 任何字符串 "abc" / "user123" / "" 都会被 add() 成功落库,
+  // 客户端 outgoing 列表立刻出现一个永远无人响应的 pending 行。
+
+  const fresh = buildFriendRequest(this.auth.uid, targetUid, now)
+  await colFriendships.add(fresh)
+  return { errCode: 0, errMsg: '请求已发送', data: { friendshipId: addRes.id } }
+}
+```
+
+**正解**:
+```js
+const userExistRes = await db.collection('uni-id-users')
+  .doc(targetUid)
+  .field({ _id: 1 })
+  .get()
+if (!userExistRes.data || userExistRes.data.length === 0) {
+  return { errCode: -1, errMsg: '目标用户不存在' }
+}
+```
+
+**为什么 nullable schema 不够**:uni-id-users 的 `_id` 是 ObjectID,collection 不会自动 reject 无效字符串外键 — friendship 表的 `friendUserId: 'abc'` 类型上是合法 string,只是逻辑上"不存在的用户"。schema 不能表达"必须存在于另一张表"的约束,只能服务端代码兜底。
+
+**审计**:
+```bash
+grep -rn "\.add({" uniCloud-aliyun/cloudfunctions/ | grep -v test
+```
+对每一行 add() 检查:**插入的 userId 字段是否来自 client 输入**?是 → 必须前置 `db.collection('uni-id-users').doc(uid).get()` 校验。
+
+**关联陷阱**:同款问题也存在于 `colNotifications.add({userId: targetUid, ...})` — 给"不存在的用户"发通知会落孤儿行。emitNotification 内部已经走 buildNotification(无副作用),add 时若 targetUid 无效,通知就永远没人能读。建议 emitNotification 也加一次目标存在性 fast-path 校验(P8 范围外,记入未来 PITFALLS 增量)。
+
+**落地证据**:P8 plan(本仓 `docs/superpowers/plans/2026-05-15-p8-auth-friend-leaderboard-fixes.md`)Task 1。提交 hash 在 P8 执行后回填。
+

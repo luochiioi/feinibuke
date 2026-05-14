@@ -4002,3 +4002,27 @@ P6 编译通过、真机能跑后用户反馈三类阻塞型 UX 缺口：
 P7 实施时仍受 P6 收尾的 `UTS_COMPILE_PITFALLS.md §41-§48` 八条 5.07 编译规则约束。新增 §规则 49 见 PITFALLS 末尾"十四"章。
 
 注意：上面 3975 行的"Next iteration is P7 — Profile + Achievement v2 + City Packs"是 P6 收尾时的旧路线图条目（参 `docs/superpowers/plans/2026-05-14-roadmap-p6-to-p9.md`）。真机验收后 P7 范围**收窄**为"真机阻塞型 UX 缺口"，achievements v2 / city packs 延期到 P8。本节为权威。
+
+---
+
+## 2026-05-15 P8 鉴权 / 好友请求 / 排行榜 / 地图状态修复（plan 已写）
+
+P7 commits 全部落地后(起点 `618465e` → P7 收尾 `70773e4`)真机验收暴露六类 bug：
+
+1. **B1 上传头像 NOT_LOGIN** —— `user-center/index.obj.js:34` 的 `_before` 是空函数，从未注入 `this.auth.uid`；P7 加的 `updateProfile` 永远命中 NOT_LOGIN 分支。这是个**服务端鉴权链路缺口**，与 client 写法无关。已写成 PITFALLS §规则 50（_before 模板）。
+2. **B2 退出登录/切账号后地图黑屏** —— reLaunch 后 `<checkin-map>` 状态残留或 `useMarkerStore.markers` module singleton 未清空。P8 优先方案 A：`clearUserInfo()` 末尾清 `markers.value = []`；方案 B/C 兜底。
+3. **B3 排行榜副标题切换语义** —— P7 commit `e4b5d8f` 的 `subTextFor` 做成"切 metric 切语义"，用户期望"3 维度并列"（路线 X · 打卡 Y 之类）。
+4. **B4 加好友反馈文案模糊** —— `已自动成为好友` / `请求已发送` 在客户端难分。需 4-5 个分支独立文案，服务端 errMsg 传准确字符串。
+5. **B5 不存在用户 ID 也能落 pending** —— `requestFriend` 服务端**完全没验证** `targetUid` 在 uni-id-users 表存在。任何字符串都被 add() 成功，幽灵请求出现在 outgoing 列表。已写成 PITFALLS §规则 51（user 存在性校验）。
+6. **B6 好友请求无消息中心通知** —— 服务端 `requestFriend` 漏调 `emitNotification('friend.requested', ...)`；前端 `notifications.uvue:64` 已经有渲染 case，只是服务端没发。
+
+完整 P8 plan: `docs/superpowers/plans/2026-05-15-p8-auth-friend-leaderboard-fixes.md`，分 7 个 task：
+- Task 0 后端：user-center._before 接 authUtil(B1)
+- Task 1 后端：requestFriend 加 targetUid 存在性校验(B5)
+- Task 2 后端：requestFriend 触发 friend.requested 通知(B6)
+- Task 3 App：排行榜副标题 3 维度并列(B3)
+- Task 4 App：加好友反馈文案细化(B4)
+- Task 5 App：切账号 / 退出登录后 markers store 清空(B2，最棘手，先加诊断 log 再修)
+- Task 6 docs：PITFALLS §规则 50/51 commit hash 回填
+
+P8 实施时仍受 `UTS_COMPILE_PITFALLS.md §41-§49` 九条 5.07 编译规则约束 + 本轮新加 §规则 50（鉴权 _before 模板）+ §规则 51（user 存在性校验）。本节为权威。
