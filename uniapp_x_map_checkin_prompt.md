@@ -3946,6 +3946,36 @@ See `docs/superpowers/plans/2026-05-14-roadmap-p6-to-p9.md`. The locked order is
 3. **P8** — UI Overhaul (App + Admin), **must** use design / frontend skills (`frontend-design`, `ui-ux-pro-max:ui-ux-pro-max`, `frontend-patterns`, `liquid-glass-design`, `a11y-architect`, `e2e-runner`). Plan written at start of P8.
 4. **P9** — Offline + Undo + WeChat hardening.
 
-### Next-session AI prompt
+## 2026-05-14 P6 Social + Leaderboard + Push landed
 
-Continue development in `C:\Users\Raymond\Desktop\feinibuke\map_new` for the uni-app x / UTS 5.07 project. First read and obey `uniapp_x_map_checkin_prompt.md`, `UTS_COMPILE_PITFALLS.md`, and the most recent plan file under `docs/superpowers/plans/`. P5.5 landed on branch `codex/p1-marker-json-boundary` with commits `39a92ee 29bc59c b96f0d5 7ed5bf1 4294a93 2e83e3a 5ab21f2` (already pushed to `origin/codex/p1-marker-json-boundary`). The next iteration is **P6 — Social + Leaderboard + Push**; read `docs/superpowers/plans/2026-05-14-p6-social-leaderboard-push.md` before touching code. Local-only files that must stay untracked: `.hbuilderx/launch.json`, `uni-admin/.hbuilderx/`, `uniCloud-aliyun/cloudfunctions/admin-center/admin-center.param.js`. App has no tabBar — never `switchTab`. Native map `Marker.id` must use SDK-safe small positive integers. UTS 5.07 forbids `Number(` / `Number.` and casting `getCurrentPages()` entries to `UTSJSONObject`. Cross cloud boundaries with `JSON.stringify(raw) -> JSON.parse<T>(...)`.
+Branch: `codex/p6-social-leaderboard-push` (derived from `codex/p1-marker-json-boundary`). 7 atomic commits:
+
+1. `c66f4a6` feat: friendship domain + cloud APIs — `tourism_friendships` schema (two-way rows, `(userId, status)` + `(friendUserId, status)` indexes), `friendship-service.js` pure helpers (16 tests), `marker-center` methods (`requestFriend` with auto-accept, `respondFriend`, `listFriends` with `bucketizeFriendships` + profile enrichment, `getFriendProfile`, `unfriend`), `utils/friendCloud.uts` typed boundary.
+2. `92b735d` feat: leaderboard aggregator — `leaderboard-service.js` (`aggregateLeaderboardRows`, `buildLeaderboard` with tie-break `firstCheckedAt → uid`, `attachFriendFilter`; 13 tests), `marker-center.getLeaderboard` (`scope=global|friends`, `metric=points|routes|checkins`, caller footer pin).
+3. `7c170e4` feat: route share + deep link — `utils/deepLink.js` + `.test.js` (13 tests; `parseRouteDeepLink`, `buildRouteShareLink`, `buildRouteShareText`), `utils/deepLink.uts` UTS mirror, share button in `route-detail.uvue` (clipboard copy), clipboard deeplink check in `index.uvue:onShow`, paste-link entry in `routes.uvue`.
+4. `draft` feat: notifications — `tourism_notifications` schema (`userId_read_created` index), `notification-service.js` (9 tests: `buildNotification`, `markRead`, `groupByDateHeadings`), `marker-center` methods (`getNotifications`, `getUnreadNotificationCount`, `markNotificationRead`, `markAllNotificationsRead`), emit hooks in `respondFriend.accept` and `detectAndRecordCompletedRoutes`, `utils/notificationCloud.uts` typed boundary, `pages/notifications/notifications.uvue` (date-grouped, tap-to-read, "mark all read"), index bell chip with unread badge.
+5. `eb4cd9d` feat: 3 new App pages — `pages/friends` (3-tab list + add-friend input), `pages/friend-profile` (stats card + unfriend), `pages/leaderboard` (scope + metric tabs, self footer pin). Index bottom-left adds "好友" / "排行". Pages.json registered all 3 routes + notifications route.
+6. `92cf127` feat: admin moderation — `admin-center` methods (`getFriendships`, `revokeFriendship`, `getNotifications`, `broadcastNotification`), `uni-admin/pages/friendships/index.vue` (filter + revoke), `uni-admin/pages/notifications/index.vue` (broadcast composer + type filter).
+7. `[this-commit]` docs: P6 acceptance report appended.
+
+### P6 final verification run (2026-05-14)
+
+- `node --test` across 18 suites: **170 passed, 0 failed** (P5.5 baseline 119; P6 adds 51: friendship 16, leaderboard 13, notifications 9, deepLink 13).
+- `node --check` sweep: all `index.obj.js` and `*-service.js` files parsed clean.
+- UTS forbidden-token grep: only pre-existing comment hits (`my-tasks`, `route-detail`) documenting the bans themselves; no active-code `Number(`, `Number.`, `display:`, or `switchTab` introduced.
+- New App pages: `pages/notifications`, `pages/friends`, `pages/friend-profile`, `pages/leaderboard` — all built with `<scroll-view>` for list scrolling, no banned CSS `display` tokens, no `switchTab` navigation (all `uni.navigateTo`).
+- Admin pages: `uni-admin/pages/friendships/index.vue`, `uni-admin/pages/notifications/index.vue` — follow existing `AdminHeader` component pattern, use `uniCloud.importObject('admin-center')`.
+
+### P6 forbidden-token grep notes
+
+After full `.uvue` / `.uts` edits, the only grep hits remain pre-existing comments that document banned APIs themselves — no active code introduces `Number(`, `Number.`, `display: block|inline|...`, or `switchTab`.
+
+### Next-session AI prompt (P7)
+
+Continue development in `C:\Users\Raymond\Desktop\feinibuke\map_new` for the uni-app x / UTS 5.07 project. First read and obey `uniapp_x_map_checkin_prompt.md`, `UTS_COMPILE_PITFALLS.md`, and `docs/superpowers/plans/2026-05-14-roadmap-p6-to-p9.md`. P6 landed on branch `codex/p6-social-leaderboard-push` with 7 atomic commits (friendship, leaderboard, route share, notifications, App pages, admin moderation, docs). The next iteration is **P7 — Profile + Achievement v2 + City Packs**. See the roadmap file for the P7 outline. Write the full P7 plan at `docs/superpowers/plans/<date>-p7-profile-achievements-city-packs.md` before touching code.
+
+Working norms:
+- Branch per iteration, derived from `codex/p6-social-leaderboard-push` tip.
+- Every cloud-side service change is preceded by a pure-helper test.
+- App has no tabBar — never `switchTab`. Native map `Marker.id` stays SDK-safe. UTS 5.07 forbids `Number(` / `Number.` and `getCurrentPages()` cast to `UTSJSONObject`. Cross cloud: `JSON.stringify(raw) -> JSON.parse<T>(...)`.
+- Never commit: `.hbuilderx/launch.json`, `uni-admin/.hbuilderx/`, `uniCloud-aliyun/cloudfunctions/admin-center/admin-center.param.js`.
