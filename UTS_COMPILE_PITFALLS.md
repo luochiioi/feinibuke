@@ -1423,3 +1423,326 @@ P5.4 did not introduce a new UTS/HBuilderX compile rule. The changed `.uvue/.uts
 Moving the App homepage auth chip from the WeChat capsule side to the top-left was not enough on some phones because `top: calc(env(safe-area-inset-top) + 12rpx)` could still sit inside or too close to the status bar. The current offset is `top: calc(env(safe-area-inset-top) + 44rpx)`.
 
 This is a layout acceptance note, not a new compile rule. Keep using `env(safe-area-inset-top)` plus an explicit rpx offset for top floating controls, then verify on the actual target phone.
+
+> ⚠️ **2026-05-14 校准（被 §规则 41 覆盖）**：上面这条 P5.4 note 在 2026-05-14 的 5.07 编译器上**已失效** —— `top: calc(env(safe-area-inset-top) + …rpx)` 现在直接编译失败。改用 §规则 41 的固定 rpx 或动态 `:style`。
+
+---
+
+## 十三、P6 社交/排行/推送（2026-05-14）— 8 条 UTS 5.07 新规则
+
+P6 一晚踩出 8 条 .uvue/.uts 5.07 编译规则。本节按"先出错、先修"顺序列出，每条都给出 **错误码 / 错误消息原文 / 反模式 / 正解 / 触发位置**。每条都有真实 commit 落地证据。
+
+### 规则 41：CSS top/bottom/left/right 不接受 calc()/env() —— 5.07 编译器直接拒绝
+
+**5.07 编译输出原文**：
+```
+error: property value not supported for `top`
+(supported values are: number|pixel|percent|auto)
+```
+
+§十二/P5.4 follow-up note 里说 `top: calc(env(safe-area-inset-top) + 44rpx)` 可以工作 —— 那是早期 5.07 版本的行为，**当前 5.07 编译器（2026-05-14 校准）已经把 calc()/env() 直接拒到 AST 阶段**。这条规则升级覆盖 P5.4 note。
+
+**反模式**：
+```css
+.auth-chip { top: calc(env(safe-area-inset-top) + 96rpx); }   /* 编译失败 */
+.bell-chip { top: calc(env(safe-area-inset-top) + 96rpx); }
+```
+
+**正解 A（推荐，无刘海机型）**：固定 rpx，预留状态栏空间。
+```css
+.auth-chip { top: 120rpx; }
+```
+
+**正解 B（需要刘海/挖孔感知）**：`onShow` 里读 `safeAreaInsets.top`，转 rpx 后绑模板 `:style`。
+```ts
+const safeTop = ref<number>(120)
+onShow((): void => {
+  const sys = uni.getSystemInfoSync()
+  safeTop.value = Math.round(sys.safeAreaInsets.top * 2) + 96  // px*2 ≈ rpx
+})
+```
+```html
+<view class="auth-chip" :style="'top:' + safeTop + 'rpx'"></view>
+```
+
+**落地证据**：commit `f2c4c5e`，`pages/index/index.uvue` `.auth-chip` / `.bell-chip` 改固定 120rpx。
+
+---
+
+### 规则 42：type alias 的联合类型不能含"内联对象字面量分支"（UTS110111101）
+
+**5.07 编译输出原文**：
+```
+error: UTS110111101: Direct declaration of Object Literal Type is not supported.
+```
+
+**反模式**：
+```ts
+type GroupedItem = NotificationRow | { _type: string; label: string }
+```
+
+**正解**：先给每个分支命名再 union。
+```ts
+type DateHeading = { _type: string; label: string }
+type GroupedItem = NotificationRow | DateHeading
+```
+
+**但是！** 这只解决了 UTS110111101 编译期错误；**联合类型本身在 5.07 template / filter / 构造场景里还有更深的坑——参 §规则 43**。
+
+**落地证据**：commit `be74ae0`、`f2c4c5e`，`pages/notifications/notifications.uvue` 与 `utils/notificationCloud.uts` 同型修复（后续被 §规则 43 全部重写掉，因为 union 本身不能用）。
+
+---
+
+### 规则 43 ⭐：联合类型在模板/filter/构造场景里全炸 —— 改用扁平 DisplayItem
+
+修完 §规则 42 之后，下一波报错链：
+```
+error: No parameter with name '_type' found.
+error: No parameter with name 'label' found.
+error: 参数类型不匹配：实际类型为 'UTSArray<UTSObject>'，预期类型为 'UTSArray<NotificationRow>'。
+error: 找不到名称"_type"。
+error: 找不到名称"_id"。
+```
+
+**根因**（与 §Phase 1.5/A "Kotlin 名义类型" 同源）：UTS 把 `A | B` 编译到 Kotlin `Any?`，因此：
+
+1. **模板访问分支字段**：`{{ item._type }}` 在 `Any?` 上找不到 `_type`
+2. **构造分支实例**：`{ _type: 'x', label: 'y' } as Union` 失败（Kotlin 不能 cast 匿名对象到 sealed 类）
+3. **filter 返回类型**：`arr.filter(...)` 在 union 上返回 `UTSArray<UTSObject>`，传给 `(rows: A[]) => B[]` 类型不匹配
+
+**正解：扁平化为单一 DisplayItem 类型 + 字符串 discriminator + nullable 分支字段**：
+
+```ts
+type DisplayItem = {
+  kind: string                   // 'heading' or 'row'
+  headingLabel: string           // 仅 kind=='heading' 时有意义；row 时填 ''
+  row: NotificationRow | null    // 仅 kind=='row' 时非空
+}
+
+function toDisplayItems(rows: NotificationRow[]): DisplayItem[] {
+  const out: DisplayItem[] = []
+  let lastDate = ''
+  for (let i = 0; i < rows.length; i++) {
+    const row = rows[i]
+    const date = new Date(row.createdAt).toISOString().substring(0, 10)
+    if (date != lastDate) {
+      out.push({ kind: 'heading', headingLabel: date, row: null } as DisplayItem)
+      lastDate = date
+    }
+    out.push({ kind: 'row', headingLabel: '', row: row } as DisplayItem)
+  }
+  return out
+}
+```
+
+模板（row 分支用 `!!` 显式断言，参 §规则 48）：
+```html
+<view v-for="(item, idx) in items" :key="idx.toString() + '_' + item.kind">
+  <view v-if="item.kind == 'heading'" class="heading">
+    <text>{{ item.headingLabel }}</text>
+  </view>
+  <view v-else class="row" @click="tapNotif(item.row!!)">
+    <text>{{ titleFor(item.row!!) }}</text>
+  </view>
+</view>
+```
+
+**反模式（任一即崩）**：
+1. `Row | Heading` union 在 ref 列表里，模板访问 `.kind` 之外的字段
+2. `{ x: 1 } as Union` 试图实例化 union 的某个分支
+3. 在 union 上 `arr.filter(...)` 期望返回原 union 类型
+
+**落地证据**：commit `<P6-final>`，`pages/notifications/notifications.uvue` 从 union 重写为 DisplayItem。`utils/notificationCloud.uts` 同时删除遗留的 `NotificationGroupItem` / `NotificationDateHeading` 导出。
+
+---
+
+### 规则 44：async 函数必须显式 Promise<T> 返回类型
+
+**5.07 编译输出原文**（三条同时炸）：
+```
+error: Cannot infer type for this parameter. Specify it explicitly.
+error: Not enough information to infer type argument for 'T'.
+error: Return type mismatch: expected 'Function', actual 'UTSPromise<uninferred ERROR CLASS: Cannot infer argument for type parameter T>'.
+```
+
+**反模式**：
+```ts
+async function tapNotif(row: NotificationRow): void { ... }
+async function doAddFriend(): void { ... }
+```
+
+**正解**：
+```ts
+async function tapNotif(row: NotificationRow): Promise<void> { ... }
+async function doAddFriend(): Promise<void> { ... }
+```
+
+**为什么 TS 允许 `async fn(): void` 但 UTS 不行**：UTS 把 async 函数编译到 Kotlin `suspend fun`，async 关键字强制返回 `UTSPromise<T>`；标注 `: void` 与 UTSPromise 直接冲突，编译器推不出 T。
+
+**审计**：grep `async function \w+\([^)]*\):\s*void` 应当返回 0 匹配。
+
+**落地证据**：commit `2a0d3bc`，`pages/friends/friends.uvue:doAddFriend` 与 `pages/notifications/notifications.uvue:tapNotif`。
+
+---
+
+### 规则 45：<script setup> 不 hoist —— 后声明的函数不能被前面引用
+
+**5.07 编译输出原文**：
+```
+error: 找不到名称"reload"
+```
+
+**反模式**（leaderboard.uvue 早期版本）：
+```ts
+function setMetric(m: string): void { metric.value = m; reload() }
+function setScope(s: string): void { scope.value = s; reload() }
+
+// ... 其他函数 ...
+
+async function reload(): Promise<void> { ... }   // ← 写在 setMetric 下面 → 找不到名称
+```
+
+**正解**：把被引用的函数提到引用方上面。
+```ts
+async function reload(): Promise<void> { ... }   // ← 先声明
+
+function setMetric(m: string): void { metric.value = m; reload() }
+function setScope(s: string): void { scope.value = s; reload() }
+```
+
+**为什么 TS 能 hoist 但 UTS 不行**：JS function declaration 在解析期 hoist 到作用域顶部，TS 沿用该语义。UTS 的 `<script setup>` 编译成一个 Kotlin 匿名函数体，body 内的 `fun` 按源代码顺序求值，**没有 hoisting**。
+
+**审计规则**：每个 `<script setup>` 里，被调用的函数必须**词法上**先声明。同款隐患：`onShow(() => { foo() })` 里 `foo` 也必须先于该 onShow 声明。
+
+**HBuilderX 内置 [AI修复] 按钮警告**：本次踩坑期间该按钮曾把已删除的 reload 又加回旧位置，产生 `Conflicting overloads` 二次错。修同型问题时**直接重编译**，不要点 [AI修复]。
+
+**落地证据**：commit `2a0d3bc`，`pages/leaderboard/leaderboard.uvue` 把 reload 上提到 setMetric/setScope 之上。
+
+---
+
+### 规则 46：function api(): any 包装 uniCloud.importObject 会丢失方法签名
+
+**5.07 编译输出原文**（每个云方法一条）：
+```
+error: 找不到名称"getNotifications"。
+error: 找不到名称"listFriends"。
+error: 找不到名称"getLeaderboard"。
+...
+```
+
+**反模式**：
+```ts
+function markerApi(): any {
+  return uniCloud.importObject('marker-center', { customUI: true } as UniCloudImportObjectOptions)
+}
+
+export async function pullNotifications(...): Promise<...> {
+  const res = await markerApi().getNotifications(payload) as UTSJSONObject  // ← 'getNotifications' 找不到
+}
+```
+
+**根因**：`uniCloud.importObject('marker-center')` 真实返回类型是 UTS 编译器**基于云函数 `index.obj.js` exports 动态推断**的 anonymous interface（含所有 method）。包成 `function api(): any` 后返回类型被强制变成 `any`；UTS 编译到 Kotlin 时 `any → Any?`，而 **Kotlin Any? 上没有任何方法** —— 所有 `api().xxx()` 调用都被静态调度判定为"找不到名称"。差量编译缓存命中时不报，缓存失效后一次性炸 N 个方法。
+
+**正解（与 utils/cloudSync.uts ×12 处一致）**：内联 const，让类型推断保留 anonymous interface。
+```ts
+export async function pullNotifications(...): Promise<...> {
+  const markerApi = uniCloud.importObject('marker-center', { customUI: true } as UniCloudImportObjectOptions)
+  const res = await markerApi.getNotifications(payload) as UTSJSONObject
+}
+```
+
+**审计规则**：
+- grep `function \w*[Aa]pi\(\):\s*any` 应当返回 0 匹配。
+- grep `\.importObject\(['"]` 应当只在内联 const 上下文里出现，**不允许 `function ... { return uniCloud.importObject(...) }` 包装**。
+
+**落地证据**：commit `1aa05c5`，`utils/notificationCloud.uts` 4 个云方法 + `utils/friendCloud.uts` 6 个云方法全部改用内联 const。
+
+---
+
+### 规则 47：JSON.parse<T>() 返回 T | null —— 索引前必判空
+
+**5.07 编译输出原文**：
+```
+error: Only safe (?.) or non-null asserted (!!.) calls are allowed on a nullable receiver of type 'UTSJSONObject?'.
+```
+
+**反模式**：
+```ts
+const parsed = JSON.parse<UTSJSONObject>(JSON.stringify(raw))
+const count = parsed['count']   // ← parsed 是 UTSJSONObject | null，不能直接索引
+```
+
+**正解 A（早返，推荐）**：
+```ts
+const parsed = JSON.parse<UTSJSONObject>(JSON.stringify(raw))
+if (parsed == null) return 0
+const count = parsed['count']   // 此处已 smart-cast 为非空
+```
+
+**正解 B（!! 断言，仅当确信非空且失败可崩）**：
+```ts
+const parsed = JSON.parse<UTSJSONObject>(JSON.stringify(raw))!!
+const count = parsed['count']
+```
+
+§Phase 1.5/D 法则 12 强调"嵌套类型对象一律走 JSON.parse<T>() 真实构造"——本条扩展了它：**parse 之后必须先判 null 才能访问任何字段**。
+
+**落地证据**：commit `1aa05c5`，`utils/notificationCloud.uts:getUnreadCount`。
+
+---
+
+### 规则 48：模板 v-if 复合条件不传播 null narrowing —— 必须手动 !!
+
+**5.07 编译输出原文**：
+```
+error: Only safe (?.) or non-null asserted (!!.) calls are allowed on a nullable receiver of type 'LeaderboardRow?'.
+```
+
+**简单条件可以 narrow**（friend-profile.uvue 实测正常）：
+```html
+<view v-if="profile != null">
+  <text>{{ profile.nickname }}</text>     <!-- ✅ profile narrow 为非空 -->
+</view>
+```
+
+**复合条件不 narrow**（leaderboard.uvue 实测炸）：
+```html
+<view v-if="selfRow != null && !selfInTop">
+  <text>{{ selfRow.rank }}</text>          <!-- ❌ selfRow 仍为 LeaderboardRow? -->
+</view>
+```
+
+**正解**：复合条件下手动 `!!`。
+```html
+<view v-if="selfRow != null && !selfInTop">
+  <text>{{ selfRow!!.rank }}</text>        <!-- ✅ -->
+</view>
+```
+
+**审计规则**：grep `v-if="\w+\s*!=\s*null\s*&&` 找出所有复合条件 v-if，逐个核对内部字段访问是否带 `!!`。
+
+**落地证据**：commit `b8c5074`，`pages/leaderboard/leaderboard.uvue` self-row footer 5 处 `selfRow.xxx → selfRow!!.xxx`。
+
+---
+
+## 写新 .uvue 页面前的 8 条最低体检（P6 收尾）
+
+1. 任何 `<style>` 里的 `top/bottom/left/right` **不含** `calc()`/`env()` —— §规则 41
+2. 任何 `type X = A | B` 的 B **不是匿名对象字面量** —— §规则 42
+3. 列表里**不混合两种结构差异大的类型**；用扁平 `DisplayItem { kind, ... }` —— §规则 43
+4. `async function` 一律 `Promise<void>` —— §规则 44
+5. `<script setup>` 函数声明顺序：**被引用方先于引用方** —— §规则 45
+6. 云对象只用**内联** `const api = uniCloud.importObject(...)` —— §规则 46
+7. `JSON.parse<T>()` 之后**必判 null** —— §规则 47
+8. 模板 `v-if` **复合条件**内访问字段必加 `!!` —— §规则 48
+
+## P6 commit 链落地证据
+
+| commit | 修复对象 | 触发规则 |
+|---|---|---|
+| `f2c4c5e` | index.uvue calc/env + notifications.uvue union literal | §41, §42 |
+| `be74ae0` | notificationCloud.uts union literal | §42 |
+| `1aa05c5` | notification/friend cloud 云方法包装 + JSON.parse 空判 | §46, §47 |
+| `2a0d3bc` | friends/notifications async-void + leaderboard 函数顺序 | §44, §45 |
+| `b8c5074` | leaderboard.uvue 模板 !! 断言 | §48 |
+| `<P6-final>` | notifications.uvue union → DisplayItem 扁平化 | §43 |

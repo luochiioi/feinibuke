@@ -13,20 +13,22 @@
         <text class="empty-text">暂无消息</text>
       </view>
 
-      <view v-for="(item, idx) in items" :key="item._type != null ? ('h_' + idx.toString()) : (item._id ?? 'n_' + idx.toString())">
-        <view v-if="item._type != null" class="date-heading">
-          <text class="date-heading-text">{{ item.label }}</text>
+      <!-- PITFALLS §规则 43：列表混合两种结构（日期分组头 + 通知行）不能用 union；
+           扁平化为 DisplayItem { kind, headingLabel, row } 后才能在模板里稳定 dispatch -->
+      <view v-for="(item, idx) in items" :key="idx.toString() + '_' + item.kind">
+        <view v-if="item.kind == 'heading'" class="date-heading">
+          <text class="date-heading-text">{{ item.headingLabel }}</text>
         </view>
-        <view v-else class="notif-row" :class="item.read ? 'notif-read' : 'notif-unread'" @click="tapNotif(item)">
+        <view v-else class="notif-row" :class="item.row!!.read ? 'notif-read' : 'notif-unread'" @click="tapNotif(item.row!!)">
           <view class="notif-icon">
-            <text class="notif-icon-text">{{ iconFor(item.type) }}</text>
+            <text class="notif-icon-text">{{ iconFor(item.row!!.type) }}</text>
           </view>
           <view class="notif-body">
-            <text class="notif-title">{{ titleFor(item) }}</text>
-            <text v-if="bodyFor(item).length > 0" class="notif-sub">{{ bodyFor(item) }}</text>
-            <text class="notif-time">{{ fmtTime(item.createdAt) }}</text>
+            <text class="notif-title">{{ titleFor(item.row!!) }}</text>
+            <text v-if="bodyFor(item.row!!).length > 0" class="notif-sub">{{ bodyFor(item.row!!) }}</text>
+            <text class="notif-time">{{ fmtTime(item.row!!.createdAt) }}</text>
           </view>
-          <view v-if="!item.read" class="unread-dot" />
+          <view v-if="!item.row!!.read" class="unread-dot" />
         </view>
       </view>
     </scroll-view>
@@ -35,17 +37,18 @@
 
 <script setup lang="uts">
 import { ref } from 'vue'
-import { pullNotifications, markRead, markAllRead, getUnreadCount, type NotificationRow } from '@/utils/notificationCloud'
+import { pullNotifications, markRead, markAllRead, type NotificationRow } from '@/utils/notificationCloud'
 import { formatDateTime } from '@/utils/format'
 
-// UTS 5.07 不支持在 type alias 里直接联合"内联对象字面量类型"——必须先给每个分支命名再 union
-type DateHeading = {
-  _type: string
-  label: string
+// PITFALLS §规则 43：UTS/Kotlin 是名义类型，模板里无法稳定 dispatch union 分支。
+// 单一具名类型 + 字符串 discriminator + nullable row 才是 5.07 能编译的写法。
+type DisplayItem = {
+  kind: string                   // 'heading' or 'row'
+  headingLabel: string           // 仅 kind=='heading' 时有意义；row 时为 ''
+  row: NotificationRow | null    // 仅 kind=='row' 时非空
 }
-type GroupedItem = NotificationRow | DateHeading
 
-const items = ref<GroupedItem[]>([] as GroupedItem[])
+const items = ref<DisplayItem[]>([] as DisplayItem[])
 const loading = ref<boolean>(false)
 const unreadCount = ref<number>(0)
 
@@ -87,19 +90,19 @@ function fmtTime(ts: number | null): string {
   return formatDateTime(ts)
 }
 
-function groupByDate(rows: NotificationRow[]): GroupedItem[] {
-  if (rows.length == 0) return [] as GroupedItem[]
-  const out: GroupedItem[] = []
+function toDisplayItems(rows: NotificationRow[]): DisplayItem[] {
+  if (rows.length == 0) return [] as DisplayItem[]
+  const out: DisplayItem[] = []
   let lastDate = ''
   for (let i = 0; i < rows.length; i++) {
     const row = rows[i]
     const ts = row.createdAt
     const date = ts > 0 ? new Date(ts).toISOString().substring(0, 10) : ''
     if (date.length > 0 && date != lastDate) {
-      out.push({ _type: 'heading', label: date } as GroupedItem)
+      out.push({ kind: 'heading', headingLabel: date, row: null } as DisplayItem)
       lastDate = date
     }
-    out.push(row as GroupedItem)
+    out.push({ kind: 'row', headingLabel: '', row: row } as DisplayItem)
   }
   return out
 }
@@ -108,7 +111,7 @@ async function reload(): Promise<void> {
   loading.value = true
   try {
     const rows = await pullNotifications(100, 0)
-    items.value = groupByDate(rows)
+    items.value = toDisplayItems(rows)
     unreadCount.value = rows.filter((r: NotificationRow): boolean => !r.read).length
   } catch (_e) {
     // keep stale list
@@ -117,19 +120,14 @@ async function reload(): Promise<void> {
   }
 }
 
-// UTS 5.07: async 函数返回类型必须是 Promise<T>（参 friends.uvue:doAddFriend 注释）
+// PITFALLS §规则 44：async 函数必须显式 Promise<T> 返回类型
 async function tapNotif(row: NotificationRow): Promise<void> {
   if (row.read) return
   const ok = await markRead(row._id)
   if (ok) {
-    row.read = true
-    row.readAt = Date.now()
     unreadCount.value = Math.max(0, unreadCount.value - 1)
-    // re-group to refresh the UI (immutability)
-    items.value = groupByDate(items.value.filter((it: GroupedItem): boolean => {
-      const r = it as NotificationRow
-      return r._id == null || true
-    }))
+    // reload() 重新拉云端，自然带上 read=true 的最新分组——避免在客户端
+    // 手动 filter+regroup 触发 union 类型不匹配（原代码炸点之一）
     reload()
   }
 }

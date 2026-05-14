@@ -1,11 +1,7 @@
 // P6 notification boundary — App side.
-// Cross-cloud boundary: JSON.stringify(raw) -> JSON.parse<T>(...).
-//
-// PITFALLS §法则 12：嵌套类型对象一律走 JSON.parse<T>()，禁用 as T。
-// PITFALLS §规则 24/对应：UTS 5.07 严格模式下 `function markerApi(): any` 包装
-// 会把云对象方法签名丢失为 any，编译器随后用 "找不到名称" 拒绝任何 .xxx() 调用。
-// 正解：每个函数内部 `const markerApi = uniCloud.importObject(...)` 内联本地常量
-// （与 utils/cloudSync.uts ×12 处一致），方法名直接在推断类型上解析。
+// Cross-cloud boundary 遵循 PITFALLS §法则 12（JSON.stringify -> JSON.parse<T>()）
+// + §规则 46（云对象只用内联 const，不要 function api(): any 包装）
+// + §规则 47（JSON.parse<T>() 返回 T | null，索引前先判空）。
 
 export type NotificationRow = {
   _id: string
@@ -17,12 +13,9 @@ export type NotificationRow = {
   createdAt: number
 }
 
-// UTS 5.07 不支持在 type alias 里直接联合"内联对象字面量类型"（UTS110111101）——必须先给每个分支命名再 union
-export type NotificationDateHeading = {
-  _type: string
-  label: string
-}
-export type NotificationGroupItem = NotificationRow | NotificationDateHeading
+// 历史包袱清理（commit be74ae0 留下的）：曾导出过 NotificationGroupItem = NotificationRow | NotificationDateHeading，
+// 但模板里用不了 union（PITFALLS §规则 43）——展示层改用扁平 DisplayItem，本模块不再需要这俩类型。
+// 没有任何外部 importer 引用过它们，直接删除。
 
 export async function pullNotifications(limit: number, offset: number): Promise<NotificationRow[]> {
   try {
