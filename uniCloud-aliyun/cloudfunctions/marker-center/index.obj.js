@@ -8,6 +8,7 @@ const colRoutes = db.collection('tourism_routes')
 const colUserRoutes = db.collection('user_routes')
 const colTaskDefs = db.collection('tourism_tasks')
 const colFriendships = db.collection('tourism_friendships')
+const colNotifications = db.collection('tourism_notifications')
 const authUtil = require('auth-util')
 const { createRepairCheckinPlan, createDeleteCheckinPlan } = require('./repair-service')
 const {
@@ -36,6 +37,7 @@ const {
   attachFriendFilter,
   aggregateLeaderboardRows
 } = require('./leaderboard-service')
+const { buildNotification, markRead } = require('./notification-service')
 
 // 拉当前 uid 在所有 marker 中的"已打卡 markerId 集合"。
 // 嵌套字段查询 'checkedBy.userId': uid 复用 §规则 29 的索引友好写法。
@@ -78,6 +80,10 @@ async function detectAndRecordCompletedRoutes(uid, now) {
             id: Number(route.id),
             name: String(route.name || ''),
             reward: String(rewardEntry.reward || '')
+          })
+          emitNotification('route.completed', uid, {
+            routeId: Number(route.id),
+            routeName: String(route.name || '')
           })
         }
       } catch (e) {
@@ -558,6 +564,11 @@ module.exports = {
       if (!mirrorExisting.data.length) {
         await colFriendships.add(mirror)
       }
+      // Notify the original requester that the friend request was accepted.
+      emitNotification('friend.accepted', String(row.requestedBy), {
+        friendUserId: String(this.auth.uid),
+        friendshipId
+      })
     }
 
     return { errCode: 0, errMsg: decision === 'accept' ? '已接受' : '已拒绝', data: { friendshipId, status: next.status } }
@@ -721,6 +732,60 @@ module.exports = {
         self: selfRow
       }
     }
+  },
+
+  // ===== P6 Notifications =====
+
+  async getNotifications(data) {
+    if (!this.auth.uid) return { errCode: -1, errMsg: '请先登录' }
+    const payload = data || {}
+    const limit = Math.max(1, Math.min(100, Number(payload.limit) || 50))
+    const offset = Math.max(0, Number(payload.offset) || 0)
+    const res = await colNotifications
+      .where({ userId: String(this.auth.uid) })
+      .orderBy('createdAt', 'desc')
+      .skip(offset).limit(limit)
+      .get()
+    return { errCode: 0, data: res.data }
+  },
+
+  async getUnreadNotificationCount() {
+    if (!this.auth.uid) return { errCode: 0, data: { count: 0 } }
+    const res = await colNotifications
+      .where({ userId: String(this.auth.uid), read: false })
+      .count()
+    return { errCode: 0, data: { count: Number(res && res.total || 0) } }
+  },
+
+  async markNotificationRead(data) {
+    if (!this.auth.uid) return { errCode: -1, errMsg: '请先登录' }
+    const payload = data || {}
+    const id = String(payload._id || '').trim()
+    if (!id) return { errCode: -1, errMsg: '缺少通知ID' }
+    const rowRes = await colNotifications.doc(id).get()
+    if (!rowRes.data.length) return { errCode: -1, errMsg: '通知不存在' }
+    const row = rowRes.data[0]
+    if (String(row.userId) !== String(this.auth.uid)) return { errCode: -1, errMsg: '无权操作' }
+    const next = markRead(row, Date.now())
+    if (next == null) return { errCode: 0, data: { read: false } }
+    await colNotifications.doc(id).update({ read: true, readAt: next.readAt })
+    return { errCode: 0, data: { read: true } }
+  },
+
+  async markAllNotificationsRead() {
+    if (!this.auth.uid) return { errCode: -1, errMsg: '请先登录' }
+    const me = String(this.auth.uid)
+    const res = await colNotifications
+      .where({ userId: me, read: false })
+      .get()
+    const now = Date.now()
+    for (const row of (res.data || [])) {
+      const next = markRead(row, now)
+      if (next != null) {
+        await colNotifications.doc(row._id).update({ read: true, readAt: next.readAt })
+      }
+    }
+    return { errCode: 0, data: { updated: (res.data || []).length } }
   }
 }
 
@@ -782,4 +847,16 @@ async function checkTasksForMarker(userId, marker) {
     completed.push({ taskId: task.id, taskName: task.name, reward: task.reward })
   }
   return completed
+}
+
+// P6: fire-and-forget notification emitter. Failure is logged but never blocks
+// the parent operation (route completion, friend accept, etc.).
+async function emitNotification(type, userId, payload) {
+  const row = buildNotification(type, userId, payload, Date.now())
+  if (row == null) return
+  try {
+    await colNotifications.add(row)
+  } catch (e) {
+    console.log('[notif] emit failed', type, userId, e && e.message ? e.message : e)
+  }
 }

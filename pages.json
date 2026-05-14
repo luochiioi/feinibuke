@@ -74,6 +74,12 @@
       "style": {
         "navigationBarTitleText": "路线详情"
       }
+    },
+    {
+      "path": "pages/notifications/notifications",
+      "style": {
+        "navigationBarTitleText": "消息中心"
+      }
     }
   ],
   "globalStyle": {

@@ -4,6 +4,13 @@
       <text :class="isLoggedIn ? 'auth-chip-text auth-chip-text-on' : 'auth-chip-text auth-chip-text-off'">{{ authLabel }}</text>
     </view>
 
+    <view class="bell-chip" @click="goNotifications">
+      <text class="bell-icon-text">🔔</text>
+      <view v-if="notifUnread > 0" class="bell-badge">
+        <text class="bell-badge-text">{{ notifUnread > 99 ? '99+' : notifUnread.toString() }}</text>
+      </view>
+    </view>
+
     <checkin-map
       map-id="mainMap"
       class="map-component"
@@ -122,11 +129,13 @@ import type { CheckinMarker, CheckinEntry } from '@/types/marker'
 import { formatDateTime } from '@/utils/format'
 import { deleteCloudCheckin, repairMissingCheckins } from '@/utils/cloudSync'
 import { parseRouteDeepLink, type RouteDeepLink } from '@/utils/deepLink'
+import { getUnreadCount as getNotifUnread } from '@/utils/notificationCloud'
 
 const LOCATE_SCALE: number = 17
 const OTHER_FOOTPRINT_PHOTO_LIMIT: number = 12
 let hasCenteredOnUser: boolean = false
 const panelDetailsLoading = ref<boolean>(false)
+const notifUnread = ref<number>(0)
 
 const isLoggedIn = computed((): boolean => userState.userInfo != null)
 const authLabel = computed((): string => {
@@ -165,6 +174,10 @@ function goAuth(): void {
 }
 function ensureMapCtx(): MapContext | null {
   return uni.createMapContext('mainMap')
+}
+
+function goNotifications(): void {
+  uni.navigateTo({ url: '/pages/notifications/notifications' })
 }
 
 function goRoutes(): void {
@@ -429,6 +442,8 @@ onShow((): void => {
   })
   // P6: handle deep link from clipboard (one-shot per app foreground)
   handleDeepLinkFromClipboard()
+  // P6: refresh notification unread count
+  getNotifUnread().then((n: number): void => { notifUnread.value = n })
 })
 
 onHide((): void => {
@@ -592,6 +607,11 @@ function doDelete(): void {
 .auth-chip-text { font-size: 24rpx; font-weight: 500; }
 .auth-chip-text-on { color: #ffffff; }
 .auth-chip-text-off { color: #2ecc71; }
+
+.bell-chip { position: absolute; top: calc(env(safe-area-inset-top) + 96rpx); right: 24rpx; z-index: 20; width: 60rpx; height: 60rpx; border-radius: 999rpx; background-color: #ffffff; display: flex; align-items: center; justify-content: center; box-shadow: 0 4rpx 12rpx rgba(0,0,0,0.08); }
+.bell-icon-text { font-size: 28rpx; }
+.bell-badge { position: absolute; top: -4rpx; right: -4rpx; min-width: 32rpx; height: 32rpx; border-radius: 999rpx; background-color: #ff3b30; display: flex; align-items: center; justify-content: center; padding: 0 6rpx; }
+.bell-badge-text { font-size: 18rpx; color: #ffffff; font-weight: 600; }
 .bl-stack { position: absolute; left: 24rpx; bottom: 64rpx; z-index: 20; display: flex; flex-direction: column; }
 .bl-btn { padding: 14rpx 28rpx; border-radius: 999rpx; margin-bottom: 16rpx; box-shadow: 0 4rpx 12rpx rgba(0,0,0,0.08); }
 .bl-btn-route { background-color: #2ecc71; }

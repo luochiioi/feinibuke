@@ -1,0 +1,34 @@
+{
+  "bsonType": "object",
+  "required": ["userId", "type", "createdAt"],
+  "permission": {
+    "read": "doc.userId == auth.uid || auth.role == 'admin'",
+    "create": "auth.role == 'admin'",
+    "update": "doc.userId == auth.uid || auth.role == 'admin'",
+    "delete": "auth.role == 'admin'"
+  },
+  "properties": {
+    "_id": {},
+    "userId": { "bsonType": "string", "description": "Recipient uid." },
+    "type": {
+      "bsonType": "string",
+      "enum": ["friend.requested", "friend.accepted", "route.completed", "route.markerAdded", "system.broadcast"]
+    },
+    "payload": { "bsonType": "object", "description": "Type-specific data (e.g., friendshipId, routeId, friendUserId)." },
+    "read": { "bsonType": "bool", "defaultValue": false },
+    "readAt": { "bsonType": "int", "description": "ms-epoch when user marked it read." },
+    "createdAt": { "bsonType": "int" }
+  },
+  "indexes": [
+    {
+      "IndexName": "userId_read_created",
+      "MgoKeySchema": {
+        "MgoIndexKeys": [
+          { "Name": "userId", "Direction": "1" },
+          { "Name": "read", "Direction": "1" },
+          { "Name": "createdAt", "Direction": "-1" }
+        ]
+      }
+    }
+  ]
+}

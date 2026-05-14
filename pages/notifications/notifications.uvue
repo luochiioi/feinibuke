@@ -1,0 +1,174 @@
+<template>
+  <view class="notif-page">
+    <view v-if="unreadCount > 0" class="mark-all-bar" @click="doMarkAllRead">
+      <text class="mark-all-text">全部标为已读 ({{ unreadCount }})</text>
+    </view>
+
+    <scroll-view class="notif-list" scroll-y direction="vertical" :show-scrollbar="false">
+      <view v-if="loading" class="notice">
+        <text class="notice-text">加载中...</text>
+      </view>
+
+      <view v-if="!loading && items.length == 0" class="empty">
+        <text class="empty-text">暂无消息</text>
+      </view>
+
+      <view v-for="(item, idx) in items" :key="item._type != null ? ('h_' + idx.toString()) : (item._id ?? 'n_' + idx.toString())">
+        <view v-if="item._type != null" class="date-heading">
+          <text class="date-heading-text">{{ item.label }}</text>
+        </view>
+        <view v-else class="notif-row" :class="item.read ? 'notif-read' : 'notif-unread'" @click="tapNotif(item)">
+          <view class="notif-icon">
+            <text class="notif-icon-text">{{ iconFor(item.type) }}</text>
+          </view>
+          <view class="notif-body">
+            <text class="notif-title">{{ titleFor(item) }}</text>
+            <text v-if="bodyFor(item).length > 0" class="notif-sub">{{ bodyFor(item) }}</text>
+            <text class="notif-time">{{ fmtTime(item.createdAt) }}</text>
+          </view>
+          <view v-if="!item.read" class="unread-dot" />
+        </view>
+      </view>
+    </scroll-view>
+  </view>
+</template>
+
+<script setup lang="uts">
+import { ref } from 'vue'
+import { pullNotifications, markRead, markAllRead, getUnreadCount, type NotificationRow } from '@/utils/notificationCloud'
+import { formatDateTime } from '@/utils/format'
+
+type GroupedItem = NotificationRow | { _type: string, label: string }
+
+const items = ref<GroupedItem[]>([] as GroupedItem[])
+const loading = ref<boolean>(false)
+const unreadCount = ref<number>(0)
+
+function iconFor(type: string): string {
+  if (type == 'friend.accepted' || type == 'friend.requested') return '👤'
+  if (type == 'route.completed' || type == 'route.markerAdded') return '🗺️'
+  if (type == 'system.broadcast') return '📢'
+  return '🔔'
+}
+
+function titleFor(row: NotificationRow): string {
+  if (row.type == 'friend.accepted') return '好友已接受请求'
+  if (row.type == 'friend.requested') return '有新的好友请求'
+  if (row.type == 'route.completed') return '路线已完成'
+  if (row.type == 'route.markerAdded') return '路线有新打卡点'
+  if (row.type == 'system.broadcast') return '系统通知'
+  return row.type
+}
+
+function bodyFor(row: NotificationRow): string {
+  const p = row.payload
+  if (p == null) return ''
+  if (row.type == 'route.completed') {
+    const name = p['routeName'] != null ? p['routeName'] as string : ''
+    return name.length > 0 ? '你完成了路线「' + name + '」' : ''
+  }
+  if (row.type == 'friend.accepted') {
+    const fid = p['friendUserId'] != null ? p['friendUserId'] as string : ''
+    return fid.length > 0 ? '你和 ' + fid + ' 已成为好友' : ''
+  }
+  if (row.type == 'system.broadcast') {
+    return p['title'] != null ? p['title'] as string : ''
+  }
+  return ''
+}
+
+function fmtTime(ts: number | null): string {
+  if (ts == null || ts <= 0) return ''
+  return formatDateTime(ts)
+}
+
+function groupByDate(rows: NotificationRow[]): GroupedItem[] {
+  if (rows.length == 0) return [] as GroupedItem[]
+  const out: GroupedItem[] = []
+  let lastDate = ''
+  for (let i = 0; i < rows.length; i++) {
+    const row = rows[i]
+    const ts = row.createdAt
+    const date = ts > 0 ? new Date(ts).toISOString().substring(0, 10) : ''
+    if (date.length > 0 && date != lastDate) {
+      out.push({ _type: 'heading', label: date } as GroupedItem)
+      lastDate = date
+    }
+    out.push(row as GroupedItem)
+  }
+  return out
+}
+
+async function reload(): Promise<void> {
+  loading.value = true
+  try {
+    const rows = await pullNotifications(100, 0)
+    items.value = groupByDate(rows)
+    unreadCount.value = rows.filter((r: NotificationRow): boolean => !r.read).length
+  } catch (_e) {
+    // keep stale list
+  } finally {
+    loading.value = false
+  }
+}
+
+async function tapNotif(row: NotificationRow): void {
+  if (row.read) return
+  const ok = await markRead(row._id)
+  if (ok) {
+    row.read = true
+    row.readAt = Date.now()
+    unreadCount.value = Math.max(0, unreadCount.value - 1)
+    // re-group to refresh the UI (immutability)
+    items.value = groupByDate(items.value.filter((it: GroupedItem): boolean => {
+      const r = it as NotificationRow
+      return r._id == null || true
+    }))
+    reload()
+  }
+}
+
+async function doMarkAllRead(): Promise<void> {
+  const ok = await markAllRead()
+  if (ok) {
+    unreadCount.value = 0
+    reload()
+  }
+}
+
+onShow((): void => {
+  reload()
+})
+</script>
+
+<style>
+.notif-page { flex: 1; width: 750rpx; height: 100%; background-color: #f5f7f6; }
+
+.mark-all-bar { padding: 16rpx 28rpx; background-color: #ffffff; border-bottom: 1rpx solid #f0f2f5; }
+.mark-all-text { font-size: 24rpx; color: #2e9f5f; }
+
+.notif-list { flex: 1; }
+
+.notice { background-color: #eef9f2; border-radius: 12rpx; padding: 18rpx 20rpx; margin: 24rpx; }
+.notice-text { font-size: 24rpx; color: #2e9f5f; }
+
+.empty { padding: 120rpx 40rpx; display: flex; flex-direction: column; align-items: center; }
+.empty-text { font-size: 26rpx; color: #999999; }
+
+.date-heading { padding: 18rpx 28rpx 8rpx 28rpx; }
+.date-heading-text { font-size: 22rpx; color: #888888; font-weight: 500; }
+
+.notif-row { padding: 18rpx 28rpx; display: flex; flex-direction: row; align-items: flex-start; }
+.notif-unread { background-color: #f0f9f4; }
+.notif-read { background-color: #ffffff; }
+
+.notif-icon { width: 56rpx; height: 56rpx; border-radius: 999rpx; background-color: #eef9f2; display: flex; align-items: center; justify-content: center; margin-right: 16rpx; }
+.notif-icon-text { font-size: 28rpx; }
+
+.notif-body { flex: 1; display: flex; flex-direction: column; }
+.notif-title { font-size: 26rpx; color: #1a1a1a; font-weight: 500; }
+.notif-sub { font-size: 22rpx; color: #5a6770; margin-top: 4rpx; line-height: 32rpx; }
+.notif-time { font-size: 20rpx; color: #aaaaaa; margin-top: 6rpx; }
+
+.unread-dot { width: 14rpx; height: 14rpx; border-radius: 999rpx; background-color: #2ecc71; }
+</style>
