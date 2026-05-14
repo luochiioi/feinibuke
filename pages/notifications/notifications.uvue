@@ -38,7 +38,12 @@ import { ref } from 'vue'
 import { pullNotifications, markRead, markAllRead, getUnreadCount, type NotificationRow } from '@/utils/notificationCloud'
 import { formatDateTime } from '@/utils/format'
 
-type GroupedItem = NotificationRow | { _type: string, label: string }
+// UTS 5.07 不支持在 type alias 里直接联合"内联对象字面量类型"——必须先给每个分支命名再 union
+type DateHeading = {
+  _type: string
+  label: string
+}
+type GroupedItem = NotificationRow | DateHeading
 
 const items = ref<GroupedItem[]>([] as GroupedItem[])
 const loading = ref<boolean>(false)

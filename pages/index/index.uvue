@@ -615,14 +615,15 @@ function doDelete(): void {
 <style>
 .map-page { flex: 1; display: flex; flex-direction: column; width: 750rpx; height: 100%; position: relative; }
 .map-component { width: 750rpx; flex: 1; }
-.auth-chip { position: absolute; top: calc(env(safe-area-inset-top) + 96rpx); left: 24rpx; z-index: 20; padding: 10rpx 24rpx; border-radius: 24rpx; box-shadow: 0 4rpx 12rpx rgba(0,0,0,0.08); }
+/* UTS 5.07 编译器不支持 top: calc()/env() —— 改为固定 rpx，预留状态栏空间 */
+.auth-chip { position: absolute; top: 120rpx; left: 24rpx; z-index: 20; padding: 10rpx 24rpx; border-radius: 24rpx; box-shadow: 0 4rpx 12rpx rgba(0,0,0,0.08); }
 .auth-chip-on { background-color: #2ecc71; }
 .auth-chip-off { background-color: #ffffff; border: 2rpx solid #2ecc71; }
 .auth-chip-text { font-size: 24rpx; font-weight: 500; }
 .auth-chip-text-on { color: #ffffff; }
 .auth-chip-text-off { color: #2ecc71; }
 
-.bell-chip { position: absolute; top: calc(env(safe-area-inset-top) + 96rpx); right: 24rpx; z-index: 20; width: 60rpx; height: 60rpx; border-radius: 999rpx; background-color: #ffffff; display: flex; align-items: center; justify-content: center; box-shadow: 0 4rpx 12rpx rgba(0,0,0,0.08); }
+.bell-chip { position: absolute; top: 120rpx; right: 24rpx; z-index: 20; width: 60rpx; height: 60rpx; border-radius: 999rpx; background-color: #ffffff; display: flex; align-items: center; justify-content: center; box-shadow: 0 4rpx 12rpx rgba(0,0,0,0.08); }
 .bell-icon-text { font-size: 28rpx; }
 .bell-badge { position: absolute; top: -4rpx; right: -4rpx; min-width: 32rpx; height: 32rpx; border-radius: 999rpx; background-color: #ff3b30; display: flex; align-items: center; justify-content: center; padding: 0 6rpx; }
 .bell-badge-text { font-size: 18rpx; color: #ffffff; font-weight: 600; }
