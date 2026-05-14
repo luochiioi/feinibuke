@@ -31,6 +31,11 @@ const {
   bucketizeFriendships,
   toPublicProfile
 } = require('./friendship-service')
+const {
+  buildLeaderboard,
+  attachFriendFilter,
+  aggregateLeaderboardRows
+} = require('./leaderboard-service')
 
 // 拉当前 uid 在所有 marker 中的"已打卡 markerId 集合"。
 // 嵌套字段查询 'checkedBy.userId': uid 复用 §规则 29 的索引友好写法。
@@ -658,6 +663,64 @@ module.exports = {
       .where({ userId: targetUid, friendUserId: me })
       .remove()
     return { errCode: 0, errMsg: '已解除好友', data: { targetUid } }
+  },
+
+  // ===== P6 Leaderboard =====
+  // Reads three slices (rewards, user_routes, users), aggregates via the
+  // pure helper, then optionally filters to the caller's accepted-friend
+  // set. No DB caching: the row set is bounded by user count × 3 reads,
+  // and the hard limit on the response stays ≤ 50.
+  //
+  // Auth: a logged-out caller can still read the global board, but
+  // scope=friends always needs a uid (because "my friends" is undefined
+  // otherwise). The empty-friend case explicitly returns just the caller.
+
+  async getLeaderboard(data) {
+    const payload = data || {}
+    const metric = String(payload.metric || 'points')
+    const scope = String(payload.scope || 'global')
+    const requestedLimit = Number(payload.limit)
+    const limit = Number.isFinite(requestedLimit) ? requestedLimit : 50
+    const me = this.auth.uid ? String(this.auth.uid) : null
+
+    if (scope === 'friends' && !me) {
+      return { errCode: -1, errMsg: '请先登录' }
+    }
+
+    const [rewardsRes, userRoutesRes, usersRes] = await Promise.all([
+      colRewards.field({ userId: true, rewardPoints: true, earnedAt: true }).get(),
+      colUserRoutes.field({ userId: true, routeId: true, completedAt: true }).get(),
+      colUserProfiles.field({ userId: true, nickname: true, avatar: true, totalCheckins: true }).get()
+    ])
+
+    let rows = aggregateLeaderboardRows({
+      rewards: rewardsRes.data || [],
+      userRoutes: userRoutesRes.data || [],
+      userProfiles: usersRes.data || []
+    })
+
+    if (scope === 'friends' && me) {
+      const friendsRes = await colFriendships
+        .where({ userId: me, status: 'accepted' })
+        .field({ friendUserId: true })
+        .get()
+      const allowed = new Set((friendsRes.data || []).map(r => String(r.friendUserId)))
+      allowed.add(me)
+      rows = attachFriendFilter(rows, allowed)
+    }
+
+    const board = buildLeaderboard(rows, { metric, limit })
+    const selfRow = me ? board.find(row => row.userId === me) || null : null
+
+    return {
+      errCode: 0,
+      data: {
+        metric: board.length ? board[0].metric : (['points', 'routes', 'checkins'].indexOf(metric) >= 0 ? metric : 'points'),
+        scope,
+        rows: board,
+        self: selfRow
+      }
+    }
   }
 }
 
