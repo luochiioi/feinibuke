@@ -35,14 +35,17 @@
         <text class="lb-value">{{ row.value.toString() }}</text>
       </view>
 
+      <!-- UTS 5.07 模板里 v-if="selfRow != null" 不会把 narrowing 传到内部表达式
+           （Kotlin smart-cast 仅在同一作用域生效）—— 必须用 !! 显式断言非空，
+           与 script L64 selfRow.value!!.userId 保持同款约定 -->
       <view v-if="selfRow != null && !selfInTop" class="lb-row lb-row-self lb-row-footer">
-        <text class="lb-rank">{{ rankText(selfRow.rank) }}</text>
-        <view class="lb-avatar"><text class="lb-avatar-text">{{ initial(selfRow.nickname) }}</text></view>
+        <text class="lb-rank">{{ rankText(selfRow!!.rank) }}</text>
+        <view class="lb-avatar"><text class="lb-avatar-text">{{ initial(selfRow!!.nickname) }}</text></view>
         <view class="lb-info">
-          <text class="lb-name">{{ selfRow.nickname }}</text>
-          <text class="lb-sub">{{ labelFor(selfRow) }}</text>
+          <text class="lb-name">{{ selfRow!!.nickname }}</text>
+          <text class="lb-sub">{{ labelFor(selfRow!!) }}</text>
         </view>
-        <text class="lb-value">{{ selfRow.value.toString() }}</text>
+        <text class="lb-value">{{ selfRow!!.value.toString() }}</text>
       </view>
     </scroll-view>
   </view>
