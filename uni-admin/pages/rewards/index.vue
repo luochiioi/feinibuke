@@ -46,11 +46,14 @@
 
     <view v-for="row in list" :key="row._id" class="reward-card">
       <view class="card-head">
-        <view>
+        <view class="card-head-info">
           <text class="user-name">{{ row.userName || row.userId || '--' }}</text>
           <text class="user-id">UID: {{ row.userId || '--' }}</text>
         </view>
-        <text class="status-pill" :class="row.rewardClaimed ? 'claimed' : 'pending'">{{ row.statusText }}</text>
+        <view class="card-head-actions">
+          <text class="status-pill" :class="row.rewardClaimed ? 'claimed' : 'pending'">{{ row.statusText }}</text>
+          <text class="filter-link" @click="filterByUser(row.userId)">筛选此用户</text>
+        </view>
       </view>
       <view class="card-body">
         <text class="source-pill" :class="row.sourceType">{{ sourceLabel(row.sourceType) }}</text>
@@ -74,6 +77,7 @@
           <text class="meta-value">{{ formatTime(row.claimedAt) }}</text>
         </view>
       </view>
+      <text class="reward-row-id">奖励记录 ID：{{ row._id || '--' }}</text>
     </view>
 
     <view v-if="hasMore" class="load-more" @click="fetchData">
@@ -111,6 +115,17 @@ function setStatus(status) {
 function resetFilters() {
   statusFilter.value = ''
   userIdInput.value = ''
+  reload()
+}
+
+function filterByUser(userId) {
+  const trimmed = String(userId || '').trim()
+  if (!trimmed) {
+    uni.showToast({ title: '该行缺少 userId', icon: 'none' })
+    return
+  }
+  userIdInput.value = trimmed
+  statusFilter.value = ''
   reload()
 }
 
@@ -357,12 +372,28 @@ function formatTime(ts) {
   margin-top: 4rpx;
 }
 
+.card-head-info { flex: 1; min-width: 0; }
+.card-head-actions { display: flex; flex-direction: column; align-items: flex-end; gap: 6rpx; }
+
 .status-pill,
 .source-pill {
   border-radius: 999rpx;
   font-size: 22rpx;
   padding: 4rpx 16rpx;
   white-space: nowrap;
+}
+
+.filter-link {
+  color: #1677ff;
+  font-size: 22rpx;
+}
+
+.reward-row-id {
+  color: #b5bdb9;
+  display: block;
+  font-size: 20rpx;
+  margin-top: 12rpx;
+  word-break: break-all;
 }
 
 .status-pill.pending {

@@ -129,3 +129,34 @@ test('buildAdminPointsSummary returns zero shape for empty input', () => {
   assert.equal(summary.taskIssuedPoints, 0)
   assert.equal(summary.routeIssuedPoints, 0)
 })
+
+test('normalizeRewardRecords preserves input order for earnedAt-desc rows', () => {
+  const rows = normalizeRewardRecords([
+    { _id: 'r-2', userId: 'u1', source: 'route', routeName: 'B', reward: '20 积分', rewardClaimed: false, earnedAt: 2000 },
+    { _id: 'r-1', userId: 'u1', source: 'route', routeName: 'A', reward: '10 积分', rewardClaimed: true, earnedAt: 1000, claimedAt: 1500 }
+  ], [])
+  assert.deepEqual(rows.map(row => row._id), ['r-2', 'r-1'])
+  assert.equal(rows[0].earnedAt, 2000)
+  assert.equal(rows[1].claimedAt, 1500)
+})
+
+test('buildAdminPointsSummary ignores rows with non-positive points (none-kind / legacy zero)', () => {
+  const summary = buildAdminPointsSummary([
+    { userId: 'u1', source: 'route', reward: '', rewardPoints: 0, rewardClaimed: true },
+    { userId: 'u1', source: 'route', reward: 'Prize', rewardPoints: 10, rewardClaimed: true, claimedAt: 99 },
+    { userId: 'u1', source: 'task', reward: '5 积分', rewardPoints: 5 }
+  ])
+  assert.equal(summary.totalEarnedPoints, 15)
+  assert.equal(summary.routeIssuedPoints, 10)
+  assert.equal(summary.taskIssuedPoints, 5)
+  assert.equal(summary.pendingRoutePoints, 0)
+})
+
+test('filterRewardRecords narrows to a single user across mixed sources', () => {
+  const rows = [
+    { _id: 'a', userId: 'u1', source: 'route', rewardClaimed: false, earnedAt: 3 },
+    { _id: 'b', userId: 'u2', source: 'task', rewardClaimed: true, earnedAt: 2 },
+    { _id: 'c', userId: 'u1', source: 'task', rewardClaimed: true, earnedAt: 1 }
+  ]
+  assert.deepEqual(filterRewardRecords(rows, { userId: 'u1' }).map(row => row._id), ['a', 'c'])
+})
