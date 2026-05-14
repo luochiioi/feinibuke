@@ -36,19 +36,19 @@ export type FriendRequestResult = {
   autoAccepted: boolean
 }
 
-function markerApi(): any {
-  return uniCloud.importObject('marker-center', { customUI: true } as UniCloudImportObjectOptions)
-}
+// PITFALLS §法则 12 同款：`function markerApi(): any` 会丢失方法类型，UTS 5.07
+// 严格模式以 "找不到名称" 拒绝调用。统一改用 cloudSync.uts ×12 处的内联 const 模式。
 
 // ===== Read =====
 
 export async function pullFriends(status: string | null): Promise<FriendBuckets> {
   try {
+    const markerApi = uniCloud.importObject('marker-center', { customUI: true } as UniCloudImportObjectOptions)
     const payload = JSON.parse('{}') as UTSJSONObject
     if (status != null && status.length > 0) {
       payload['status'] = status
     }
-    const res = await markerApi().listFriends(payload) as UTSJSONObject
+    const res = await markerApi.listFriends(payload) as UTSJSONObject
     const errCode = res['errCode'] as number
     if (errCode !== 0) return emptyBuckets()
     const raw = res['data']
@@ -65,9 +65,10 @@ export async function pullFriends(status: string | null): Promise<FriendBuckets>
 export async function getFriendProfile(uid: string): Promise<FriendProfile | null> {
   if (uid == null || uid.length == 0) return null
   try {
+    const markerApi = uniCloud.importObject('marker-center', { customUI: true } as UniCloudImportObjectOptions)
     const payload = JSON.parse('{}') as UTSJSONObject
     payload['uid'] = uid
-    const res = await markerApi().getFriendProfile(payload) as UTSJSONObject
+    const res = await markerApi.getFriendProfile(payload) as UTSJSONObject
     const errCode = res['errCode'] as number
     if (errCode !== 0) return null
     const raw = res['data']
@@ -84,9 +85,10 @@ export async function getFriendProfile(uid: string): Promise<FriendProfile | nul
 
 export async function requestFriend(targetUid: string): Promise<FriendRequestResult | null> {
   if (targetUid == null || targetUid.length == 0) return null
+  const markerApi = uniCloud.importObject('marker-center', { customUI: true } as UniCloudImportObjectOptions)
   const payload = JSON.parse('{}') as UTSJSONObject
   payload['targetUid'] = targetUid
-  const res = await markerApi().requestFriend(payload) as UTSJSONObject
+  const res = await markerApi.requestFriend(payload) as UTSJSONObject
   const errCode = res['errCode'] as number
   if (errCode !== 0) {
     const rawMsg = res['errMsg']
@@ -103,10 +105,11 @@ export async function respondFriend(friendshipId: string, decision: string): Pro
   if (friendshipId == null || friendshipId.length == 0) return false
   if (decision !== 'accept' && decision !== 'reject') return false
   try {
+    const markerApi = uniCloud.importObject('marker-center', { customUI: true } as UniCloudImportObjectOptions)
     const payload = JSON.parse('{}') as UTSJSONObject
     payload['friendshipId'] = friendshipId
     payload['decision'] = decision
-    const res = await markerApi().respondFriend(payload) as UTSJSONObject
+    const res = await markerApi.respondFriend(payload) as UTSJSONObject
     const errCode = res['errCode'] as number
     return errCode === 0
   } catch (e) {
@@ -118,9 +121,10 @@ export async function respondFriend(friendshipId: string, decision: string): Pro
 export async function unfriend(targetUid: string): Promise<boolean> {
   if (targetUid == null || targetUid.length == 0) return false
   try {
+    const markerApi = uniCloud.importObject('marker-center', { customUI: true } as UniCloudImportObjectOptions)
     const payload = JSON.parse('{}') as UTSJSONObject
     payload['targetUid'] = targetUid
-    const res = await markerApi().unfriend(payload) as UTSJSONObject
+    const res = await markerApi.unfriend(payload) as UTSJSONObject
     const errCode = res['errCode'] as number
     return errCode === 0
   } catch (e) {
@@ -169,11 +173,12 @@ export type LeaderboardResult = {
 
 export async function pullLeaderboard(metric: string, scope: string, limit: number): Promise<LeaderboardResult> {
   try {
+    const markerApi = uniCloud.importObject('marker-center', { customUI: true } as UniCloudImportObjectOptions)
     const payload = JSON.parse('{}') as UTSJSONObject
     payload['metric'] = metric
     payload['scope'] = scope
     payload['limit'] = limit
-    const res = await markerApi().getLeaderboard(payload) as UTSJSONObject
+    const res = await markerApi.getLeaderboard(payload) as UTSJSONObject
     const errCode = res['errCode'] as number
     if (errCode !== 0) return emptyLeaderboard(metric, scope)
     const raw = res['data']

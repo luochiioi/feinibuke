@@ -1,5 +1,11 @@
 // P6 notification boundary — App side.
 // Cross-cloud boundary: JSON.stringify(raw) -> JSON.parse<T>(...).
+//
+// PITFALLS §法则 12：嵌套类型对象一律走 JSON.parse<T>()，禁用 as T。
+// PITFALLS §规则 24/对应：UTS 5.07 严格模式下 `function markerApi(): any` 包装
+// 会把云对象方法签名丢失为 any，编译器随后用 "找不到名称" 拒绝任何 .xxx() 调用。
+// 正解：每个函数内部 `const markerApi = uniCloud.importObject(...)` 内联本地常量
+// （与 utils/cloudSync.uts ×12 处一致），方法名直接在推断类型上解析。
 
 export type NotificationRow = {
   _id: string
@@ -18,16 +24,13 @@ export type NotificationDateHeading = {
 }
 export type NotificationGroupItem = NotificationRow | NotificationDateHeading
 
-function markerApi(): any {
-  return uniCloud.importObject('marker-center', { customUI: true } as UniCloudImportObjectOptions)
-}
-
 export async function pullNotifications(limit: number, offset: number): Promise<NotificationRow[]> {
   try {
+    const markerApi = uniCloud.importObject('marker-center', { customUI: true } as UniCloudImportObjectOptions)
     const payload = JSON.parse('{}') as UTSJSONObject
     payload['limit'] = limit
     payload['offset'] = offset
-    const res = await markerApi().getNotifications(payload) as UTSJSONObject
+    const res = await markerApi.getNotifications(payload) as UTSJSONObject
     const errCode = res['errCode'] as number
     if (errCode !== 0) return [] as NotificationRow[]
     const raw = res['data']
@@ -42,12 +45,15 @@ export async function pullNotifications(limit: number, offset: number): Promise<
 
 export async function getUnreadCount(): Promise<number> {
   try {
-    const res = await markerApi().getUnreadNotificationCount() as UTSJSONObject
+    const markerApi = uniCloud.importObject('marker-center', { customUI: true } as UniCloudImportObjectOptions)
+    const res = await markerApi.getUnreadNotificationCount() as UTSJSONObject
     const errCode = res['errCode'] as number
     if (errCode !== 0) return 0
     const raw = res['data']
     if (raw == null) return 0
+    // JSON.parse<T>() 返回 T | null —— 不能直接索引，必须先判 null（PITFALLS §469 "Only safe (?.) or non-null (!!.)"）
     const parsed = JSON.parse<UTSJSONObject>(JSON.stringify(raw))
+    if (parsed == null) return 0
     const count = parsed['count']
     if (count == null) return 0
     const n = count as number
@@ -60,9 +66,10 @@ export async function getUnreadCount(): Promise<number> {
 
 export async function markRead(notificationId: string): Promise<boolean> {
   try {
+    const markerApi = uniCloud.importObject('marker-center', { customUI: true } as UniCloudImportObjectOptions)
     const payload = JSON.parse('{}') as UTSJSONObject
     payload['_id'] = notificationId
-    const res = await markerApi().markNotificationRead(payload) as UTSJSONObject
+    const res = await markerApi.markNotificationRead(payload) as UTSJSONObject
     const errCode = res['errCode'] as number
     return errCode === 0
   } catch (e) {
@@ -73,7 +80,8 @@ export async function markRead(notificationId: string): Promise<boolean> {
 
 export async function markAllRead(): Promise<boolean> {
   try {
-    const res = await markerApi().markAllNotificationsRead() as UTSJSONObject
+    const markerApi = uniCloud.importObject('marker-center', { customUI: true } as UniCloudImportObjectOptions)
+    const res = await markerApi.markAllNotificationsRead() as UTSJSONObject
     const errCode = res['errCode'] as number
     return errCode === 0
   } catch (e) {
