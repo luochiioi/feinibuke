@@ -1,0 +1,146 @@
+// P6 friendship boundary — App side.
+//
+// Mirror the pattern from `utils/cloudSync.uts`: every cloud response gets
+// re-parsed via `JSON.stringify(raw) -> JSON.parse<T>(...)` so the result is
+// a real typed instance, not a `as T` fake-cast (PITFALLS §Phase 1.5/D).
+
+export type FriendProfile = {
+  userId: string
+  nickname: string
+  avatar: string
+  totalCheckins: number
+  totalPhotos: number
+  completedRoutes: number
+}
+
+export type FriendshipRow = {
+  _id: string
+  userId: string
+  friendUserId: string
+  status: string
+  requestedBy: string
+  createdAt: number
+  updatedAt: number
+  profile: FriendProfile
+}
+
+export type FriendBuckets = {
+  accepted: FriendshipRow[]
+  incoming: FriendshipRow[]
+  outgoing: FriendshipRow[]
+}
+
+export type FriendRequestResult = {
+  friendshipId: string
+  status: string
+  autoAccepted: boolean
+}
+
+function markerApi(): any {
+  return uniCloud.importObject('marker-center', { customUI: true } as UniCloudImportObjectOptions)
+}
+
+// ===== Read =====
+
+export async function pullFriends(status: string | null): Promise<FriendBuckets> {
+  try {
+    const payload = JSON.parse('{}') as UTSJSONObject
+    if (status != null && status.length > 0) {
+      payload['status'] = status
+    }
+    const res = await markerApi().listFriends(payload) as UTSJSONObject
+    const errCode = res['errCode'] as number
+    if (errCode !== 0) return emptyBuckets()
+    const raw = res['data']
+    if (raw == null) return emptyBuckets()
+    const parsed = JSON.parse<FriendBuckets>(JSON.stringify(raw))
+    if (parsed == null) return emptyBuckets()
+    return parsed
+  } catch (e) {
+    console.log('[friendCloud] pullFriends failed', e)
+    return emptyBuckets()
+  }
+}
+
+export async function getFriendProfile(uid: string): Promise<FriendProfile | null> {
+  if (uid == null || uid.length == 0) return null
+  try {
+    const payload = JSON.parse('{}') as UTSJSONObject
+    payload['uid'] = uid
+    const res = await markerApi().getFriendProfile(payload) as UTSJSONObject
+    const errCode = res['errCode'] as number
+    if (errCode !== 0) return null
+    const raw = res['data']
+    if (raw == null) return null
+    const parsed = JSON.parse<FriendProfile>(JSON.stringify(raw))
+    return parsed
+  } catch (e) {
+    console.log('[friendCloud] getFriendProfile failed', e)
+    return null
+  }
+}
+
+// ===== Write =====
+
+export async function requestFriend(targetUid: string): Promise<FriendRequestResult | null> {
+  if (targetUid == null || targetUid.length == 0) return null
+  const payload = JSON.parse('{}') as UTSJSONObject
+  payload['targetUid'] = targetUid
+  const res = await markerApi().requestFriend(payload) as UTSJSONObject
+  const errCode = res['errCode'] as number
+  if (errCode !== 0) {
+    const rawMsg = res['errMsg']
+    const msg = rawMsg != null ? rawMsg as string : ''
+    throw new Error(msg.length > 0 ? msg : '发送好友请求失败')
+  }
+  const raw = res['data']
+  if (raw == null) return null
+  const parsed = JSON.parse<FriendRequestResult>(JSON.stringify(raw))
+  return parsed
+}
+
+export async function respondFriend(friendshipId: string, decision: string): Promise<boolean> {
+  if (friendshipId == null || friendshipId.length == 0) return false
+  if (decision !== 'accept' && decision !== 'reject') return false
+  try {
+    const payload = JSON.parse('{}') as UTSJSONObject
+    payload['friendshipId'] = friendshipId
+    payload['decision'] = decision
+    const res = await markerApi().respondFriend(payload) as UTSJSONObject
+    const errCode = res['errCode'] as number
+    return errCode === 0
+  } catch (e) {
+    console.log('[friendCloud] respondFriend failed', e)
+    return false
+  }
+}
+
+export async function unfriend(targetUid: string): Promise<boolean> {
+  if (targetUid == null || targetUid.length == 0) return false
+  try {
+    const payload = JSON.parse('{}') as UTSJSONObject
+    payload['targetUid'] = targetUid
+    const res = await markerApi().unfriend(payload) as UTSJSONObject
+    const errCode = res['errCode'] as number
+    return errCode === 0
+  } catch (e) {
+    console.log('[friendCloud] unfriend failed', e)
+    return false
+  }
+}
+
+// ===== Helpers =====
+
+function emptyBuckets(): FriendBuckets {
+  return {
+    accepted: [] as FriendshipRow[],
+    incoming: [] as FriendshipRow[],
+    outgoing: [] as FriendshipRow[]
+  } as FriendBuckets
+}
+
+export function bucketsAreEmpty(buckets: FriendBuckets): boolean {
+  return buckets.accepted.length == 0 &&
+    buckets.incoming.length == 0 &&
+    buckets.outgoing.length == 0
+}

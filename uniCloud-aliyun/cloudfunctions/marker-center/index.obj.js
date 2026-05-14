@@ -7,6 +7,7 @@ const colAuditLogs = db.collection('tourism_audit_logs')
 const colRoutes = db.collection('tourism_routes')
 const colUserRoutes = db.collection('user_routes')
 const colTaskDefs = db.collection('tourism_tasks')
+const colFriendships = db.collection('tourism_friendships')
 const authUtil = require('auth-util')
 const { createRepairCheckinPlan, createDeleteCheckinPlan } = require('./repair-service')
 const {
@@ -23,6 +24,13 @@ const {
   buildPointsLedger
 } = require('./reward-service')
 const { buildAuditLogEntry } = require('./audit-service')
+const {
+  buildFriendRequest,
+  applyFriendDecision,
+  buildMirrorRow,
+  bucketizeFriendships,
+  toPublicProfile
+} = require('./friendship-service')
 
 // 拉当前 uid 在所有 marker 中的"已打卡 markerId 集合"。
 // 嵌套字段查询 'checkedBy.userId': uid 复用 §规则 29 的索引友好写法。
@@ -449,6 +457,207 @@ module.exports = {
     }))
 
     return { errCode: 0, data: list }
+  },
+
+  // ===== P6 Social — friendship =====
+  // Two-way rows. requestFriend writes one pending row; respondFriend either
+  // flips it to rejected, or flips it to accepted AND inserts the mirror row
+  // so `where({ userId: me, status: 'accepted' })` works for both sides.
+  // Idempotency: a second requestFriend for the same pair returns the
+  // existing pending/accepted row unchanged. If the other side already has
+  // a pending request to us, requestFriend auto-accepts (skips a redundant
+  // step in the UI).
+
+  async requestFriend(data) {
+    if (!this.auth.uid) return { errCode: -1, errMsg: '请先登录' }
+    const payload = data || {}
+    const targetUid = String(payload.targetUid || '').trim()
+    if (!targetUid) return { errCode: -1, errMsg: '缺少目标用户' }
+    if (targetUid === String(this.auth.uid)) return { errCode: -1, errMsg: '不能添加自己为好友' }
+
+    const now = Date.now()
+
+    // If the target already requested me, auto-accept that row instead of
+    // creating a competing pending row.
+    const incomingRes = await colFriendships
+      .where({ userId: targetUid, friendUserId: String(this.auth.uid) })
+      .limit(1).get()
+    if (incomingRes.data.length) {
+      const incoming = incomingRes.data[0]
+      if (incoming.status === 'accepted') {
+        return { errCode: 0, errMsg: '已是好友', data: { friendshipId: incoming._id, status: 'accepted', autoAccepted: false } }
+      }
+      if (incoming.status === 'pending') {
+        const flipped = applyFriendDecision(incoming, 'accept', now)
+        await colFriendships.doc(incoming._id).update({ status: flipped.status, updatedAt: flipped.updatedAt })
+        await colFriendships.add(buildMirrorRow(flipped, now))
+        return { errCode: 0, errMsg: '已自动接受对方请求', data: { friendshipId: incoming._id, status: 'accepted', autoAccepted: true } }
+      }
+      // rejected: fall through and create a fresh pending row from me.
+    }
+
+    const existingRes = await colFriendships
+      .where({ userId: String(this.auth.uid), friendUserId: targetUid })
+      .limit(1).get()
+    if (existingRes.data.length) {
+      const row = existingRes.data[0]
+      if (row.status === 'pending') {
+        return { errCode: 0, errMsg: '请求已发送', data: { friendshipId: row._id, status: 'pending' } }
+      }
+      if (row.status === 'accepted') {
+        return { errCode: 0, errMsg: '已是好友', data: { friendshipId: row._id, status: 'accepted' } }
+      }
+      // rejected → resurrect as pending so users can retry after a refusal.
+      await colFriendships.doc(row._id).update({ status: 'pending', updatedAt: now, requestedBy: String(this.auth.uid) })
+      return { errCode: 0, errMsg: '请求已发送', data: { friendshipId: row._id, status: 'pending' } }
+    }
+
+    const fresh = buildFriendRequest(this.auth.uid, targetUid, now)
+    if (fresh == null) return { errCode: -1, errMsg: '参数无效' }
+    const addRes = await colFriendships.add(fresh)
+    return { errCode: 0, errMsg: '请求已发送', data: { friendshipId: addRes.id, status: 'pending' } }
+  },
+
+  async respondFriend(data) {
+    if (!this.auth.uid) return { errCode: -1, errMsg: '请先登录' }
+    const payload = data || {}
+    const friendshipId = String(payload.friendshipId || '').trim()
+    const decision = String(payload.decision || '').trim()
+    if (!friendshipId) return { errCode: -1, errMsg: '缺少 friendshipId' }
+    if (decision !== 'accept' && decision !== 'reject') {
+      return { errCode: -1, errMsg: '无效的决定' }
+    }
+
+    const rowRes = await colFriendships.doc(friendshipId).get()
+    if (!rowRes.data.length) return { errCode: -1, errMsg: '好友请求不存在' }
+    const row = rowRes.data[0]
+    if (String(row.friendUserId) !== String(this.auth.uid)) {
+      return { errCode: -1, errMsg: '无权处理此请求' }
+    }
+    if (row.status !== 'pending') {
+      return { errCode: -1, errMsg: '请求已处理' }
+    }
+
+    const now = Date.now()
+    const next = applyFriendDecision(row, decision, now)
+    if (next == null) return { errCode: -1, errMsg: '请求已处理' }
+
+    await colFriendships.doc(friendshipId).update({ status: next.status, updatedAt: next.updatedAt })
+
+    if (decision === 'accept') {
+      const mirror = buildMirrorRow(next, now)
+      // Defensive: skip mirror if it already exists (e.g., retried accept).
+      const mirrorExisting = await colFriendships
+        .where({ userId: mirror.userId, friendUserId: mirror.friendUserId, status: 'accepted' })
+        .limit(1).get()
+      if (!mirrorExisting.data.length) {
+        await colFriendships.add(mirror)
+      }
+    }
+
+    return { errCode: 0, errMsg: decision === 'accept' ? '已接受' : '已拒绝', data: { friendshipId, status: next.status } }
+  },
+
+  async listFriends(data) {
+    if (!this.auth.uid) return { errCode: -1, errMsg: '请先登录' }
+    const payload = data || {}
+    const filter = payload.status ? String(payload.status) : null
+    const me = String(this.auth.uid)
+
+    // Pull every row that touches me. Two queries (one per index) is cheaper
+    // and clearer than a $or — uniCloud's where supports OR via db.command.or
+    // but we already have separate (userId, status) and (friendUserId, status)
+    // indexes, so the simple two-call shape is fine here.
+    const [ownedRes, mirrorPendingRes] = await Promise.all([
+      colFriendships.where({ userId: me }).get(),
+      colFriendships.where({ friendUserId: me, status: 'pending' }).get()
+    ])
+    const rows = [...(ownedRes.data || []), ...(mirrorPendingRes.data || [])]
+    const buckets = bucketizeFriendships(rows, me)
+
+    // Enrich every bucket with the other party's public profile so the UI
+    // can render nicknames without a second round trip.
+    const otherUidSet = new Set()
+    const collect = list => list.forEach(r => {
+      const owner = String(r.userId)
+      const target = String(r.friendUserId)
+      otherUidSet.add(owner === me ? target : owner)
+    })
+    collect(buckets.accepted)
+    collect(buckets.incoming)
+    collect(buckets.outgoing)
+
+    const profileMap = new Map()
+    if (otherUidSet.size) {
+      const profiles = await colUserProfiles
+        .where({ userId: db.command.in([...otherUidSet]) })
+        .get()
+      for (const p of (profiles.data || [])) {
+        profileMap.set(String(p.userId), p)
+      }
+    }
+
+    const attach = list => list.map(row => {
+      const owner = String(row.userId)
+      const target = String(row.friendUserId)
+      const otherUid = owner === me ? target : owner
+      const profile = profileMap.get(otherUid) || null
+      return { ...row, profile: toPublicProfile(profile, { completedRoutes: 0 }) }
+    })
+
+    const accepted = attach(buckets.accepted)
+    const incoming = attach(buckets.incoming)
+    const outgoing = attach(buckets.outgoing)
+
+    if (filter === 'accepted') return { errCode: 0, data: { accepted, incoming: [], outgoing: [] } }
+    if (filter === 'pending') return { errCode: 0, data: { accepted: [], incoming, outgoing } }
+    return { errCode: 0, data: { accepted, incoming, outgoing } }
+  },
+
+  async getFriendProfile(data) {
+    if (!this.auth.uid) return { errCode: -1, errMsg: '请先登录' }
+    const payload = data || {}
+    const uid = String(payload.uid || '').trim()
+    if (!uid) return { errCode: -1, errMsg: '缺少用户' }
+    const me = String(this.auth.uid)
+
+    // Allow self-lookup (used by the friends page header), otherwise require
+    // an accepted friendship row owned by me.
+    if (uid !== me) {
+      const frRes = await colFriendships
+        .where({ userId: me, friendUserId: uid, status: 'accepted' })
+        .limit(1).get()
+      if (!frRes.data.length) return { errCode: -1, errMsg: '尚未成为好友' }
+    }
+
+    const [profileRes, completedRes] = await Promise.all([
+      colUserProfiles.where({ userId: uid }).limit(1).get(),
+      colUserRoutes.where({ userId: uid }).count()
+    ])
+    const profile = profileRes.data.length ? profileRes.data[0] : null
+    const completedRoutes = Number(completedRes && completedRes.total || 0)
+    // Fall back to the uid itself so the row carries an identity even when
+    // the user has not customised their profile yet.
+    const enriched = { ...(profile || {}), userId: profile ? profile.userId : uid }
+    return { errCode: 0, data: toPublicProfile(enriched, { completedRoutes }) }
+  },
+
+  async unfriend(data) {
+    if (!this.auth.uid) return { errCode: -1, errMsg: '请先登录' }
+    const payload = data || {}
+    const targetUid = String(payload.targetUid || '').trim()
+    if (!targetUid) return { errCode: -1, errMsg: '缺少目标用户' }
+    if (targetUid === String(this.auth.uid)) return { errCode: -1, errMsg: '不能解除自己' }
+
+    // Delete both rows of the pair to keep the index clean.
+    const me = String(this.auth.uid)
+    await colFriendships
+      .where({ userId: me, friendUserId: targetUid })
+      .remove()
+    await colFriendships
+      .where({ userId: targetUid, friendUserId: me })
+      .remove()
+    return { errCode: 0, errMsg: '已解除好友', data: { targetUid } }
   }
 }
 

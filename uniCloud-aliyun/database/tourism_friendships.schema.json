@@ -1,0 +1,58 @@
+{
+  "bsonType": "object",
+  "required": ["userId", "friendUserId", "status", "requestedBy", "createdAt", "updatedAt"],
+  "permission": {
+    "read": "auth.uid != null && (doc.userId == auth.uid || doc.friendUserId == auth.uid || auth.role == 'admin')",
+    "create": "auth.role == 'admin'",
+    "update": "auth.role == 'admin'",
+    "delete": "auth.role == 'admin'"
+  },
+  "properties": {
+    "_id": {},
+    "userId": {
+      "bsonType": "string",
+      "description": "Owner of this row — queries 'list my friends' run as where({ userId: me })."
+    },
+    "friendUserId": {
+      "bsonType": "string",
+      "description": "Counterparty uid. After accept, a mirror row exists where userId / friendUserId are swapped."
+    },
+    "status": {
+      "bsonType": "string",
+      "enum": ["pending", "accepted", "rejected"],
+      "description": "pending while awaiting response; accepted once the target responds; rejected kept for history."
+    },
+    "requestedBy": {
+      "bsonType": "string",
+      "description": "Original requester uid. Both rows after accept carry the same requestedBy so 'who asked first' survives the mirror."
+    },
+    "createdAt": {
+      "bsonType": "int",
+      "description": "Server ms-epoch when this row was inserted. Mirror rows carry the accept timestamp, not the original request."
+    },
+    "updatedAt": {
+      "bsonType": "int",
+      "description": "Server ms-epoch of the last status flip."
+    }
+  },
+  "indexes": [
+    {
+      "IndexName": "userId_status",
+      "MgoKeySchema": {
+        "MgoIndexKeys": [
+          { "Name": "userId", "Direction": "1" },
+          { "Name": "status", "Direction": "1" }
+        ]
+      }
+    },
+    {
+      "IndexName": "friendUserId_status",
+      "MgoKeySchema": {
+        "MgoIndexKeys": [
+          { "Name": "friendUserId", "Direction": "1" },
+          { "Name": "status", "Direction": "1" }
+        ]
+      }
+    }
+  ]
+}
