@@ -12,6 +12,7 @@
     </view>
 
     <checkin-map
+      :key="currentUid"
       map-id="mainMap"
       class="map-component"
       :latitude="latitude"
@@ -142,6 +143,16 @@ const OTHER_FOOTPRINT_PHOTO_LIMIT: number = 12
 let hasCenteredOnUser: boolean = false
 const panelDetailsLoading = ref<boolean>(false)
 const notifUnread = ref<number>(0)
+
+// P8 B2: <checkin-map> 原生 SDK 跨 reLaunch / navigateBack 重绑定时,
+// map 控件复用旧实例,切换到不同用户的 markers 时出现黑屏过渡态。
+// 用 uid(session 维度)作 key,logout/userInfo=null→key 变为 'anon',
+// 新登录→key 变为新 uid,Vue 销毁旧原生实例重建,消除复用态。
+// https://vuejs.org/api/built-in-special-attributes.html#key
+const currentUid = computed((): string => {
+  const info = userState.userInfo
+  return info != null ? info.userId : 'anon'
+})
 
 const isLoggedIn = computed((): boolean => userState.userInfo != null)
 const authLabel = computed((): string => {
@@ -426,10 +437,6 @@ async function consumePendingFocus(): Promise<boolean> {
 }
 
 onShow((): void => {
-  // P8 B2 诊断:切账号/退出登录后地图黑屏排查。修复确认后删除这 3 行。
-  console.log('[index/onShow] userInfo=', userState.userInfo != null ? userState.userInfo!!.userId : 'null')
-  console.log('[index/onShow] markers.length=', markers.value.length)
-  console.log('[index/onShow] markersJson=', markersJson.value.substring(0, Math.min(200, markersJson.value.length)))
   loadMarkers()
   loadTasks()
   startTracking()
