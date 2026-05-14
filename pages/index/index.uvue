@@ -426,6 +426,10 @@ async function consumePendingFocus(): Promise<boolean> {
 }
 
 onShow((): void => {
+  // P8 B2 诊断:切账号/退出登录后地图黑屏排查。修复确认后删除这 3 行。
+  console.log('[index/onShow] userInfo=', userState.userInfo != null ? userState.userInfo!!.userId : 'null')
+  console.log('[index/onShow] markers.length=', markers.value.length)
+  console.log('[index/onShow] markersJson=', markersJson.value.substring(0, Math.min(200, markersJson.value.length)))
   loadMarkers()
   loadTasks()
   startTracking()

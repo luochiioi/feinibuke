@@ -1,4 +1,5 @@
 import { reactive } from 'vue'
+import { markers } from '@/stores/useMarkerStore'
 
 export type UserInfo = {
   userId: string
@@ -118,4 +119,10 @@ export function clearUserInfo() {
   uni.removeStorageSync('uni_id_token_expired')
   // 退出登录时同步清除本地业务数据，避免下一个账号看到旧数据
   clearUserData()
+  // P8 B2: useMarkerStore 是模块级 singleton,clearUserData 只清 storage,
+  // markers.value 仍持有上一账号的数组,reLaunch /pages/index/index 后会先把
+  // 旧数据回喂给 <checkin-map> 再被 loadFromStorage 覆盖,可能让原生 SDK
+  // 进入"先有旧 markers / 再消失重建"的中间状态。直接清掉,让 index.uvue:onShow
+  // 的 loadFromStorage 走"storage 空 → 落 defaults"干净路径。
+  markers.value = []
 }
