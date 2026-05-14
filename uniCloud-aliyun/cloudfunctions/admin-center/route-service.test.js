@@ -97,6 +97,55 @@ test('sanitizeRouteCreate accepts points-only routes without reward text', () =>
   assert.equal(route.rewardPoints, 50)
 })
 
+test('sanitizeRouteCreate rejects points reward kind without positive rewardPoints', () => {
+  assert.throws(() => sanitizeRouteCreate({
+    name: 'r',
+    markerIds: [1],
+    rewardKind: 'points',
+    rewardPoints: 0
+  }, 'admin', 1), /积分数量必须大于 0/)
+  assert.throws(() => sanitizeRouteCreate({
+    name: 'r',
+    markerIds: [1],
+    rewardKind: 'points'
+  }, 'admin', 1), /积分数量必须大于 0/)
+})
+
+test('sanitizeRouteCreate rejects both reward kind without positive rewardPoints', () => {
+  assert.throws(() => sanitizeRouteCreate({
+    name: 'r',
+    markerIds: [1],
+    rewardKind: 'both',
+    reward: '路线徽章',
+    rewardPoints: 0
+  }, 'admin', 1), /积分数量必须大于 0/)
+})
+
+test('sanitizeRouteUpdate enforces points kind requires positive points', () => {
+  assert.throws(() => sanitizeRouteUpdate({
+    rewardKind: 'points',
+    rewardPoints: 0
+  }, 1), /积分数量必须大于 0/)
+})
+
+test('sanitizeRouteUpdate enforces both kind requires reward text and points', () => {
+  assert.throws(() => sanitizeRouteUpdate({
+    rewardKind: 'both',
+    reward: '',
+    rewardPoints: 20
+  }, 1), /奖励文案不能为空/)
+  assert.throws(() => sanitizeRouteUpdate({
+    rewardKind: 'both',
+    reward: '徽章',
+    rewardPoints: 0
+  }, 1), /积分数量必须大于 0/)
+})
+
+test('sanitizeRouteUpdate without rewardKind passes rewardPoints through unchanged', () => {
+  const updates = sanitizeRouteUpdate({ rewardPoints: 50 }, 1)
+  assert.equal(updates.rewardPoints, 50)
+})
+
 test('sanitizeRouteCreate rejects empty name and over-long name', () => {
   assert.throws(() => sanitizeRouteCreate({
     name: '   ',

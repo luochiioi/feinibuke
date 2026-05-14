@@ -55,7 +55,7 @@
             </view>
           </view>
           <text class="card-desc">{{ r.description || '无描述' }}</text>
-          <text class="card-meta">奖励：{{ rewardKindLabel(r.rewardKind) }} · {{ routeRewardText(r) }}</text>
+          <text class="card-meta">奖励：{{ rewardSummary(r) }}</text>
           <text class="card-meta">打卡点：{{ formatMarkerNames(r.markerIds) }}</text>
           <text class="card-meta">路线 ID：{{ r.id }} · 创建于 {{ formatTime(r.createdAt) }} · 更新于 {{ formatTime(r.updatedAt) }}</text>
           <text v-if="r.coverImage" class="card-meta">封面：{{ r.coverImage }}</text>
@@ -82,11 +82,12 @@
         <view class="modal-row modal-row-stack">
           <text class="modal-label">奖励类型</text>
           <view class="status-toggle">
-            <text class="toggle-pill" :class="editForm.rewardKind === 'none' ? 'on' : ''" @click="editForm.rewardKind = 'none'">无</text>
-            <text class="toggle-pill" :class="editForm.rewardKind === 'prize' ? 'on' : ''" @click="editForm.rewardKind = 'prize'">奖品</text>
-            <text class="toggle-pill" :class="editForm.rewardKind === 'points' ? 'on' : ''" @click="editForm.rewardKind = 'points'">积分</text>
-            <text class="toggle-pill" :class="editForm.rewardKind === 'both' ? 'on' : ''" @click="editForm.rewardKind = 'both'">奖品+积分</text>
+            <text class="toggle-pill" :class="editForm.rewardKind === 'none' ? 'on' : ''" @click="changeRewardKind('none')">无</text>
+            <text class="toggle-pill" :class="editForm.rewardKind === 'prize' ? 'on' : ''" @click="changeRewardKind('prize')">奖品</text>
+            <text class="toggle-pill" :class="editForm.rewardKind === 'points' ? 'on' : ''" @click="changeRewardKind('points')">积分</text>
+            <text class="toggle-pill" :class="editForm.rewardKind === 'both' ? 'on' : ''" @click="changeRewardKind('both')">奖品+积分</text>
           </view>
+          <text class="modal-hint kind-hint">{{ rewardKindHint }}</text>
         </view>
         <input
           v-if="editForm.rewardKind !== 'none'"
@@ -233,21 +234,37 @@ function formatTime(ts) {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`
 }
 
-function rewardKindLabel(kind) {
-  const k = kind || 'prize'
-  if (k === 'none') return '无奖励'
-  if (k === 'points') return '积分'
-  if (k === 'both') return '奖品+积分'
-  return '奖品'
+function rewardSummary(route) {
+  const kind = route && route.rewardKind ? route.rewardKind : 'prize'
+  const points = Number(route && route.rewardPoints || 0)
+  const reward = route && route.reward ? route.reward : ''
+  if (kind === 'none') return '无奖励'
+  if (kind === 'points') return points > 0 ? `积分 ${points}` : '积分（未设置数量）'
+  if (kind === 'both') {
+    const prize = reward || '奖品'
+    return points > 0 ? `奖品 + 积分 ${points}（${prize}）` : `奖品 + 积分（${prize}）`
+  }
+  return reward ? `奖品（${reward}）` : '奖品'
 }
 
-function routeRewardText(route) {
-  const kind = route.rewardKind || 'prize'
-  const points = Number(route.rewardPoints || 0)
-  if (kind === 'none') return '--'
-  if (kind === 'points') return points > 0 ? `${points} 积分` : '积分'
-  if (kind === 'both') return `${route.reward || '--'} / ${points} 积分`
-  return route.reward || '--'
+const rewardKindHint = computed(() => {
+  const kind = editForm.value.rewardKind
+  if (kind === 'none') return '保存后不会写入奖励记录，路线纯展示。'
+  if (kind === 'prize') return '需要填写奖品文案；不会发放积分。'
+  if (kind === 'points') return '积分数量必须 > 0；不写奖品文案。'
+  return '奖品文案与积分数量都必须填写；积分必须 > 0。'
+})
+
+function changeRewardKind(kind) {
+  editForm.value.rewardKind = kind
+  if (kind === 'none') {
+    editForm.value.reward = ''
+    editForm.value.rewardPoints = 0
+  } else if (kind === 'prize') {
+    editForm.value.rewardPoints = 0
+  } else if (kind === 'points') {
+    editForm.value.reward = ''
+  }
 }
 
 function openCreate() {
@@ -309,6 +326,13 @@ async function saveRoute() {
   if ((editForm.value.rewardKind === 'prize' || editForm.value.rewardKind === 'both') && !editForm.value.reward.trim()) {
     uni.showToast({ title: '请填写奖励文案', icon: 'none' })
     return
+  }
+  if (editForm.value.rewardKind === 'points' || editForm.value.rewardKind === 'both') {
+    const points = Number(editForm.value.rewardPoints || 0)
+    if (!(points > 0)) {
+      uni.showToast({ title: '积分数量必须大于 0', icon: 'none' })
+      return
+    }
   }
   if (editForm.value.markerIds.length === 0) {
     uni.showToast({ title: '至少选择 1 个打卡点', icon: 'none' })
@@ -616,6 +640,11 @@ async function doDelete(r) {
   font-size: 22rpx;
   color: #2ecc71;
   margin-bottom: 12rpx;
+}
+
+.kind-hint {
+  color: #999;
+  margin-top: 6rpx;
 }
 
 .modal-row {

@@ -50,6 +50,13 @@ function normalizeRewardPoints(value) {
   return n
 }
 
+function ensurePositivePointsForKind(rewardKind, rewardPoints) {
+  if (rewardKind !== REWARD_KIND_POINTS && rewardKind !== REWARD_KIND_BOTH) return
+  if (!(rewardPoints > 0)) {
+    throw new Error('积分数量必须大于 0')
+  }
+}
+
 function normalizeReward(value, rewardKind) {
   const reward = String(value == null ? '' : value).trim()
   if (rewardKind === REWARD_KIND_NONE) return ''
@@ -124,6 +131,7 @@ function sanitizeRouteCreate(data, creatorId, now) {
   const rewardKind = normalizeRewardKind(data && data.rewardKind)
   const reward = normalizeReward(data && data.reward, rewardKind)
   const rewardPoints = rewardKind === REWARD_KIND_NONE ? 0 : normalizeRewardPoints(data && data.rewardPoints)
+  ensurePositivePointsForKind(rewardKind, rewardPoints)
   const status = data && Object.prototype.hasOwnProperty.call(data, 'status')
     ? normalizeStatus(data.status)
     : ROUTE_STATUS_ACTIVE
@@ -173,6 +181,11 @@ function sanitizeRouteUpdate(data, now) {
     updates.rewardPoints = rewardKind === REWARD_KIND_NONE ? 0 : normalizeRewardPoints(data.rewardPoints)
   } else if (rewardKind === REWARD_KIND_NONE) {
     updates.rewardPoints = 0
+  }
+  if (rewardKind === REWARD_KIND_POINTS || rewardKind === REWARD_KIND_BOTH) {
+    const provided = data && Object.prototype.hasOwnProperty.call(data, 'rewardPoints')
+    const points = provided ? Number(updates.rewardPoints) : 0
+    ensurePositivePointsForKind(rewardKind, points)
   }
   if (data && Object.prototype.hasOwnProperty.call(data, 'status')) {
     updates.status = normalizeStatus(data.status)
