@@ -1808,4 +1808,4 @@ function rankClass(rank: number): string {
 
 **降级原则**：如果必须用 emoji 表达信息（如系统通知用 📢），同时在 fallback 路径有文字（"系统通知"），让用户即使看到方框也能猜出含义。
 
-**落地证据**：P7 计划 Task 6 已确定 `pages/leaderboard/leaderboard.uvue` rank 1/2/3 改 CSS 金银铜徽章。提交 hash 在 P7 执行后回填。
+**落地证据**：P7 commit `e4b5d8f` (`refactor(app): 排行榜 rank 徽章 / 头像 / 副标题重做`) —— `pages/leaderboard/leaderboard.uvue` 的 `rankText` 改为 `return rank.toString()`,1/2/3 颜色由 `rankClass`(`rank-gold/silver/bronze`)控制,文字颜色用直接 className(`rank-badge-text-light/dark`)替代 `.rank-normal .rank-badge-text` 后代选择器以规避 UTS 端兼容性不确定。同 commit 把头像从 first-letter `<text>` 升级为 `<image v-if="row.avatar.length > 0">` + first-letter `<text v-else>` 双态结构(80×80 rpx),并把副标题改为"另一个维度"(`subTextFor` 不再与右侧大号数值重复 metric)。
