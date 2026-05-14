@@ -26,11 +26,16 @@
       <view v-if="!loading && rows.length == 0" class="empty"><text class="empty-text">暂无排行数据</text></view>
 
       <view v-for="row in rows" :key="row.userId" class="lb-row" :class="isSelfRow(row) ? 'lb-row-self' : ''">
-        <text class="lb-rank">{{ rankText(row.rank) }}</text>
-        <view class="lb-avatar"><text class="lb-avatar-text">{{ initial(row.nickname) }}</text></view>
+        <view :class="rankClass(row.rank)">
+          <text :class="rankTextClass(row.rank)">{{ rankText(row.rank) }}</text>
+        </view>
+        <view class="lb-avatar">
+          <image v-if="row.avatar.length > 0" :src="row.avatar" class="lb-avatar-img" mode="aspectFill" />
+          <text v-else class="lb-avatar-text">{{ initial(row.nickname) }}</text>
+        </view>
         <view class="lb-info">
           <text class="lb-name">{{ row.nickname }}</text>
-          <text class="lb-sub">{{ labelFor(row) }}</text>
+          <text class="lb-sub">{{ subTextFor(row) }}</text>
         </view>
         <text class="lb-value">{{ row.value.toString() }}</text>
       </view>
@@ -39,11 +44,16 @@
            （Kotlin smart-cast 仅在同一作用域生效）—— 必须用 !! 显式断言非空，
            与 script L64 selfRow.value!!.userId 保持同款约定 -->
       <view v-if="selfRow != null && !selfInTop" class="lb-row lb-row-self lb-row-footer">
-        <text class="lb-rank">{{ rankText(selfRow!!.rank) }}</text>
-        <view class="lb-avatar"><text class="lb-avatar-text">{{ initial(selfRow!!.nickname) }}</text></view>
+        <view :class="rankClass(selfRow!!.rank)">
+          <text :class="rankTextClass(selfRow!!.rank)">{{ rankText(selfRow!!.rank) }}</text>
+        </view>
+        <view class="lb-avatar">
+          <image v-if="selfRow!!.avatar.length > 0" :src="selfRow!!.avatar" class="lb-avatar-img" mode="aspectFill" />
+          <text v-else class="lb-avatar-text">{{ initial(selfRow!!.nickname) }}</text>
+        </view>
         <view class="lb-info">
           <text class="lb-name">{{ selfRow!!.nickname }}</text>
-          <text class="lb-sub">{{ labelFor(selfRow!!) }}</text>
+          <text class="lb-sub">{{ subTextFor(selfRow!!) }}</text>
         </view>
         <text class="lb-value">{{ selfRow!!.value.toString() }}</text>
       </view>
@@ -90,16 +100,30 @@ function initial(name: string): string {
   return name.substring(0, 1)
 }
 
+// P7 §规则 49:emoji 🥇🥈🥉 在 Android WebView 缺字形,改为 CSS 金银铜圆形徽章。
+// rankText 仅返数字,bg 颜色由 rankClass 控制,文字颜色由 rankTextClass 控制
+// (直接 className,避免 .rank-normal .rank-badge-text 后代选择器在 UTS 端兼容性不一致)。
 function rankText(rank: number): string {
-  if (rank == 1) return '🥇'
-  if (rank == 2) return '🥈'
-  if (rank == 3) return '🥉'
   return rank.toString()
 }
 
-function labelFor(row: LeaderboardRow): string {
-  if (metric.value == 'routes') return '完成路线 ' + row.routes.toString()
-  if (metric.value == 'checkins') return '打卡 ' + row.checkins.toString()
+function rankClass(rank: number): string {
+  if (rank == 1) return 'rank-badge rank-gold'
+  if (rank == 2) return 'rank-badge rank-silver'
+  if (rank == 3) return 'rank-badge rank-bronze'
+  return 'rank-badge rank-normal'
+}
+
+function rankTextClass(rank: number): string {
+  return rank <= 3 ? 'rank-badge-text rank-badge-text-light' : 'rank-badge-text rank-badge-text-dark'
+}
+
+// 副标题语义:与右侧大号数值不重复,展示"另一个维度"提高信息密度。
+// metric=points → 副标题秀路线;metric=routes → 副标题秀打卡次数;
+// metric=checkins → 副标题秀积分。
+function subTextFor(row: LeaderboardRow): string {
+  if (metric.value == 'points') return '完成 ' + row.routes.toString() + ' 条路线'
+  if (metric.value == 'routes') return '打卡 ' + row.checkins.toString() + ' 次'
   return '积分 ' + row.points.toString()
 }
 
@@ -140,9 +164,19 @@ onShow((): void => {
 .lb-row-self { background-color: #f0f9f4; }
 .lb-row-footer { border-top: 2rpx solid #2ecc71; }
 
-.lb-rank { width: 56rpx; font-size: 26rpx; color: #5a6770; text-align: center; }
-.lb-avatar { width: 60rpx; height: 60rpx; border-radius: 999rpx; background-color: #eef9f2; display: flex; align-items: center; justify-content: center; margin-right: 14rpx; }
-.lb-avatar-text { font-size: 24rpx; color: #2ecc71; font-weight: 600; }
+/* P7 §规则 49:圆形排名徽章,金/银/铜/灰四档,完全代替 🥇🥈🥉 emoji。 */
+.rank-badge { width: 56rpx; height: 56rpx; border-radius: 28rpx; display: flex; align-items: center; justify-content: center; margin-right: 12rpx; }
+.rank-gold   { background-color: #f7c548; }
+.rank-silver { background-color: #c0c0c0; }
+.rank-bronze { background-color: #cd7f32; }
+.rank-normal { background-color: #f0f2f5; }
+.rank-badge-text { font-size: 26rpx; font-weight: 700; }
+.rank-badge-text-light { color: #ffffff; }
+.rank-badge-text-dark { color: #555555; }
+
+.lb-avatar { width: 80rpx; height: 80rpx; border-radius: 40rpx; background-color: #eef9f2; display: flex; align-items: center; justify-content: center; margin-right: 14rpx; overflow: hidden; }
+.lb-avatar-img { width: 80rpx; height: 80rpx; }
+.lb-avatar-text { font-size: 28rpx; color: #2ecc71; font-weight: 600; }
 .lb-info { flex: 1; display: flex; flex-direction: column; }
 .lb-name { font-size: 26rpx; color: #1a1a1a; font-weight: 500; }
 .lb-sub { font-size: 20rpx; color: #888888; margin-top: 2rpx; }
