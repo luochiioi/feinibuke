@@ -1552,7 +1552,7 @@ function toDisplayItems(rows: NotificationRow[]): DisplayItem[] {
 2. `{ x: 1 } as Union` 试图实例化 union 的某个分支
 3. 在 union 上 `arr.filter(...)` 期望返回原 union 类型
 
-**落地证据**：commit `<P6-final>`，`pages/notifications/notifications.uvue` 从 union 重写为 DisplayItem。`utils/notificationCloud.uts` 同时删除遗留的 `NotificationGroupItem` / `NotificationDateHeading` 导出。
+**落地证据**：commit `9421325`，`pages/notifications/notifications.uvue` 从 union 重写为 DisplayItem。`utils/notificationCloud.uts` 同时删除遗留的 `NotificationGroupItem` / `NotificationDateHeading` 导出。
 
 ---
 
@@ -1745,4 +1745,4 @@ error: Only safe (?.) or non-null asserted (!!.) calls are allowed on a nullable
 | `1aa05c5` | notification/friend cloud 云方法包装 + JSON.parse 空判 | §46, §47 |
 | `2a0d3bc` | friends/notifications async-void + leaderboard 函数顺序 | §44, §45 |
 | `b8c5074` | leaderboard.uvue 模板 !! 断言 | §48 |
-| `<P6-final>` | notifications.uvue union → DisplayItem 扁平化 | §43 |
+| `9421325` | notifications.uvue union → DisplayItem 扁平化 | §43 |
