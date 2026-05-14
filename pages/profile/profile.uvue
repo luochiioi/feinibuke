@@ -1,0 +1,266 @@
+<template>
+  <scroll-view class="profile-page" scroll-y direction="vertical" :show-scrollbar="false">
+    <!-- 头部:头像 + 昵称 + ID -->
+    <view class="header">
+      <view class="avatar-wrap">
+        <image
+          v-if="avatarPath.length > 0"
+          :src="avatarPath"
+          class="avatar-img"
+          mode="aspectFill"
+        />
+        <text v-else class="avatar-fallback">{{ avatarInitial }}</text>
+      </view>
+      <view class="header-info">
+        <text class="nickname">{{ displayName }}</text>
+        <view class="id-row">
+          <text class="id-label">ID: </text>
+          <text class="id-value">{{ userIdText }}</text>
+          <view class="copy-btn" @click="copyId">
+            <text class="copy-btn-text">复制</text>
+          </view>
+        </view>
+      </view>
+    </view>
+
+    <!-- 累计统计 -->
+    <view class="stats-row">
+      <view class="stat-cell">
+        <text class="stat-num">{{ statsCheckins.toString() }}</text>
+        <text class="stat-label">打卡</text>
+      </view>
+      <view class="stat-divider"></view>
+      <view class="stat-cell">
+        <text class="stat-num">{{ statsRoutes.toString() }}</text>
+        <text class="stat-label">路线</text>
+      </view>
+      <view class="stat-divider"></view>
+      <view class="stat-cell">
+        <text class="stat-num">{{ statsPoints.toString() }}</text>
+        <text class="stat-label">积分</text>
+      </view>
+    </view>
+
+    <!-- 入口列表 -->
+    <view class="menu-card">
+      <view class="menu-item" @click="goMyCheckins">
+        <text class="menu-text">我的打卡记录</text>
+        <text class="menu-arrow">›</text>
+      </view>
+      <view class="menu-item" @click="goRewards">
+        <text class="menu-text">我的奖励</text>
+        <text class="menu-arrow">›</text>
+      </view>
+      <view class="menu-item" @click="goMyTasks">
+        <text class="menu-text">我的任务</text>
+        <text class="menu-arrow">›</text>
+      </view>
+      <view class="menu-item menu-item-last" @click="goEdit">
+        <text class="menu-text">编辑资料</text>
+        <text class="menu-arrow">›</text>
+      </view>
+    </view>
+
+    <!-- 退出登录 -->
+    <view class="logout-wrap">
+      <view class="logout-btn" @click="doLogout">
+        <text class="logout-text">退出登录</text>
+      </view>
+    </view>
+
+    <view class="spacer"></view>
+  </scroll-view>
+</template>
+
+<script setup lang="uts">
+import { ref, computed } from 'vue'
+import { state as userState, clearUserInfo, refreshUserIdFromAuth } from '@/user/index.uts'
+import { pullMyCheckins, pullActiveRoutes, pullPointsSummary } from '@/utils/cloudSync'
+import type { RouteWithProgress } from '@/utils/cloudSync'
+
+// UTS 5.07 §45:被引用的函数必须词法上先声明。所有 helper 函数先 declare,
+// onShow / 模板事件 handler 再用。
+
+const statsCheckins = ref<number>(0)
+const statsRoutes = ref<number>(0)
+const statsPoints = ref<number>(0)
+
+const displayName = computed((): string => {
+  const u = userState.userInfo
+  if (u == null) return ''
+  return u.userName.length > 0 ? u.userName : u.userId
+})
+
+const userIdText = computed((): string => {
+  const u = userState.userInfo
+  return u != null ? u.userId : ''
+})
+
+const avatarPath = computed((): string => {
+  const u = userState.userInfo
+  return u != null ? u.avatar : ''
+})
+
+const avatarInitial = computed((): string => {
+  const name = displayName.value
+  return name.length > 0 ? name.substring(0, 1) : '?'
+})
+
+// onShow 内必须 async wrap;§44 async 函数返回类型不能写 void
+async function loadStats(): Promise<void> {
+  try {
+    const checkins = await pullMyCheckins()
+    statsCheckins.value = checkins.length
+  } catch (_e) { /* keep stale */ }
+
+  try {
+    const routes = await pullActiveRoutes()
+    // 完成判定:progress.ratio >= 1 (与 route-completion service 端口径一致)
+    let done = 0
+    for (let i = 0; i < routes.length; i++) {
+      const r = routes[i] as RouteWithProgress
+      if (r.progress.ratio >= 1) done++
+    }
+    statsRoutes.value = done
+  } catch (_e) { /* keep stale */ }
+
+  try {
+    const summary = await pullPointsSummary()
+    if (summary != null) {
+      statsPoints.value = summary.totalEarnedPoints
+    }
+  } catch (_e) { /* keep stale */ }
+}
+
+async function init(): Promise<void> {
+  if (userState.userInfo == null) {
+    uni.redirectTo({ url: '/pages/login/login' })
+    return
+  }
+  // 进入主页时刷一次 whoami,确保 nickname / avatar 拿到最新值
+  await refreshUserIdFromAuth()
+  await loadStats()
+}
+
+function copyId(): void {
+  const u = userState.userInfo
+  if (u == null) return
+  uni.setClipboardData({
+    data: u.userId,
+    success: function() {
+      uni.showToast({ title: '已复制', icon: 'success', duration: 1200 })
+    }
+  } as SetClipboardDataOptions)
+}
+
+function goMyCheckins(): void {
+  uni.navigateTo({ url: '/pages/my-checkins/my-checkins' })
+}
+function goRewards(): void {
+  uni.navigateTo({ url: '/pages/rewards/rewards' })
+}
+function goMyTasks(): void {
+  uni.navigateTo({ url: '/pages/my-tasks/my-tasks' })
+}
+function goEdit(): void {
+  uni.navigateTo({ url: '/pages/profile-edit/profile-edit' })
+}
+
+function doLogout(): void {
+  uni.showModal({
+    title: '退出登录',
+    content: '确定要退出当前账号吗?',
+    success: function(res: ShowModalSuccess) {
+      if (res.confirm) {
+        clearUserInfo()
+        uni.reLaunch({ url: '/pages/index/index' })
+      }
+    }
+  } as ShowModalOptions)
+}
+
+onShow((): void => {
+  init()
+})
+</script>
+
+<style>
+.profile-page { flex: 1; width: 750rpx; height: 100%; background-color: #f5f7f6; }
+
+.header {
+  background-color: #ffffff;
+  padding: 40rpx 30rpx;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+}
+
+.avatar-wrap {
+  width: 140rpx;
+  height: 140rpx;
+  border-radius: 70rpx;
+  background-color: #eef9f2;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-right: 24rpx;
+  overflow: hidden;
+}
+.avatar-img { width: 140rpx; height: 140rpx; }
+.avatar-fallback { font-size: 56rpx; color: #2ecc71; font-weight: 600; }
+
+.header-info { flex: 1; display: flex; flex-direction: column; }
+.nickname { font-size: 36rpx; color: #1a1a1a; font-weight: 600; margin-bottom: 12rpx; }
+
+.id-row { display: flex; flex-direction: row; align-items: center; }
+.id-label { font-size: 22rpx; color: #888888; }
+.id-value { font-size: 22rpx; color: #5a6770; flex: 1; }
+.copy-btn {
+  background-color: #eef9f2;
+  border-radius: 20rpx;
+  padding: 6rpx 18rpx;
+  margin-left: 12rpx;
+}
+.copy-btn-text { font-size: 22rpx; color: #2ecc71; font-weight: 500; }
+
+.stats-row {
+  background-color: #ffffff;
+  margin-top: 20rpx;
+  padding: 30rpx 0;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+}
+.stat-cell { flex: 1; display: flex; flex-direction: column; align-items: center; }
+.stat-num { font-size: 40rpx; color: #1a1a1a; font-weight: 600; }
+.stat-label { font-size: 22rpx; color: #888888; margin-top: 6rpx; }
+.stat-divider { width: 2rpx; height: 60rpx; background-color: #f0f2f5; }
+
+.menu-card {
+  background-color: #ffffff;
+  margin-top: 20rpx;
+}
+.menu-item {
+  padding: 28rpx 30rpx;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  border-bottom: 1rpx solid #f0f2f5;
+}
+.menu-item-last { border-bottom: 1rpx solid transparent; }
+.menu-text { flex: 1; font-size: 28rpx; color: #1a1a1a; }
+.menu-arrow { font-size: 32rpx; color: #cccccc; }
+
+.logout-wrap { padding: 40rpx 30rpx; }
+.logout-btn {
+  background-color: #ffffff;
+  border-radius: 12rpx;
+  padding: 24rpx 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.logout-text { font-size: 28rpx; color: #e74c3c; font-weight: 500; }
+
+.spacer { height: 60rpx; }
+</style>

@@ -98,6 +98,12 @@
       "style": {
         "navigationBarTitleText": "排行榜"
       }
+    },
+    {
+      "path": "pages/profile/profile",
+      "style": {
+        "navigationBarTitleText": "我的"
+      }
     }
   ],
   "globalStyle": {
