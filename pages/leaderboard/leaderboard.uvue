@@ -118,13 +118,17 @@ function rankTextClass(rank: number): string {
   return rank <= 3 ? 'rank-badge-text rank-badge-text-light' : 'rank-badge-text rank-badge-text-dark'
 }
 
-// 副标题语义:与右侧大号数值不重复,展示"另一个维度"提高信息密度。
-// metric=points → 副标题秀路线;metric=routes → 副标题秀打卡次数;
-// metric=checkins → 副标题秀积分。
+// P8 B3: 副标题展示"另外两个维度"(并列),保留右侧大号 = 当前 metric。
+// 切 metric 时不再换语义,每行始终展示完整 3 维度信息。
 function subTextFor(row: LeaderboardRow): string {
-  if (metric.value == 'points') return '完成 ' + row.routes.toString() + ' 条路线'
-  if (metric.value == 'routes') return '打卡 ' + row.checkins.toString() + ' 次'
-  return '积分 ' + row.points.toString()
+  if (metric.value == 'points') {
+    return '路线 ' + row.routes.toString() + ' · 打卡 ' + row.checkins.toString()
+  }
+  if (metric.value == 'routes') {
+    return '积分 ' + row.points.toString() + ' · 打卡 ' + row.checkins.toString()
+  }
+  // metric == 'checkins'
+  return '积分 ' + row.points.toString() + ' · 路线 ' + row.routes.toString()
 }
 
 function isSelfRow(row: LeaderboardRow): boolean {
@@ -179,6 +183,6 @@ onShow((): void => {
 .lb-avatar-text { font-size: 28rpx; color: #2ecc71; font-weight: 600; }
 .lb-info { flex: 1; display: flex; flex-direction: column; }
 .lb-name { font-size: 26rpx; color: #1a1a1a; font-weight: 500; }
-.lb-sub { font-size: 20rpx; color: #888888; margin-top: 2rpx; }
+.lb-sub { font-size: 24rpx; color: #888888; margin-top: 2rpx; }
 .lb-value { font-size: 32rpx; color: #2ecc71; font-weight: 600; }
 </style>
