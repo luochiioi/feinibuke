@@ -1872,7 +1872,7 @@ grep -A 5 "_before:" uniCloud-aliyun/cloudfunctions/*/index.obj.js
 ```
 任何 `_before: function() {}` 空体且 cloudfunction 内含使用 `this.auth.uid` 的方法的,都是 §规则 50 违规。
 
-**落地证据**:P8 plan(本仓 `docs/superpowers/plans/2026-05-15-p8-auth-friend-leaderboard-fixes.md`)Task 0。提交 hash 在 P8 执行后回填。
+**落地证据**:P8 commit `1b4a991`(`fix(cloud): user-center._before 接入 authUtil(B1)`)在 `uniCloud-aliyun/cloudfunctions/user-center/index.obj.js` 把空 `_before` 替换为 `async _before` + `authUtil.checkAuth(this)` + catch 不抛模板;同时给 `user-center/package.json` 加 `"auth-util": "file:../common/auth-util"` 依赖。验证流程:profile-edit 上传头像不再 NOT_LOGIN。
 
 ---
 
@@ -1920,5 +1920,5 @@ grep -rn "\.add({" uniCloud-aliyun/cloudfunctions/ | grep -v test
 
 **关联陷阱**:同款问题也存在于 `colNotifications.add({userId: targetUid, ...})` — 给"不存在的用户"发通知会落孤儿行。emitNotification 内部已经走 buildNotification(无副作用),add 时若 targetUid 无效,通知就永远没人能读。建议 emitNotification 也加一次目标存在性 fast-path 校验(P8 范围外,记入未来 PITFALLS 增量)。
 
-**落地证据**:P8 plan(本仓 `docs/superpowers/plans/2026-05-15-p8-auth-friend-leaderboard-fixes.md`)Task 1。提交 hash 在 P8 执行后回填。
+**落地证据**:P8 commit `1ebd446`(`fix(cloud): requestFriend 加 targetUid 存在性校验(B5)`)在 `uniCloud-aliyun/cloudfunctions/marker-center/index.obj.js:497-502` 插入 `db.collection('uni-id-users').doc(targetUid).get()` 兜底拦截幽灵 ID。验证流程:friends.uvue 输入不存在 ID → toast "目标用户不存在",outgoing 列表无新行。
 
