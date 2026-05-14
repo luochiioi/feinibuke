@@ -11,10 +11,12 @@ export type NotificationRow = {
   createdAt: number
 }
 
-export type NotificationGroupItem = NotificationRow | {
+// UTS 5.07 不支持在 type alias 里直接联合"内联对象字面量类型"（UTS110111101）——必须先给每个分支命名再 union
+export type NotificationDateHeading = {
   _type: string
   label: string
 }
+export type NotificationGroupItem = NotificationRow | NotificationDateHeading
 
 function markerApi(): any {
   return uniCloud.importObject('marker-center', { customUI: true } as UniCloudImportObjectOptions)
