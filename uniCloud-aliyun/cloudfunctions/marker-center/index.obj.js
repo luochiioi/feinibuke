@@ -494,6 +494,13 @@ module.exports = {
     if (!targetUid) return { errCode: -1, errMsg: '缺少目标用户' }
     if (targetUid === String(this.auth.uid)) return { errCode: -1, errMsg: '不能添加自己为好友' }
 
+    // P8 B5: 服务端兜底拦截"幽灵 ID"。不能等 colFriendships.add 默默成功后,
+    // 让客户端在 outgoing 列表看到一个永远不会有人响应的 pending 行。详见 PITFALLS §规则 51。
+    const userExistRes = await db.collection('uni-id-users').doc(targetUid).get()
+    if (!userExistRes.data || userExistRes.data.length === 0) {
+      return { errCode: -1, errMsg: '目标用户不存在' }
+    }
+
     const now = Date.now()
 
     // If the target already requested me, auto-accept that row instead of
