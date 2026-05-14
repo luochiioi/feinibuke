@@ -64,6 +64,21 @@ const selfInTop = computed((): boolean => {
   return rows.value.some((r: LeaderboardRow): boolean => r.userId == selfRow.value!!.userId)
 })
 
+// UTS 5.07 不像 TS 那样把后续 function 声明前置（hoist）—— 若 setMetric/setScope
+// 写在 reload 之前，编译期会"找不到名称 reload"。把 reload 提到这里。
+async function reload(): Promise<void> {
+  loading.value = true
+  try {
+    const result = await pullLeaderboard(metric.value, scope.value, 50)
+    rows.value = result.rows
+    selfRow.value = result.self
+  } catch (_e) {
+    // keep stale
+  } finally {
+    loading.value = false
+  }
+}
+
 function setMetric(m: string): void { metric.value = m; reload() }
 function setScope(s: string): void { scope.value = s; reload() }
 
@@ -88,19 +103,6 @@ function labelFor(row: LeaderboardRow): string {
 function isSelfRow(row: LeaderboardRow): boolean {
   const me = userState.userInfo != null ? userState.userInfo.userId : ''
   return me.length > 0 && row.userId == me
-}
-
-async function reload(): Promise<void> {
-  loading.value = true
-  try {
-    const result = await pullLeaderboard(metric.value, scope.value, 50)
-    rows.value = result.rows
-    selfRow.value = result.self
-  } catch (_e) {
-    // keep stale
-  } finally {
-    loading.value = false
-  }
 }
 
 onShow((): void => {

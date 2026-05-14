@@ -117,7 +117,8 @@ async function reload(): Promise<void> {
   }
 }
 
-async function tapNotif(row: NotificationRow): void {
+// UTS 5.07: async 函数返回类型必须是 Promise<T>（参 friends.uvue:doAddFriend 注释）
+async function tapNotif(row: NotificationRow): Promise<void> {
   if (row.read) return
   const ok = await markRead(row._id)
   if (ok) {

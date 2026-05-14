@@ -95,7 +95,9 @@ async function reload(): Promise<void> {
   }
 }
 
-async function doAddFriend(): void {
+// UTS 5.07: async 函数返回类型必须是 Promise<T>，不能写 `: void`（会触发
+// "Cannot infer type for this parameter" + 'Function' vs UTSPromise 不匹配）
+async function doAddFriend(): Promise<void> {
   const uid = addUid.value.trim()
   if (uid.length == 0) {
     uni.showToast({ title: '请输入用户ID', icon: 'none' })
