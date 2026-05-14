@@ -371,4 +371,28 @@ P8 执行完后,把 placeholder 替换为实际 commit hash(参考 P7 §规则 4
 | `refactor(app): 排行榜副标题 3 维度并列(B3)` | Task 3 |
 | `refactor(app): 加好友反馈文案细化(B4)` | Task 4 |
 | `fix(app): 切账号 / 退出登录后 markers store 清空(B2)` | Task 5 |
+| `fix(app): <checkin-map> :key="currentUid" 强制 SDK 重建(B2 v2)` | Task 5 补充 |
 | `docs: PITFALLS §规则 50 / §规则 51 + P8 commit hash 回填` | Task 6 |
+
+---
+
+## 实际执行结果(2026-05-15)
+
+**P8 共 8 个 commit**(起点 `752e31d`→终点 `a548c40`):
+
+| # | Commit | Task | Bug | 验证 |
+|---|--------|------|-----|------|
+| 1 | `1b4a991` | T0 | B1 | ✅ profile-edit 上传头像不再 NOT_LOGIN |
+| 2 | `1ebd446` | T1 | B5 | ✅ 假 ID→toast "目标用户不存在" |
+| 3 | `2c7145c` | T2 | B6 | ✅ 被请求方消息中心收到通知 |
+| 4 | `d1cdcdb` | T3 | B3 | ✅ 副标题 3 维度并列 |
+| 5 | `85a8a4f` | T4 | B4 | ✅ 5 类 toast 可分辨 |
+| 6 | `5bcbdee` | T5v1 | B2 | ⚠️ markers 清空生效,黑屏仍存 |
+| 7 | `a548c40` | T5v2 | B2 | ⚠️ :key 消 SDK 复用态,3-5s 初始化延迟不变 |
+| 8 | `cf1a3ef` | T6 | docs | ✅ §50/§51 hash 回填 + §52/§53 新增 |
+
+**B2 遗留**:`:key="currentUid"` 消除了"SDK 实例复用导致的 state 错乱"中间态,但原生 MapView 重建后的瓦片加载/GL 初始化本身有 3-5s 延迟,应用层无法绕过。后续建议:加遮罩 UI("加载中...")改善用户体验。详见 `uniapp_x_map_checkin_prompt.md` P8 章节 + `UTS_COMPILE_PITFALLS.md` §规则 52/§规则 53。
+
+**Node 测试**:189/189 全绿,无回归。
+
+**新增 PITFALLS**: §规则 52(跨云 parse 前注入 non-optional 字段), §规则 53(`<map>` SDK key 属性消重建延迟)

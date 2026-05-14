@@ -4005,24 +4005,44 @@ P7 实施时仍受 P6 收尾的 `UTS_COMPILE_PITFALLS.md §41-§48` 八条 5.07 
 
 ---
 
-## 2026-05-15 P8 鉴权 / 好友请求 / 排行榜 / 地图状态修复（plan 已写）
+## 2026-05-15 P8 鉴权 / 好友请求 / 排行榜 / 地图状态修复（已落地）
 
-P7 commits 全部落地后(起点 `618465e` → P7 收尾 `70773e4`)真机验收暴露六类 bug：
+P7 commits 全部落地后(起点 `618465e` → P7 收尾 `70773e4`)真机验收暴露六类 bug。**本轮 8 个 commit 已全部提交**，6 个 bug 中 5 个修完、B2 部分修复。
 
-1. **B1 上传头像 NOT_LOGIN** —— `user-center/index.obj.js:34` 的 `_before` 是空函数，从未注入 `this.auth.uid`；P7 加的 `updateProfile` 永远命中 NOT_LOGIN 分支。这是个**服务端鉴权链路缺口**，与 client 写法无关。已写成 PITFALLS §规则 50（_before 模板）。
-2. **B2 退出登录/切账号后地图黑屏** —— reLaunch 后 `<checkin-map>` 状态残留或 `useMarkerStore.markers` module singleton 未清空。P8 优先方案 A：`clearUserInfo()` 末尾清 `markers.value = []`；方案 B/C 兜底。
-3. **B3 排行榜副标题切换语义** —— P7 commit `e4b5d8f` 的 `subTextFor` 做成"切 metric 切语义"，用户期望"3 维度并列"（路线 X · 打卡 Y 之类）。
-4. **B4 加好友反馈文案模糊** —— `已自动成为好友` / `请求已发送` 在客户端难分。需 4-5 个分支独立文案，服务端 errMsg 传准确字符串。
-5. **B5 不存在用户 ID 也能落 pending** —— `requestFriend` 服务端**完全没验证** `targetUid` 在 uni-id-users 表存在。任何字符串都被 add() 成功，幽灵请求出现在 outgoing 列表。已写成 PITFALLS §规则 51（user 存在性校验）。
-6. **B6 好友请求无消息中心通知** —— 服务端 `requestFriend` 漏调 `emitNotification('friend.requested', ...)`；前端 `notifications.uvue:64` 已经有渲染 case，只是服务端没发。
+| Bug | 状态 | 最后 commit | 说明 |
+|-----|------|-------------|------|
+| B1 NOT_LOGIN | ✅ 已修复 | `1b4a991` | user-center._before 接 authUtil；PITFALLS §规则 50 |
+| B2 黑屏 | ⚠️ 部分缓解 | `a548c40` | clearUserInfo 清 markers + `:key="currentUid"` 强制 SDK 重建；但仍需加载 3-5s，见下方遗留问题 |
+| B3 副标题 | ✅ 已修复 | `d1cdcdb` | subTextFor 改为 "路线 X · 打卡 Y" 并列式 |
+| B4 文案 | ✅ 已修复 | `85a8a4f` | server 5 类独立 errMsg → client 透传 |
+| B5 幽灵 ID | ✅ 已修复 | `1ebd446` | requestFriend doc(targetUid).get() 兜底；PITFALLS §规则 51 |
+| B6 无通知 | ✅ 已修复 | `2c7145c` | fresh/resurrect/auto-accept 三返回点补 emitNotification |
 
-完整 P8 plan: `docs/superpowers/plans/2026-05-15-p8-auth-friend-leaderboard-fixes.md`，分 7 个 task：
-- Task 0 后端：user-center._before 接 authUtil(B1)
-- Task 1 后端：requestFriend 加 targetUid 存在性校验(B5)
-- Task 2 后端：requestFriend 触发 friend.requested 通知(B6)
-- Task 3 App：排行榜副标题 3 维度并列(B3)
-- Task 4 App：加好友反馈文案细化(B4)
-- Task 5 App：切账号 / 退出登录后 markers store 清空(B2，最棘手，先加诊断 log 再修)
-- Task 6 docs：PITFALLS §规则 50/51 commit hash 回填
+完整 P8 plan: `docs/superpowers/plans/2026-05-15-p8-auth-friend-leaderboard-fixes.md`
 
-P8 实施时仍受 `UTS_COMPILE_PITFALLS.md §41-§49` 九条 5.07 编译规则约束 + 本轮新加 §规则 50（鉴权 _before 模板）+ §规则 51（user 存在性校验）。本节为权威。
+**P8 8 个 commit**（从 752e31d 起）：
+```
+a548c40 fix(app): <checkin-map> :key="currentUid" 强制 SDK 重建消黑屏(B2 v2)
+cf1a3ef docs: PITFALLS §规则 50 / §规则 51 回填 P8 commit hash
+5bcbdee fix(app): 切账号/退出登录后 markers store 清空 + onShow 诊断(B2 v1)
+85a8a4f refactor(app): 加好友反馈文案 5 类分支独立(B4)
+d1cdcdb refactor(app): 排行榜副标题 3 维度并列(B3)
+2c7145c feat(cloud): requestFriend 触发 friend.requested / friend.accepted 通知(B6)
+1ebd446 fix(cloud): requestFriend 加 targetUid 存在性校验(B5)
+1b4a991 fix(cloud): user-center._before 接入 authUtil(B1)
+```
+
+### B2 遗留问题（需后续跟进）
+
+退出登录/切账号后 `<checkin-map>` 原生 SDK 仍需要 3-5 秒的黑屏过渡才能恢复地图。
+
+**已做（两层防御）**：
+1. `clearUserInfo()` 末尾 `markers.value = []` — 清掉模块级 singleton，防止旧账号 markers 穿透
+2. `<checkin-map :key="currentUid">` — logout 时 key 变 'anon'，新登录变 uid，Vue 销毁旧原生 MapView 重建
+
+**根因**：原生 MapView 的瓦片加载/GL 上下文初始化本身有延迟，key 切换重建不消除延迟，只消除"复用旧 SDK 实例"导致的中间态错误。黑屏过渡是 5.07 uni-app x `<map>` 的平台级限制，应用层无法完全绕过。
+
+**后续建议（P9 或后续 sprint）—— 按优先级**：
+- **遮罩方案**：在 key 变更时启动 1.5-2s 半透明遮罩("加载中...")盖住黑屏窗口，成本约 10 行模板，UI 体验改善最大
+- **预热方案**：login 成功后在 navigateBack 前预拉 markers 数据，回到 index 时 markersJson 已有值，减少空数组→有数据的时间窗
+- **原生侧调查**：确认 5.07 MapView 是否有 `onMapReady` 回调或 preload API

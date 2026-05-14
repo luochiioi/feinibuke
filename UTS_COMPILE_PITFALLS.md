@@ -1922,3 +1922,79 @@ grep -rn "\.add({" uniCloud-aliyun/cloudfunctions/ | grep -v test
 
 **落地证据**:P8 commit `1ebd446`(`fix(cloud): requestFriend 加 targetUid 存在性校验(B5)`)在 `uniCloud-aliyun/cloudfunctions/marker-center/index.obj.js:497-502` 插入 `db.collection('uni-id-users').doc(targetUid).get()` 兜底拦截幽灵 ID。验证流程:friends.uvue 输入不存在 ID → toast "目标用户不存在",outgoing 列表无新行。
 
+---
+
+## §规则 52:跨云解析 T 前,把服务端不返的 non-optional 字段注入 rawObj
+
+**适用范围**:任何 `JSON.parse<T>(JSON.stringify(cloudResponse))` 的场景。当 T 里有 `message: string` / `autoAccepted: boolean` 这类 non-optional 字段但云函数不保证每个分支都返回时,`JSON.parse<T>` 会返回 `null`(UTS 5.07 严格类型匹配)。
+
+**反模式**(P8 B4 第一版修复时踩到):
+```ts
+// friendCloud.uts requestFriend()
+const parsed = JSON.parse<FriendRequestResult>(JSON.stringify(raw))
+if (parsed == null) return null
+parsed.message = rawMsg as string  // ❌ parsed 已经是 null,抛 NPE
+```
+
+```ts
+export type FriendRequestResult = {
+  friendshipId: string
+  status: string
+  autoAccepted: boolean  // non-optional,但服务端 6 个返回点有 5 个不返
+  message: string        // non-optional,但服务端 JSON 里根本没有 "message" 键
+}
+// JSON.parse 因为缺 autoAccepted / message 两个字段 → 返回 null
+```
+
+**正解**(P8 B4 最终版 `friendCloud.uts:101-112`):
+```ts
+const rawObj = raw as UTSJSONObject
+rawObj['message'] = rawMsg != null ? rawMsg as string : ''        // 先写入
+if (rawObj['autoAccepted'] == null) { rawObj['autoAccepted'] = false } // 兜底
+const parsed = JSON.parse<FriendRequestResult>(JSON.stringify(rawObj))
+```
+
+**为什么 §规则 47(JSON.parse 后判 null)不够**:§规则 47 只能兜住"解析失败返回 null 时不会直接 NPE"这一层;但如果 T 有 non-optional 字段而服务端不返,**每次都是 null**——parse 本身"成功"了,但字段匹配失败导致 `parsed` 是 null。§规则 47 的 null guard 会让 RPC 永远返回 null,一切调用方都收不到有效 payload。
+
+**审计**:
+```bash
+grep -rn "JSON.parse<" utils/ pages/  # 找到所有跨云 parse 点
+```
+对每一处:检查解析目标的 type 定义,确认所有 non-optional 字段在云函数每个分支都一定返回。漏字段的一律先在 rawObj 上注入兜底值再 parse。
+
+**关联**:§法则 12(跨云返回必须 JSON 双序列化)是前提;§规则 47 是"判 null";本条是"为什么判 null 不够 + 怎么消除 null"。
+
+**落地证据**:P8 commit `85a8a4f`(`refactor(app): 加好友反馈文案 5 类分支独立(B4)`)在 `utils/friendCloud.uts:101-109` 落地 rawObj 注入模式。
+
+---
+
+## §规则 53:`<map>` / `<checkin-map>` 原生 SDK key 属性消重建延迟
+
+**适用范围**:任何使用 uni-app x 5.07 `<map>` 或 `<checkin-map>` 原生控件且存在"退出登录→重新登录→地图回到 index"流程的页面。
+
+**现象**:reLaunch 或 navigateBack 后 `<checkin-map>` 原生 SDK 实例被复用,上一账号的 MapView 状态与新 markers 数据不匹配,出现 3-5 秒黑屏过渡。
+
+**已尝试但不够的方案**:
+- 清 `markers.value = []`(P8 commit `5bcbdee`):清掉 singleton,但 SDK 复用仍导致黑屏
+- 清 `useMapStore` lat/lng:同理,SDK 控件本身不重建
+
+**正解**(P8 commit `a548c40`,`pages/index/index.uvue`):
+```html
+<checkin-map
+  :key="currentUid"
+  map-id="mainMap"
+  ...
+/>
+```
+```ts
+const currentUid = computed((): string => {
+  const info = userState.userInfo
+  return info != null ? info.userId : 'anon'
+})
+```
+
+**为什么有效**:`:key` 变化时 Vue 销毁旧 `<checkin-map>`(含底层原生 MapView)再创建新实例——不是"数据驱动",而是"实例级重建"。重建不会消除原生 SDK 的初始化延迟(瓦片加载/GL 上下文 etc.),**但消除了"旧 SDK 实例+新数据"的中间态**。
+
+**局限**:key 切换后的原生 SDK 重建仍有 3-5 秒初始化时间。这不是数据层问题,是 uni-app x 5.07 原生 MapView 的平台级限制,应用层无法绕过。建议配合遮罩 UI("加载中...")改善体验。
+
+**落地证据**:P8 commit `a548c40`(`fix(app): <checkin-map> :key="currentUid" 强制 SDK 重建消黑屏(B2)`)在 `pages/index/index.uvue` 落地 `:key="currentUid"` + `currentUid` computed。
