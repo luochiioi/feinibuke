@@ -1,0 +1,168 @@
+<template>
+  <view class="page-wrap">
+    <!-- 加载中 -->
+    <view v-if="loading" class="notice">
+      <text class="notice-text">正在加载非遗内容...</text>
+    </view>
+
+    <!-- 空状态 -->
+    <view v-if="loading == false && detail == null" class="empty">
+      <text class="empty-text">暂无非遗内容</text>
+    </view>
+
+    <!-- 详情内容 -->
+    <view v-if="detail != null" class="content">
+
+      <!-- 分类徽章 + 摘要 -->
+      <view class="hero">
+        <view class="cat-badge">
+          <text class="cat-badge-text">{{ detail!!.category }}</text>
+        </view>
+        <text class="hero-summary">{{ detail!!.summary }}</text>
+      </view>
+
+      <!-- 图片画廊（仅有图片时渲染，横向滚动，不嵌套在任何 scroll-y 内） -->
+      <view v-if="detail!!.images.length > 0" class="gallery-wrap">
+        <scroll-view class="gallery" scroll-x direction="horizontal" :show-scrollbar="false">
+          <view class="gallery-inner">
+            <view
+              v-for="(imgUrl, imgIdx) in detail!!.images"
+              :key="imgIdx.toString()"
+              class="gallery-item"
+            >
+              <image class="gallery-img" :src="imgUrl" mode="aspectFill" />
+            </view>
+          </view>
+        </scroll-view>
+      </view>
+
+      <!-- 故事正文 -->
+      <view class="section">
+        <text class="section-title">非遗故事</text>
+        <text class="story-text">{{ detail!!.story }}</text>
+      </view>
+
+      <!-- 传承人 -->
+      <view v-if="detail!!.inheritorName.length > 0" class="section">
+        <text class="section-title">传承人</text>
+        <view class="inheritor-card">
+          <image
+            v-if="detail!!.inheritorPhoto.length > 0"
+            class="inheritor-photo"
+            :src="detail!!.inheritorPhoto"
+            mode="aspectFill"
+          />
+          <view class="inheritor-info">
+            <text class="inheritor-name">{{ detail!!.inheritorName }}</text>
+            <text class="inheritor-bio">{{ detail!!.inheritorBio }}</text>
+          </view>
+        </view>
+      </view>
+
+      <!-- 相关非遗 -->
+      <view v-if="detail!!.relatedMarkerIds.length > 0" class="section">
+        <text class="section-title">相关非遗</text>
+        <view
+          v-for="rid in detail!!.relatedMarkerIds"
+          :key="rid.toString()"
+          class="related-row"
+          @click="goRelated(rid)"
+        >
+          <text class="related-text">查看相关非遗 #{{ rid.toString() }}</text>
+          <text class="related-arrow">›</text>
+        </view>
+      </view>
+
+      <!-- 底部留白 -->
+      <view class="bottom-spacer" />
+    </view>
+  </view>
+</template>
+
+<script setup lang="uts">
+import { ref } from 'vue'
+import type { HeritageDetail } from '@/types/heritage'
+import { fetchHeritageDetail } from '@/utils/heritageCloud'
+
+const detail = ref<HeritageDetail | null>(null)
+const loading = ref<boolean>(true)
+
+// §45：loadDetail 先声明，再被 onLoad 引用
+async function loadDetail(markerId: number): Promise<void> {
+  loading.value = true
+  const result = await fetchHeritageDetail(markerId)
+  detail.value = result
+  loading.value = false
+}
+
+function goRelated(rid: number): void {
+  uni.navigateTo({ url: '/pages/heritage-detail/heritage-detail?markerId=' + rid.toString() })
+}
+
+// §16：onLoad 是 uni-app x 全局钩子，不从 vue import
+onLoad((options: OnLoadOptions): void => {
+  const idStr = options['markerId'] as string | null
+  if (idStr != null && idStr.length > 0) {
+    // §34：禁用 Number()，使用 parseInt(str, 10)
+    const n = parseInt(idStr!!, 10)
+    if (!isNaN(n) && n > 0) {
+      loadDetail(n)
+    } else {
+      loading.value = false
+    }
+  } else {
+    loading.value = false
+  }
+})
+</script>
+
+<style>
+.page-wrap { flex: 1; width: 750rpx; background-color: #f5f7f6; display: flex; flex-direction: column; }
+
+/* 加载 / 空状态 */
+.notice { background-color: #eef9f2; border-radius: 12rpx; padding: 18rpx 20rpx; margin: 24rpx; }
+.notice-text { font-size: 24rpx; color: #2e9f5f; }
+
+.empty { padding: 80rpx 40rpx; display: flex; flex-direction: column; align-items: center; }
+.empty-text { font-size: 26rpx; color: #999999; line-height: 40rpx; text-align: center; }
+
+/* 内容主体 */
+.content { display: flex; flex-direction: column; }
+
+/* 顶部英雄区：分类徽章 + 摘要 */
+.hero { margin: 24rpx; padding: 28rpx 24rpx; background-color: #ffffff; border-radius: 24rpx; display: flex; flex-direction: column; }
+
+.cat-badge { padding: 6rpx 20rpx; border-radius: 24rpx; background-color: #e8f0fe; align-self: flex-start; }
+.cat-badge-text { font-size: 24rpx; color: #1a73e8; }
+
+.hero-summary { font-size: 28rpx; color: #3a4a5a; line-height: 44rpx; margin-top: 16rpx; }
+
+/* 图片画廊 */
+.gallery-wrap { margin: 0 0 0 24rpx; }
+.gallery { width: 702rpx; }
+.gallery-inner { display: flex; flex-direction: row; padding-right: 24rpx; }
+.gallery-item { margin-right: 16rpx; flex-shrink: 0; }
+.gallery-img { width: 280rpx; height: 210rpx; border-radius: 16rpx; background-color: #e0e4e8; }
+
+/* 通用 section 卡片 */
+.section { margin: 0 24rpx 20rpx 24rpx; padding: 24rpx; background-color: #ffffff; border-radius: 20rpx; display: flex; flex-direction: column; }
+.section-title { font-size: 28rpx; font-weight: 600; color: #1a1a1a; margin-bottom: 16rpx; }
+
+/* 故事正文 */
+.story-text { font-size: 26rpx; color: #3a4a5a; line-height: 44rpx; }
+
+/* 传承人卡片 */
+.inheritor-card { display: flex; flex-direction: row; align-items: flex-start; }
+.inheritor-photo { width: 100rpx; height: 100rpx; border-radius: 50rpx; background-color: #e0e4e8; margin-right: 20rpx; flex-shrink: 0; }
+.inheritor-info { flex: 1; display: flex; flex-direction: column; }
+.inheritor-name { font-size: 28rpx; font-weight: 600; color: #1a1a1a; }
+.inheritor-bio { font-size: 24rpx; color: #5a6770; margin-top: 8rpx; line-height: 38rpx; }
+
+/* 相关非遗行 */
+.related-row { display: flex; flex-direction: row; align-items: center; padding: 18rpx 0; border-bottom-width: 1rpx; border-bottom-style: solid; border-bottom-color: #f0f2f5; }
+.related-text { flex: 1; font-size: 26rpx; color: #1a73e8; }
+.related-arrow { font-size: 30rpx; color: #aaaaaa; }
+
+/* 底部留白 */
+.bottom-spacer { height: 48rpx; }
+</style>

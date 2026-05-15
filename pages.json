@@ -110,6 +110,12 @@
       "style": {
         "navigationBarTitleText": "编辑资料"
       }
+    },
+    {
+      "path": "pages/heritage-detail/heritage-detail",
+      "style": {
+        "navigationBarTitleText": "非遗详情"
+      }
     }
   ],
   "globalStyle": {
