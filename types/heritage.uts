@@ -1,0 +1,21 @@
+export type HeritageDetail = {
+  _id: string
+  markerId: number
+  category: string
+  summary: string
+  story: string
+  images: string[]
+  inheritorName: string
+  inheritorBio: string
+  inheritorPhoto: string
+  relatedMarkerIds: number[]
+  status: string
+}
+
+export type HeritageListItem = {
+  _id: string
+  markerId: number
+  category: string
+  summary: string
+  images: string[]
+}
