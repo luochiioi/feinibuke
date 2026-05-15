@@ -883,6 +883,8 @@ async function checkTasksForMarker(userId, marker) {
 }
 ```
 
+**P10 重蹈覆辙（2026-05-16）**：`heritage-center` 把鉴权助手写成云对象方法 `_requireAdmin`，再 `await this._requireAdmin()` 调用，真机报 `this._requireAdmin is not a function`（`_` 前缀方法可能根本不进 importObject 方法表）。改为模块级 `async function requireAdmin(ctx)`、各方法 `await requireAdmin(this)` 后修复（commit `cbb6547`）。**新建任何云对象，鉴权/复用逻辑一律模块级函数 + 显式传 `this`/`uid`，不要做成 `this._method()`。**
+
 ### 规则 14：客户端用户 ID 必须与云端 `this.auth.uid` 保持一致
 
 云端写入 `checkedBy[].userId`、`createdBy`、`user_tasks.userId` 时使用的是 uni-id token 解析出的 `_id`。App 端 `userInfo.userId` 不能再使用展示编号或业务编号，例如 `000_004`，否则会出现这些错位：

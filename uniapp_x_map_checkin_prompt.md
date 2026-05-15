@@ -4159,12 +4159,16 @@ index.uvue `<checkin-map>` 切 key 重建期间加半透明遮罩，盖住 3-5s 
 
 **种子数据**（`heritage-center.seedDefaults`，幂等）：澳门 5（鱼行醉龙节、澳门神像雕刻、凉茶、土生土语话剧、道教科仪音乐）+ 湖南 5（湘绣、花鼓戏、滩头年画、江永女书、醴陵釉下五彩瓷烧制技艺），`markerId` 1001-1005 / 1101-1105，同时幂等种入对应 `tourism_markers`。
 
-**验收点**：
+**验收点（2026-05-16 真机验收通过 ✅）**：
 1. 后台触发 `seedDefaults` → `tourism_heritage` 10 条、`tourism_markers` 新增 10 点。
 2. 地图点澳门/湖南种子点 → marker-panel "了解非遗详情" → F1 显示类别徽章/简介/图文画廊/故事/传承人/相关条目。
 3. 无内容的旧打卡点点"了解非遗详情" → F1 显示"暂无非遗内容"空状态（不卡死）。
 4. 首页"非遗"入口 → F2 名录页，按 10 类 tab 筛选、滚动分页。
 5. 后台非遗列表/编辑：选关联 marker、填字段、传图（`folder=heritage-media`）、存草稿/发布。
+
+**真机暴露并修复的两个 bug**：
+- 后台非遗页报 `Cannot find module '../common/auth-util'` → heritage-center 改 `require('auth-util')` + package.json `file:` 依赖（PITFALLS §规则 55）。
+- 后台报 `this._requireAdmin is not a function` → `_requireAdmin` 由云对象方法改为模块级独立函数（PITFALLS §规则 13——P10 重蹈覆辙后再次确认）。
 
 **部署顺序（uniCloud）**：① 上传 `tourism_heritage` schema；② 上传部署 `heritage-center`（package.json 已声明 auth-util 依赖，上传时自动打包 common）；③ 重部署 `photo-center`；④ App / uni-admin 编译运行；⑤ 后台触发 `seedDefaults`。
 
