@@ -69,10 +69,15 @@ export function returnToIndexForFocus(deltaToIndex: number): void {
   uni.reLaunch({ url: '/pages/index/index' })
 }
 
+// P9-2 详情面板反复弹出修复：requestFocusByMarker 会同时写 focusPayload
+// 和 focusTarget 两个通道。consumeFocusPayload 只消费 payload 并提前 return，
+// 残留的 focusTarget 会在下一次 onShow 被 consumeFocus() 当作待消费目标，
+// 导致面板二次弹出。消费 payload 时必须同步清空 focusTarget。
 export function consumeFocusPayload(): FocusPayload | null {
   const inMemory = focusPayload.value
   if (inMemory != null) {
     focusPayload.value = null
+    focusTarget.value = null
     uni.removeStorageSync(KEY_PENDING_FOCUS)
     return inMemory
   }
@@ -80,10 +85,12 @@ export function consumeFocusPayload(): FocusPayload | null {
   if (raw == null || raw.length === 0) return null
   try {
     const parsed = JSON.parse<FocusPayload>(raw)
+    focusTarget.value = null
     uni.removeStorageSync(KEY_PENDING_FOCUS)
     return parsed
   } catch (e) {
     console.log('consumeFocusPayload failed', e)
+    focusTarget.value = null
     uni.removeStorageSync(KEY_PENDING_FOCUS)
     return null
   }
