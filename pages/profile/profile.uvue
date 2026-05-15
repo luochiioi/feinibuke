@@ -178,7 +178,14 @@ function doLogout(): void {
     success: (res: ShowActionSheetSuccess): void => {
       if (res.tapIndex == 0) {
         clearUserInfo()
-        uni.reLaunch({ url: '/pages/index/index' })
+        // P9-0 B2 黑屏真因(β 修复): 原本 uni.reLaunch('/pages/index/index')
+        // 销毁整个 index 页 + 原生 <map>,触发 3-5s MapView GL 重建黑屏。
+        // 真机日志佐证: 创建 dom 23 个 / 渲染 998ms,与冷启动签名一致,
+        // 是全新 mount 而非 onShow。
+        // profile 仅能从 index.uvue:171 通过 navigateTo 进入,栈固定
+        // [index, profile],navigateBack 直接弹 profile → index 走 onShow,
+        // <map> 保持存活,markers 走响应式刷新。
+        uni.navigateBack({ delta: 1 as number })
       }
     }
   })
