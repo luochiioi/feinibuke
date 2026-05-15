@@ -4046,3 +4046,69 @@ d1cdcdb refactor(app): 排行榜副标题 3 维度并列(B3)
 - **遮罩方案**：在 key 变更时启动 1.5-2s 半透明遮罩("加载中...")盖住黑屏窗口，成本约 10 行模板，UI 体验改善最大
 - **预热方案**：login 成功后在 navigateBack 前预拉 markers 数据，回到 index 时 markersJson 已有值，减少空数组→有数据的时间窗
 - **原生侧调查**：确认 5.07 MapView 是否有 `onMapReady` 回调或 preload API
+
+---
+
+## 2026-05-15 P9 功能精简 / 面板弹出修复 / 好友列表 / 排行榜用户名（待开工）
+
+P8 验收后用户提出四个需求 + 一个 P8 遗留。
+
+### P9-0 B2 遮罩（P8 遗留）
+
+index.uvue `<checkin-map>` 切 key 重建期间加半透明遮罩，盖住 3-5s 黑屏窗口。
+
+**代码量**：index.uvue 模板 ~10 行 + setTimeout ~3 行。
+
+### P9-1 删除打卡照片上传功能
+
+用户决定打卡不再支持上传照片，**仅保留 GPS 定位 + 可选备注**。需要从软件端和管理端**全部删除**照片相关代码。
+
+**受影响文件清单（~20+ 文件）**：
+
+| 层 | 文件 | 删除内容 |
+|----|------|---------|
+| App 页面 | `pages/checkin/checkin.uvue` | photo-section 模板(16-33行)、photoPath/cloudURL ref、choosePhotoFromCamera/Album/choosePhoto 函数(全删)、submitPayload 里 photoCloudURL、enqueueCheckinForLater 里 photoCloudURL |
+| App 组件 | `components/PhotoPicker.uvue` | 整个文件删除 |
+| App 类型 | `types/marker.uts` | `CheckinEntry.photoCloudURL`、`CheckinMarker.photoPath`、`CheckinMarker.photoCloudURL` 字段 |
+| App Store | `stores/useMarkerStore.uts` | `doCheckIn` 的 `photoPath`/`photoCloudURL` 参数、`CheckinEntry.photoCloudURL` 赋值 |
+| App Store | `stores/useAchievementStore.uts` | photo 相关逻辑 |
+| App Utils | `utils/cloudSync.uts` | sync queue 里 photoCloudURL 字段、repairMissingCheckins 里 photoCloudURL |
+| App Utils | `utils/defaults.uts` | 种子 marker 的 `photoPath`/`photoCloudURL` 字段 |
+| App 页面 | `pages/index/index.uvue` | `myCheckin.photoCloudURL` 模板行、`visibleOtherCheckinsWithPhoto` computed 里 photoCloudURL 过滤 |
+| App 页面 | `pages/my-checkins/my-checkins.uvue` | 照片展示相关模板 |
+| 云函数 | `uniCloud-aliyun/cloudfunctions/photo-center/` | **整个云函数目录删除**（index.obj.js / photo-service.js / package.json） |
+| 云函数 | `uniCloud-aliyun/cloudfunctions/marker-center/index.obj.js` | checkin/repair 方法里 photoCloudURL 字段处理 |
+| 云函数 | `uniCloud-aliyun/cloudfunctions/marker-center/audit-service.js` | photoPath/photoCloudURL 字段 |
+| 云函数 | `uniCloud-aliyun/cloudfunctions/marker-center/repair-service.js` | photoCloudURL 字段 |
+| 管理端 | `uniCloud-aliyun/cloudfunctions/admin-center/` | marker-service / audit-service / index.obj.js 里 photo 相关 |
+| 管理端 | `uni-admin/pages/checkins/` | 照片展示列 |
+
+**注意**：必须同步清理 Node 测试文件里的 photo 断言（`repair-service.test.js` / `audit-service.test.js` / `marker-service.test.js` / `photo-service.js` 测试 等），保持 189 例不回归。
+
+### P9-2 打卡点详情面板反复弹出
+
+**现象**：用户在任务/打卡列表点击"去打卡"→打卡完成→回到首页，关闭详情面板后，切换到其他页面再返回首页时面板再次弹出。
+
+**根因分析**：`useMapStore` 的 `focusTarget` / `focusPayload` 两套机制并行，`consumePendingFocus()` 在 `onShow` 中异步调用（`.then()`），存在时序窗口：
+- `requestFocusByMarker()` 同时设置 `focusTarget.value`（内存）和 `persistFocusPayload()`（storage）
+- `consumePendingFocus()` 先取 storage payload 再取内存 focusTarget
+- 如果两次 `onShow` 之间间隔极短（页面栈变化、App Hide→Show），storage 里的 payload 可能未被清除就被第二次 `consumeFocusPayload()` 再次读取
+
+**建议修复方向**：
+1. 在 `consumePendingFocus()` 开头加互斥锁，确保单次 onShow 只消费一次
+2. 消费后立即 `uni.removeStorageSync(KEY_PENDING_FOCUS)` + `focusTarget.value = null` + `focusPayload.value = null` 三重清除
+3. `onShow` 改为 `await consumePendingFocus()` 而不是 `.then()`
+
+### P9-3 好友"发出的请求"列表显示检查
+
+**用户疑问**：发出的请求列表里所有记录是否独立显示（不同 target 用户应显示各自昵称）。
+
+**代码审计结论**：服务端 `listFriends`（`marker-center/index.obj.js:613-667`）对 outgoing 行正确计算 `otherUidSet`（用 `friendUserId`），从 `colUserProfiles` 批量拉取 profile 后 attach 到每一行。客户端 `friends.uvue:81-84` 的 `displayName()` 优先用 `row.profile.nickname`，fallback 用 `row.friendUserId`。**逻辑上无 bug**。
+
+**验证方式**：真机确认 outgoing 列表中不同用户的 row 显示不同昵称。如果确实相同，检查 `colUserProfiles` 表是否缺行（新注册用户没有 profile 记录 → nickname 为空 → fallback 到 friendUserId）。
+
+### P9-4 排行榜显示用户名
+
+**当前状态**：leaderboard 已显示 `row.nickname`（服务器 `getLeaderboard:740` 从 `colUserProfiles` 拉取 nickname）。但若用户注册时 nickname 为空或与注册名不一致，榜单显示的就是 ID（如 `000_001`）而非可辨识的用户名。
+
+**建议**：在每行追加显示 `userId`（小号灰色字），格式如 `"小明"` + 下方 `ID: 000_001`，让用户可以通过 ID 加好友。或者：榜单行显示 `userId · nickname` 双字段。
