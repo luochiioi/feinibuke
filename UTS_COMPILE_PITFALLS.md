@@ -2015,3 +2015,42 @@ export function consumeFocusPayload(): FocusPayload | null {
 **通用原则**:修在 store 层(状态定义处),不要修在调用方页面——store 层修一次对所有调用方一致生效。若发现某通道"只被写、几乎不被独立读",它很可能是冗余设计,可考虑彻底删除而非维护两套。
 
 **落地证据**:P8 commit `a548c40`(`fix(app): <checkin-map> :key="currentUid" 强制 SDK 重建消黑屏(B2)`)在 `pages/index/index.uvue` 落地 `:key="currentUid"` + `currentUid` computed。
+
+---
+
+## §规则 55:新建鉴权云对象引用 auth-util 必须用模块名 require + package.json file: 依赖
+
+**适用范围**:`uniCloud-aliyun/cloudfunctions/<name>/index.obj.js` 新建云对象,需要 `common/auth-util`(checkAuth)时。
+
+**现象(P10 真机)**:后台非遗内容页一打开即报
+`[heritage-center]: MODULE_NOT_FOUND:Cannot find module '../common/auth-util'`,require stack 指向 `/tmp/function/index.obj.js`。
+
+**反模式**:
+- `index.obj.js`:`const authUtil = require('../common/auth-util')`(相对路径)
+- `package.json`:dependencies 不声明 auth-util
+
+云端打包时云函数被放进 `/tmp/function/`,`../common` 解析到 `/tmp/common` —— 该目录只有当云函数声明了 `file:` 依赖、由 uniCloud 一并打包时才存在。相对路径 + 无依赖声明 = 部署后 common 模块根本没上传。
+
+**正解(对齐 marker-center / admin-center / photo-center)**:
+- `index.obj.js`:`const authUtil = require('auth-util')` —— 用模块名,不用相对路径
+- `package.json` dependencies 加 `"auth-util": "file:../common/auth-util"`,uniCloud 据此在上传时把 `common/auth-util` 打包进云函数
+
+**审计**:`grep -rn "require('\.\./common" uniCloud-aliyun/cloudfunctions/*/index.obj.js` 应返回 0。所有 common 公共模块一律模块名引用 + package.json `file:` 依赖声明。
+
+**落地证据**:P10 commit `d86b7ef`。
+
+---
+
+## §规则 56:UTS 客户端云封装函数必须 try/catch —— 否则 RPC 失败让调用页 loading 永久卡死
+
+**适用范围**:`utils/*Cloud.uts` 里 `await someCloudObject.method(...)` 的封装函数。
+
+**现象(P10 真机)**:非遗详情页一直停在"正在加载非遗内容"骨架,永不进入内容/空状态。
+
+**真因**:`heritageCloud.uts:fetchHeritageDetail` 直接 `await heritageApi.getDetail(...)`,无 try/catch。云对象未部署 / 网络失败时该调用 reject,异常透传到调用页 `loadDetail`;`loadDetail` 里 `loading.value = false` 在 await 之后,永远执行不到 → 页面卡死在骨架。
+
+**正解**:云封装层把云端失败当作预期内的运行时情况消化掉 —— try/catch,catch 内 `console.error` 后返回安全空值(`null` / `[]`),封装函数对外承诺"绝不 throw"。调用页只需处理 null/空数组。同时调用页的 `loadXxx` 自身也用 try/catch 保证 `loading` 一定置 false(纵深防御)。
+
+**通用原则**:RPC 失败不是异常分支,是常态。封装层不消化,每个调用页都得自己 try/catch,漏一个就卡死一个页面。修在封装层一处,所有调用页(详情页 + 名录页)一起受益。
+
+**落地证据**:P10 commit `79f634f`。

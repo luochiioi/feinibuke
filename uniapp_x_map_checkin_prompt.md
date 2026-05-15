@@ -4128,3 +4128,46 @@ index.uvue `<checkin-map>` 切 key 重建期间加半透明遮罩，盖住 3-5s 
 | P9-4 好友列表 | 无代码改动 | 代码审计确认 outgoing profile join 逻辑正确，无 bug。若真机显示重名 = `users` 表数据问题（默认昵称重复 / 缺行），非代码缺陷。 |
 
 **沉淀的两条新规范**：见 `UTS_COMPILE_PITFALLS.md` 规则 26（reLaunch 销毁原生组件）/ 规则 27（双通道状态必须成对消费）。
+
+---
+
+## 2026-05-16 P10 非遗内容深化（实施结果）
+
+把"打卡点"从纯 GPS 图钉升级为有内容的"非遗条目"：新增 F1 非遗详情页、F2 非遗名录页、后台非遗内容编辑、云端 `tourism_heritage` 数据层。
+
+**计划文档**：`docs/superpowers/plans/2026-05-15-p10-heritage-content.md`（13 Task / 6 Phase，Subagent-Driven 执行）。
+
+**落地 commits**（分支 `dev`，起点 `13fbd7a`）：
+- `2fe4892` 新增 `tourism_heritage` 集合 schema（按 `markerId` 与 `tourism_markers` 1:1 关联）。
+- `6de13db` `heritage-service.js` 纯函数（校验/构造/规范化/种子）+ node:test。
+- `12076f3` `heritage-center` 云对象：公开读 `getDetail`/`list` + 管理写 `create`/`update`/`remove`/`adminList`/`adminGet`。
+- `0ee7eec` `photo-center.upload` 加 `folder` 参数（默认 `avatars`，非遗图传 `heritage-media`）。
+- `d86b7ef` 修复：heritage-center 改 `require('auth-util')` + package.json 声明 `file:` 依赖（见 PITFALLS §规则 55）。
+- `26a9eb6`/`6f6553d` `types/heritage.uts` + `utils/heritageCloud.uts` 客户端云封装。
+- `9c1e267` F1 非遗详情页 `pages/heritage-detail/heritage-detail.uvue`。
+- `79f634f` 修复：heritageCloud 云调用加 try/catch，避免详情页加载卡死（见 PITFALLS §规则 56）。
+- `9bc1d44` marker-panel 加"了解非遗详情"入口。
+- `8e87727` F2 非遗名录页 `pages/heritage-list/heritage-list.uvue` + 首页入口。
+- `7abd524`/`d6f1cea` 后台 uni-admin 非遗内容列表页 + 创建/编辑表单。
+- `b3c31df`/`391c80c` 澳门/湖南 10 条非遗种子数据 + `seedDefaults`；category 枚举补"传统戏剧"（共 10 类）。
+- `92e56d5` 好友入口从首页移至"我的主页"；首页非遗按钮"非遗名录"→"非遗"、宽度对齐其它导航按钮。
+
+**新增数据层**：
+- 集合 `tourism_heritage`：`markerId` / `category`(10 类) / `summary` / `story` / `images[]` / `inheritorName,Bio,Photo` / `relatedMarkerIds[]` / `status`(draft,published)。`read` 公开，`create/update/delete` 限 admin。
+- 云对象 `heritage-center`（公开读无需登录，管理写 `_requireAdmin` 校验 role）。
+- 媒体复用 `photo-center.upload`，非遗图走 `heritage-media/` 路径。
+
+**种子数据**（`heritage-center.seedDefaults`，幂等）：澳门 5（鱼行醉龙节、澳门神像雕刻、凉茶、土生土语话剧、道教科仪音乐）+ 湖南 5（湘绣、花鼓戏、滩头年画、江永女书、醴陵釉下五彩瓷烧制技艺），`markerId` 1001-1005 / 1101-1105，同时幂等种入对应 `tourism_markers`。
+
+**验收点**：
+1. 后台触发 `seedDefaults` → `tourism_heritage` 10 条、`tourism_markers` 新增 10 点。
+2. 地图点澳门/湖南种子点 → marker-panel "了解非遗详情" → F1 显示类别徽章/简介/图文画廊/故事/传承人/相关条目。
+3. 无内容的旧打卡点点"了解非遗详情" → F1 显示"暂无非遗内容"空状态（不卡死）。
+4. 首页"非遗"入口 → F2 名录页，按 10 类 tab 筛选、滚动分页。
+5. 后台非遗列表/编辑：选关联 marker、填字段、传图（`folder=heritage-media`）、存草稿/发布。
+
+**部署顺序（uniCloud）**：① 上传 `tourism_heritage` schema；② 上传部署 `heritage-center`（package.json 已声明 auth-util 依赖，上传时自动打包 common）；③ 重部署 `photo-center`；④ App / uni-admin 编译运行；⑤ 后台触发 `seedDefaults`。
+
+**Node 测试**：云端 169 → 172 例（新增 `heritage-service` 11 例）。
+
+**沉淀的两条新规范**：见 `UTS_COMPILE_PITFALLS.md` §规则 55（新建云对象 auth-util 引用方式）/ §规则 56（客户端云封装必须 try/catch）。
