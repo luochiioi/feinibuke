@@ -1,6 +1,6 @@
 const db = uniCloud.database()
 const col = db.collection('tourism_heritage')
-const authUtil = require('../common/auth-util')
+const authUtil = require('auth-util')
 const {
   validateHeritageInput,
   buildHeritageDoc,
