@@ -6,7 +6,9 @@ const {
   buildHeritageDoc,
   buildHeritageUpdate,
   normalizeHeritageDetail,
-  CATEGORY_ENUM
+  CATEGORY_ENUM,
+  DEFAULT_SEED_MARKERS,
+  DEFAULT_SEED_HERITAGE
 } = require('./heritage-service')
 
 module.exports = {
@@ -100,5 +102,34 @@ module.exports = {
     if (!id) return { errCode: -1, errMsg: '缺少 _id', data: null }
     await col.doc(id).remove()
     return { errCode: 0, errMsg: '删除成功', data: null }
+  },
+
+  // 幂等同步澳门/湖南种子打卡点 + 种子非遗内容（仿 marker-service.syncDefaultMarkers）
+  async seedDefaults() {
+    await this._requireAdmin()
+    const now = Date.now()
+    const markerCol = db.collection('tourism_markers')
+    let markerWrites = 0
+    let heritageWrites = 0
+    for (const m of DEFAULT_SEED_MARKERS) {
+      const exist = await markerCol.where({ id: m.id }).limit(1).get()
+      if (!exist.data || exist.data.length === 0) {
+        await markerCol.add({
+          id: m.id, title: m.title, latitude: m.latitude, longitude: m.longitude,
+          checked: false, checkinCount: 0, checkedBy: [],
+          iconPath: '/static/marker_default.png', width: 36, height: 36,
+          createdBy: 'system', createdAt: now, updatedAt: now
+        })
+        markerWrites++
+      }
+    }
+    for (const h of DEFAULT_SEED_HERITAGE) {
+      const exist = await col.where({ markerId: h.markerId }).limit(1).get()
+      if (!exist.data || exist.data.length === 0) {
+        await col.add(buildHeritageDoc(h, now))
+        heritageWrites++
+      }
+    }
+    return { errCode: 0, errMsg: '种子同步完成', data: { markerWrites, heritageWrites } }
   }
 }

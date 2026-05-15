@@ -12,7 +12,7 @@
     "markerId": { "bsonType": "int", "description": "关联 tourism_markers.id（1:1，唯一）" },
     "category": {
       "bsonType": "string",
-      "enum": ["传统技艺", "民俗", "曲艺", "传统音乐", "传统舞蹈", "传统美术", "传统医药", "民间文学", "传统体育"],
+      "enum": ["传统技艺", "民俗", "曲艺", "传统音乐", "传统舞蹈", "传统美术", "传统医药", "民间文学", "传统体育", "传统戏剧"],
       "description": "非遗类别"
     },
     "summary": { "bsonType": "string", "maxLength": 300, "description": "项目简介" },
