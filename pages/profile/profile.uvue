@@ -55,6 +55,10 @@
         <text class="menu-text">我的任务</text>
         <text class="menu-arrow">›</text>
       </view>
+      <view class="menu-item" @click="goFriends">
+        <text class="menu-text">我的好友</text>
+        <text class="menu-arrow">›</text>
+      </view>
       <view class="menu-item menu-item-last" @click="goEdit">
         <text class="menu-text">编辑资料</text>
         <text class="menu-arrow">›</text>
@@ -164,6 +168,9 @@ function goRewards(): void {
 }
 function goMyTasks(): void {
   uni.navigateTo({ url: '/pages/my-tasks/my-tasks' })
+}
+function goFriends(): void {
+  uni.navigateTo({ url: '/pages/friends/friends' })
 }
 function goEdit(): void {
   uni.navigateTo({ url: '/pages/profile-edit/profile-edit' })

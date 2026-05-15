@@ -31,14 +31,11 @@
       <view class="bl-btn bl-btn-task" @click="goTasksOnly">
         <text class="bl-btn-text-off">任务</text>
       </view>
-      <view class="bl-btn bl-btn-friend" @click="goFriends">
-        <text class="bl-btn-text-off">好友</text>
-      </view>
       <view class="bl-btn bl-btn-lb" @click="goLeaderboard">
         <text class="bl-btn-text-off">排行</text>
       </view>
       <view class="bl-btn bl-btn-heritage" @click="openHeritageList">
-        <text class="bl-btn-text-off">非遗名录</text>
+        <text class="bl-btn-text-off">非遗</text>
       </view>
     </view>
 
@@ -180,10 +177,6 @@ function ensureMapCtx(): MapContext | null {
 
 function goNotifications(): void {
   uni.navigateTo({ url: '/pages/notifications/notifications' })
-}
-
-function goFriends(): void {
-  uni.navigateTo({ url: '/pages/friends/friends' })
 }
 
 function goLeaderboard(): void {
@@ -633,7 +626,7 @@ function openHeritageDetail(): void {
 .bl-btn-task { background-color: #ffffff; border: 2rpx solid #2ecc71; }
 .bl-btn-friend { background-color: #ffffff; border: 2rpx solid #2e9f5f; }
 .bl-btn-lb { background-color: #ffffff; border: 2rpx solid #2e9f5f; }
-.bl-btn-heritage { background-color: #ffffff; border: 2rpx solid #1a73e8; }
+.bl-btn-heritage { background-color: #ffffff; border: 2rpx solid #2e9f5f; }
 .bl-btn-text-on { color: #ffffff; font-size: 26rpx; font-weight: 500; }
 .bl-btn-text-off { color: #2ecc71; font-size: 26rpx; font-weight: 500; }
 
