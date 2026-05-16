@@ -4175,3 +4175,31 @@ index.uvue `<checkin-map>` 切 key 重建期间加半透明遮罩，盖住 3-5s 
 **Node 测试**：云端 169 → 172 例（新增 `heritage-service` 11 例）。
 
 **沉淀的两条新规范**：见 `UTS_COMPILE_PITFALLS.md` §规则 55（新建云对象 auth-util 引用方式）/ §规则 56（客户端云封装必须 try/catch）。
+
+## 2026-05-16 P11 非遗内容富化与发现增强（实施结果）
+
+在 P10 非遗内容层基础上加视频内容（F1）、名称/传承人搜索（F2），并补上 P10 遗留的 `title` 字段缺口。不新增集合/云对象，纯增量。
+
+**计划文档**：`docs/superpowers/plans/2026-05-16-p11-heritage-enrich.md`（设计 `docs/superpowers/specs/2026-05-16-p11-heritage-enrich-design.md`，10 Task / 4 Phase）。
+
+**落地 commits**（分支 `dev`，起点 `34693df`）：
+- `tourism_heritage` schema 加 `title`（≤80）/`videoUrl`/`videoCover` 三个可选字段。
+- `heritage-service.js` 加三字段到 `buildHeritageDoc`/`normalizeHeritageDetail`/`HERITAGE_UPDATE_WHITELIST`；新增纯函数 `buildHeritageQuery`（category 校验 + keyword trim + 正则元字符转义）+ node:test。
+- `heritage-center` 云对象：`list`/`adminList` 加 `keyword` 参数，用 `db.command.or` 对 `title`/`inheritorName` 做大小写不敏感 `RegExp` 匹配；`seedDefaults` 给已存在的种子文档补写缺失的 `title`（返回 `titleBackfills`）。
+- `types/heritage.uts` + `utils/heritageCloud.uts`：加三字段，`fetchHeritageList` 签名加 `keyword`。
+- F1 非遗详情页 `heritage-detail.uvue`：显示标题；有 `videoUrl` 时渲染 `<video>` 播放器（`poster` 用 `videoCover`）。
+- F2 非遗名录页 `heritage-list.uvue`：顶部加搜索框（`@confirm` 触发），列表项显示标题。
+- 后台 `heritage/edit.vue`：加名称输入（必填）；视频走 `uniCloud.uploadFile` **直传云存储**（绕开云函数请求体上限），封面图复用 `photo-center` base64 上传。
+- 后台 `heritage/list.vue`：加名称/传承人搜索框。
+
+**关键设计决策**：
+- 视频上传走 `uniCloud.uploadFile` 直传云存储，存返回的 `fileID` 到 `videoUrl`（阿里云 fileID 即 https 可访问地址）；不走 `photo-center` base64，避免视频大文件超云函数请求体上限。
+- 视频字段为单 `videoUrl` + `videoCover`（每条目一个介绍视频），结构简单避免 §43 联合类型坑。
+- F2"名称"= 新增的 `title` 字段（P10 时 `buildHeritageDoc` 丢弃了种子里的 `title`，非遗条目一直无名字、借住 `tourism_markers.title`）；冗余进 heritage 文档后搜索为单集合 `RegExp`。
+- F2 搜索同时覆盖 App 名录页与后台列表页。
+
+**部署顺序（uniCloud）**：① 上传 `tourism_heritage` schema；② 上传部署 `heritage-center`；③ App / uni-admin 编译运行；④ 后台触发 `seedDefaults` 给线上原 10 条非遗补 `title`。
+
+**Node 测试**：云端 172 → 181 例（`heritage-service` 新增 9 例）。
+
+**待真机验收**：`<video>` 组件 UTS 真机兼容性、视频直传链路、F2 搜索过滤 —— 见计划文档末尾验收清单。视频直传/`<video>` 若踩坑，追加 `UTS_COMPILE_PITFALLS.md §规则 57+`。

@@ -1,3 +1,10 @@
+## 1.0.43
+* P11 非遗内容富化：非遗详情页支持视频播放，后台可上传介绍视频
+* 非遗名录页与后台列表页新增名称/传承人搜索
+* tourism_heritage 新增 title/videoUrl/videoCover 字段
+* 视频走云存储直传（uniCloud.uploadFile），绕开云函数请求体上限
+* seedDefaults 给已有种子非遗补写名称
+
 ## 1.0.42
 * P10 非遗内容深化：新增非遗详情页、非遗名录页、后台非遗内容编辑
 * 新增 tourism_heritage 云集合 + heritage-center 云对象（按 markerId 1:1 关联打卡点）
