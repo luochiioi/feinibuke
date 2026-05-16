@@ -25,6 +25,19 @@
       </view>
     </view>
 
+    <view class="search-row">
+      <input
+        class="search-input"
+        v-model="keyword"
+        type="text"
+        placeholder="搜索名称或传承人"
+        confirm-type="search"
+        @confirm="doSearch"
+      />
+      <button class="btn-sm" @click="doSearch">搜索</button>
+      <button v-if="keyword" class="btn-sm ghost" @click="clearSearch">清除</button>
+    </view>
+
     <view class="toolbar">
       <view class="toolbar-actions">
         <button class="btn-sm" @click="openCreate">新增非遗内容</button>
@@ -77,6 +90,7 @@ const hasMore = ref(false)
 const loading = ref(false)
 const errorText = ref('')
 const needsLogin = ref(false)
+const keyword = ref('')
 let offset = 0
 const limit = 50
 
@@ -97,7 +111,7 @@ async function loadItems() {
   errorText.value = ''
   needsLogin.value = false
   try {
-    const res = await api.adminList({ offset, limit })
+    const res = await api.adminList({ offset, limit, keyword: keyword.value })
     if (res.errCode !== 0) throw new Error(res.errMsg || '非遗内容加载失败')
     const list = res.data || []
     items.value = offset === 0 ? list : [...items.value, ...list]
@@ -111,6 +125,15 @@ async function loadItems() {
   } finally {
     loading.value = false
   }
+}
+
+function doSearch() {
+  reload()
+}
+
+function clearSearch() {
+  keyword.value = ''
+  reload()
 }
 
 function goLogin() {
@@ -223,6 +246,22 @@ async function syncSeeds() {
 .summary-label {
   color: #8a9a90;
   font-size: 22rpx;
+}
+
+.search-row {
+  display: flex;
+  gap: 10rpx;
+  align-items: center;
+  margin-bottom: 12rpx;
+}
+
+.search-input {
+  flex: 1;
+  border: 1rpx solid #e0e0e0;
+  border-radius: 8rpx;
+  padding: 12rpx 16rpx;
+  font-size: 24rpx;
+  background: #fff;
 }
 
 .toolbar {
