@@ -1,6 +1,7 @@
 export type HeritageDetail = {
   _id: string
   markerId: number
+  title: string
   category: string
   summary: string
   story: string
@@ -10,11 +11,14 @@ export type HeritageDetail = {
   inheritorPhoto: string
   relatedMarkerIds: number[]
   status: string
+  videoUrl: string
+  videoCover: string
 }
 
 export type HeritageListItem = {
   _id: string
   markerId: number
+  title: string
   category: string
   summary: string
   images: string[]
