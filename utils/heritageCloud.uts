@@ -2,6 +2,7 @@ import type { HeritageDetail, HeritageListItem } from '@/types/heritage'
 
 // §52 兜底：服务端可能不返某些 non-optional 字段，parse 前注入空值
 function injectHeritageDefaults(raw: UTSJSONObject): void {
+  if (raw['title'] == null) { raw['title'] = '' }
   if (raw['summary'] == null) { raw['summary'] = '' }
   if (raw['story'] == null) { raw['story'] = '' }
   if (raw['images'] == null) { raw['images'] = [] as string[] }
@@ -11,6 +12,8 @@ function injectHeritageDefaults(raw: UTSJSONObject): void {
   if (raw['relatedMarkerIds'] == null) { raw['relatedMarkerIds'] = [] as number[] }
   if (raw['_id'] == null) { raw['_id'] = '' }
   if (raw['status'] == null) { raw['status'] = 'published' }
+  if (raw['videoUrl'] == null) { raw['videoUrl'] = '' }
+  if (raw['videoCover'] == null) { raw['videoCover'] = '' }
 }
 
 export async function fetchHeritageDetail(markerId: number): Promise<HeritageDetail | null> {
@@ -30,10 +33,10 @@ export async function fetchHeritageDetail(markerId: number): Promise<HeritageDet
   }
 }
 
-export async function fetchHeritageList(category: string, offset: number, limit: number): Promise<HeritageListItem[]> {
+export async function fetchHeritageList(category: string, keyword: string, offset: number, limit: number): Promise<HeritageListItem[]> {
   try {
     const heritageApi = uniCloud.importObject('heritage-center', { customUI: true } as UniCloudImportObjectOptions)
-    const res = await heritageApi.list({ category: category, offset: offset, limit: limit } as UTSJSONObject) as UTSJSONObject
+    const res = await heritageApi.list({ category: category, keyword: keyword, offset: offset, limit: limit } as UTSJSONObject) as UTSJSONObject
     const dataField = res['data']
     if (dataField == null) return [] as HeritageListItem[]
     const dataObj = dataField as UTSJSONObject
@@ -43,6 +46,7 @@ export async function fetchHeritageList(category: string, offset: number, limit:
     const out: HeritageListItem[] = []
     for (let i = 0; i < arr.length; i++) {
       const rawObj = arr[i]
+      if (rawObj['title'] == null) { rawObj['title'] = '' }
       if (rawObj['summary'] == null) { rawObj['summary'] = '' }
       if (rawObj['images'] == null) { rawObj['images'] = [] as string[] }
       if (rawObj['_id'] == null) { rawObj['_id'] = '' }
