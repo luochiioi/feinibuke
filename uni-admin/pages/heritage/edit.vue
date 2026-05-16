@@ -25,6 +25,12 @@
         </picker>
       </view>
 
+      <!-- 名称 -->
+      <view class="form-item">
+        <text class="form-label">名称 *</text>
+        <input class="form-input" v-model="form.title" placeholder="请输入非遗项目名称（80字以内）" maxlength="80" />
+      </view>
+
       <!-- 类别 -->
       <view class="form-item">
         <text class="form-label">类别 *</text>
@@ -91,6 +97,36 @@
           :disabled="uploadingImages"
           @click="pickProjectImage"
         >{{ uploadingImages ? '上传中...' : '添加图片' }}</button>
+      </view>
+
+      <!-- 介绍视频 -->
+      <view class="form-item">
+        <text class="form-label">介绍视频</text>
+        <view v-if="form.videoUrl" class="video-preview-row">
+          <video class="video-preview" :src="form.videoUrl" controls></video>
+          <text class="img-remove" @click="form.videoUrl = ''">移除视频</text>
+        </view>
+        <button
+          v-if="!form.videoUrl"
+          class="btn-upload"
+          :disabled="uploadingVideo"
+          @click="pickVideo"
+        >{{ uploadingVideo ? '上传中...' : '选择视频（直传云存储）' }}</button>
+      </view>
+
+      <!-- 视频封面 -->
+      <view class="form-item">
+        <text class="form-label">视频封面</text>
+        <view v-if="form.videoCover" class="img-preview-row">
+          <image class="img-preview" :src="form.videoCover" mode="aspectFill" />
+          <text class="img-remove" @click="form.videoCover = ''">移除</text>
+        </view>
+        <button
+          v-if="!form.videoCover"
+          class="btn-upload"
+          :disabled="uploadingCover"
+          @click="pickVideoCover"
+        >{{ uploadingCover ? '上传中...' : '选择封面图' }}</button>
       </view>
 
       <!-- 相关条目 -->
@@ -164,6 +200,8 @@ const needsLogin = ref(false)
 const saving = ref(false)
 const uploadingInheritor = ref(false)
 const uploadingImages = ref(false)
+const uploadingVideo = ref(false)
+const uploadingCover = ref(false)
 
 const isEditMode = ref(false)
 const editId = ref('')
@@ -171,6 +209,7 @@ const markerTitle = ref('')
 
 const form = ref({
   markerId: 0,
+  title: '',
   category: '',
   summary: '',
   story: '',
@@ -179,7 +218,9 @@ const form = ref({
   inheritorPhoto: '',
   images: [],
   relatedMarkerIds: [],
-  status: 'draft'
+  status: 'draft',
+  videoUrl: '',
+  videoCover: ''
 })
 
 const markerOptions = ref([]) // [{ label, value }]
@@ -242,6 +283,7 @@ async function loadHeritage(mid) {
       editId.value = detail._id || ''
       form.value = {
         markerId: detail.markerId || mid,
+        title: detail.title || '',
         category: detail.category || '',
         summary: detail.summary || '',
         story: detail.story || '',
@@ -250,7 +292,9 @@ async function loadHeritage(mid) {
         inheritorPhoto: detail.inheritorPhoto || '',
         images: Array.isArray(detail.images) ? detail.images.slice() : [],
         relatedMarkerIds: Array.isArray(detail.relatedMarkerIds) ? detail.relatedMarkerIds.slice() : [],
-        status: detail.status || 'draft'
+        status: detail.status || 'draft',
+        videoUrl: detail.videoUrl || '',
+        videoCover: detail.videoCover || ''
       }
       const found = markerOptions.value.find(o => o.value === mid)
       markerTitle.value = found ? found.label : ('打卡点 ID：' + mid)
@@ -379,6 +423,56 @@ function removeImage(idx) {
   form.value.images = arr
 }
 
+// --- Video upload (直传云存储，绕开云函数请求体上限) ---
+async function pickVideo() {
+  try {
+    const chooseRes = await new Promise((resolve, reject) => {
+      uni.chooseVideo({
+        sourceType: ['album'],
+        success: resolve,
+        fail: err => reject(new Error(err.errMsg || '选视频失败'))
+      })
+    })
+    uploadingVideo.value = true
+    const filePath = chooseRes.tempFilePath
+    const cloudPath = 'heritage-video/' + Date.now() + '_' + getFileName(filePath)
+    const upRes = await uniCloud.uploadFile({ filePath, cloudPath })
+    if (!upRes || !upRes.fileID) throw new Error('视频上传未返回地址')
+    form.value.videoUrl = upRes.fileID
+  } catch (e) {
+    needsLogin.value = isAuthError(e)
+    uni.showToast({ title: getErrorMessage(e, '上传视频失败'), icon: 'none' })
+  } finally {
+    uploadingVideo.value = false
+  }
+}
+
+async function pickVideoCover() {
+  try {
+    const chooseRes = await new Promise((resolve, reject) => {
+      uni.chooseImage({
+        count: 1,
+        sizeType: ['compressed'],
+        sourceType: ['album', 'camera'],
+        success: resolve,
+        fail: err => reject(new Error(err.errMsg || '选图失败'))
+      })
+    })
+    const filePath = chooseRes.tempFilePaths[0]
+    uploadingCover.value = true
+    const base64 = await readFileAsBase64(filePath)
+    const fileName = getFileName(filePath)
+    const upRes = await photoApi.upload({ fileContent: base64, fileName, folder: 'heritage-media' })
+    if (upRes.errCode !== 0) throw new Error(upRes.errMsg || '上传失败')
+    form.value.videoCover = upRes.data.cloudURL
+  } catch (e) {
+    needsLogin.value = isAuthError(e)
+    uni.showToast({ title: getErrorMessage(e, '上传封面失败'), icon: 'none' })
+  } finally {
+    uploadingCover.value = false
+  }
+}
+
 // --- Save ---
 async function save() {
   if (!form.value.markerId) {
@@ -387,6 +481,10 @@ async function save() {
   }
   if (!form.value.category) {
     uni.showToast({ title: '请选择类别', icon: 'none' })
+    return
+  }
+  if (!form.value.title) {
+    uni.showToast({ title: '请输入名称', icon: 'none' })
     return
   }
 
@@ -399,6 +497,7 @@ async function save() {
     if (isEditMode.value && editId.value) {
       res = await heritageApi.update({
         _id: editId.value,
+        title: form.value.title,
         category: form.value.category,
         summary: form.value.summary,
         story: form.value.story,
@@ -407,11 +506,14 @@ async function save() {
         inheritorPhoto: form.value.inheritorPhoto,
         images: form.value.images,
         relatedMarkerIds: form.value.relatedMarkerIds,
-        status: form.value.status
+        status: form.value.status,
+        videoUrl: form.value.videoUrl,
+        videoCover: form.value.videoCover
       })
     } else {
       res = await heritageApi.create({
         markerId: form.value.markerId,
+        title: form.value.title,
         category: form.value.category,
         summary: form.value.summary,
         story: form.value.story,
@@ -420,7 +522,9 @@ async function save() {
         inheritorPhoto: form.value.inheritorPhoto,
         images: form.value.images,
         relatedMarkerIds: form.value.relatedMarkerIds,
-        status: form.value.status
+        status: form.value.status,
+        videoUrl: form.value.videoUrl,
+        videoCover: form.value.videoCover
       })
     }
     if (res.errCode !== 0) throw new Error(res.errMsg || '保存失败')
@@ -626,5 +730,19 @@ function goLogin() {
 
 .btn-save[disabled] {
   opacity: 0.6;
+}
+
+.video-preview-row {
+  display: flex;
+  align-items: center;
+  gap: 16rpx;
+  margin-bottom: 12rpx;
+}
+
+.video-preview {
+  width: 320rpx;
+  height: 200rpx;
+  border-radius: 8rpx;
+  background: #000;
 }
 </style>
